@@ -1,0 +1,117 @@
+name: Spendcap
+options:
+  bundleIdPrefix: com.divinedavis
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  developmentLanguage: en
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+
+configs:
+  Debug: debug
+  Release: release
+
+packages:
+  Supabase:
+    url: https://github.com/supabase/supabase-swift
+    from: "2.20.0"
+  LinkKit:
+    url: https://github.com/plaid/plaid-link-ios
+    from: "6.0.0"
+
+targets:
+  Spendcap:
+    type: application
+    platform: iOS
+    sources:
+      - path: Spendcap
+    resources:
+      - path: Spendcap/Resources
+        optional: true
+    configFiles:
+      Debug: Secrets.xcconfig
+      Release: Secrets.xcconfig
+    info:
+      path: Spendcap/Info.plist
+      properties:
+        CFBundleDisplayName: Spendcap
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        UILaunchScreen:
+          UIColorName: ""
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIRequiredDeviceCapabilities:
+          - arm64
+        ITSAppUsesNonExemptEncryption: false
+        CFBundleIconName: AppIcon
+        UIBackgroundModes:
+          - remote-notification
+        SUPABASE_HOST: $(SUPABASE_HOST)
+        SUPABASE_ANON_KEY: $(SUPABASE_ANON_KEY)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.divinedavis.spendcap
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_EMIT_LOC_STRINGS: YES
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: CG89RY4W6R
+        ENABLE_PREVIEWS: YES
+    dependencies:
+      - package: Supabase
+        product: Supabase
+      - package: LinkKit
+        product: LinkKit
+    entitlements:
+      path: Spendcap/Spendcap.entitlements
+      properties:
+        aps-environment: production
+
+  SpendcapTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: SpendcapTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.divinedavis.spendcap.tests
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: Spendcap
+
+  SpendcapUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: SpendcapUITests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.divinedavis.spendcap.uitests
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: Spendcap
+
+schemes:
+  Spendcap:
+    build:
+      targets:
+        Spendcap: all
+        SpendcapTests: [test]
+        SpendcapUITests: [test]
+    test:
+      targets:
+        - SpendcapTests
+        - SpendcapUITests
+      gatherCoverageData: true
+    run:
+      config: Debug
+    archive:
+      config: Release

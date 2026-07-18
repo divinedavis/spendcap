@@ -1,0 +1,16 @@
+project_id = "spendcap"
+
+[functions.plaid_create_link_token]
+verify_jwt = true
+
+[functions.plaid_exchange_public_token]
+verify_jwt = true
+
+[functions.plaid_webhook]
+verify_jwt = false
+
+[functions.sync_transactions]
+verify_jwt = false
+
+[functions.check_overspend]
+verify_jwt = false

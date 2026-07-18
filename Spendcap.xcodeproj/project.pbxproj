@@ -1,0 +1,704 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		016A393FE4C5BE4D0F88B13F /* SpendcapUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F5902D08BF2F679F3AF3FC9 /* SpendcapUITests.swift */; };
+		12634489AAFE054D8C991EEA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1C7C8FFC9C7F1E90266B651F /* Assets.xcassets */; };
+		25817E7C2A717B4B39E54DF3 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2821BA90CD0918DC2B9B032B /* AuthViewModel.swift */; };
+		288D2E6C6F1E68D857664DAE /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A715553EE1AD4E5BA4BDE98 /* TodayView.swift */; };
+		4E527AF06B836FA43F3D205F /* SpendcapApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D201FA4EDF3200B3EE53F1F9 /* SpendcapApp.swift */; };
+		5D46D0B6D961BCF6CDC21422 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B56C80D9BC821F2190B3EBA1 /* SettingsView.swift */; };
+		664C3BC5D16F43B9FDE42BDB /* BudgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3BA7D53E4C8AEC4EC9EDB50 /* BudgetView.swift */; };
+		68AB7A7928D8CC3685476212 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 6D4157A0EC9B34B104554BB8 /* Supabase */; };
+		78D8B9A074F9FBBF97EE785B /* LinkKit in Frameworks */ = {isa = PBXBuildFile; productRef = 591C3F772E60DFDA47F94614 /* LinkKit */; };
+		7F9EC04BC9768D94D33B0685 /* PlaidLinkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DAC4FA3E421D906C40BA624 /* PlaidLinkView.swift */; };
+		97614B1520F832A21C0B3417 /* PushNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1096BDA0661D8CBF31FDDBDF /* PushNotificationManager.swift */; };
+		97912CF4BDF3F9A95ED1709D /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A97C47BF5E0792E242E013AF /* Models.swift */; };
+		B6C2DD5373B227C420C7928E /* SupabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74AADE09BA636449F334A6FC /* SupabaseManager.swift */; };
+		BA3281C114BBAA73B8B6136C /* SpendService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32328E88E358DEF3839466BD /* SpendService.swift */; };
+		CE06C0725FE2D69CC2D4A82F /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B2DC984C8DD235B85ADE4C /* AuthView.swift */; };
+		E373FF5521F5A6F0D564B865 /* BudgetMathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B70F26F0CECBC013339E8E2 /* BudgetMathTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		122E4AB8FDEDCC6DB9B2793B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C959FF3FA5FE71456EA0F0DF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2DA9F33C1695B9B217529B33;
+			remoteInfo = Spendcap;
+		};
+		C6D8AC343F254E8D678E8C8B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C959FF3FA5FE71456EA0F0DF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2DA9F33C1695B9B217529B33;
+			remoteInfo = Spendcap;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0B70F26F0CECBC013339E8E2 /* BudgetMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetMathTests.swift; sourceTree = "<group>"; };
+		1096BDA0661D8CBF31FDDBDF /* PushNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotificationManager.swift; sourceTree = "<group>"; };
+		11C1CDBF21375608A48714E0 /* SpendcapTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SpendcapTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		1C7C8FFC9C7F1E90266B651F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		2821BA90CD0918DC2B9B032B /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
+		32328E88E358DEF3839466BD /* SpendService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendService.swift; sourceTree = "<group>"; };
+		4B85634D8AC8E9652C0799DA /* Spendcap.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Spendcap.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4F5902D08BF2F679F3AF3FC9 /* SpendcapUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendcapUITests.swift; sourceTree = "<group>"; };
+		5057C4A60D7494BDDA3566B4 /* SpendcapUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SpendcapUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		74AADE09BA636449F334A6FC /* SupabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseManager.swift; sourceTree = "<group>"; };
+		7A715553EE1AD4E5BA4BDE98 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
+		8DAC4FA3E421D906C40BA624 /* PlaidLinkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaidLinkView.swift; sourceTree = "<group>"; };
+		A97C47BF5E0792E242E013AF /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		B56C80D9BC821F2190B3EBA1 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		D201FA4EDF3200B3EE53F1F9 /* SpendcapApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendcapApp.swift; sourceTree = "<group>"; };
+		DA45241441139C3B2067A7A8 /* Spendcap.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Spendcap.entitlements; sourceTree = "<group>"; };
+		F1B2DC984C8DD235B85ADE4C /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
+		F33FF325AD3583F8C8C0766D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		F3BA7D53E4C8AEC4EC9EDB50 /* BudgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetView.swift; sourceTree = "<group>"; };
+		"TEMP_FD0FC81F-C750-4C54-9C9E-4399E4A24903" /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		BA3EE33FB96B90557EC70969 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				68AB7A7928D8CC3685476212 /* Supabase in Frameworks */,
+				78D8B9A074F9FBBF97EE785B /* LinkKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0DC26B0F364461925DC8ADD7 = {
+			isa = PBXGroup;
+			children = (
+				DCE1DF25E1564AAEEB14345A /* Spendcap */,
+				6BADE33808083EDBE2BAF592 /* SpendcapTests */,
+				8C44EF1BA48F70ED60E6D4B5 /* SpendcapUITests */,
+				A58D599721B3FA4F0161A4C9 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		34C163A67ACFCD80C01A8A25 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				1C7C8FFC9C7F1E90266B651F /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		4E056AD3C1A4E1DFA6756699 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				B56C80D9BC821F2190B3EBA1 /* SettingsView.swift */,
+				D201FA4EDF3200B3EE53F1F9 /* SpendcapApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		622BAF0B6CC9A603FA4EB7BE /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+				F1B2DC984C8DD235B85ADE4C /* AuthView.swift */,
+				2821BA90CD0918DC2B9B032B /* AuthViewModel.swift */,
+			);
+			path = Auth;
+			sourceTree = "<group>";
+		};
+		6BADE33808083EDBE2BAF592 /* SpendcapTests */ = {
+			isa = PBXGroup;
+			children = (
+				0B70F26F0CECBC013339E8E2 /* BudgetMathTests.swift */,
+			);
+			path = SpendcapTests;
+			sourceTree = "<group>";
+		};
+		89DE395C680D01F32538FF8E /* Supabase */ = {
+			isa = PBXGroup;
+			children = (
+				74AADE09BA636449F334A6FC /* SupabaseManager.swift */,
+			);
+			path = Supabase;
+			sourceTree = "<group>";
+		};
+		8C44EF1BA48F70ED60E6D4B5 /* SpendcapUITests */ = {
+			isa = PBXGroup;
+			children = (
+				4F5902D08BF2F679F3AF3FC9 /* SpendcapUITests.swift */,
+			);
+			path = SpendcapUITests;
+			sourceTree = "<group>";
+		};
+		A58D599721B3FA4F0161A4C9 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				4B85634D8AC8E9652C0799DA /* Spendcap.app */,
+				11C1CDBF21375608A48714E0 /* SpendcapTests.xctest */,
+				5057C4A60D7494BDDA3566B4 /* SpendcapUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A70853FADEFEAC528F17BAE9 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A97C47BF5E0792E242E013AF /* Models.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		D5AFBCC3433EA107CDA6B7BA /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				32328E88E358DEF3839466BD /* SpendService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		DCE1DF25E1564AAEEB14345A /* Spendcap */ = {
+			isa = PBXGroup;
+			children = (
+				F33FF325AD3583F8C8C0766D /* Info.plist */,
+				DA45241441139C3B2067A7A8 /* Spendcap.entitlements */,
+				4E056AD3C1A4E1DFA6756699 /* App */,
+				622BAF0B6CC9A603FA4EB7BE /* Auth */,
+				EE2D8B8FB93A2F1638BDC153 /* Budget */,
+				E1797C3B6E787CC5C7F9B0E7 /* Dashboard */,
+				FD5BAEB588D9E767F62AAEBA /* Link */,
+				A70853FADEFEAC528F17BAE9 /* Models */,
+				FEBCF588D1C670359A6D8047 /* Notifications */,
+				34C163A67ACFCD80C01A8A25 /* Resources */,
+				D5AFBCC3433EA107CDA6B7BA /* Services */,
+				89DE395C680D01F32538FF8E /* Supabase */,
+			);
+			path = Spendcap;
+			sourceTree = "<group>";
+		};
+		E1797C3B6E787CC5C7F9B0E7 /* Dashboard */ = {
+			isa = PBXGroup;
+			children = (
+				7A715553EE1AD4E5BA4BDE98 /* TodayView.swift */,
+			);
+			path = Dashboard;
+			sourceTree = "<group>";
+		};
+		EE2D8B8FB93A2F1638BDC153 /* Budget */ = {
+			isa = PBXGroup;
+			children = (
+				F3BA7D53E4C8AEC4EC9EDB50 /* BudgetView.swift */,
+			);
+			path = Budget;
+			sourceTree = "<group>";
+		};
+		FD5BAEB588D9E767F62AAEBA /* Link */ = {
+			isa = PBXGroup;
+			children = (
+				8DAC4FA3E421D906C40BA624 /* PlaidLinkView.swift */,
+			);
+			path = Link;
+			sourceTree = "<group>";
+		};
+		FEBCF588D1C670359A6D8047 /* Notifications */ = {
+			isa = PBXGroup;
+			children = (
+				1096BDA0661D8CBF31FDDBDF /* PushNotificationManager.swift */,
+			);
+			path = Notifications;
+			sourceTree = "<group>";
+		};
+		"TEMP_43CEB99F-7518-4672-A5EA-225EDFEFE326" /* Spendcap */ = {
+			isa = PBXGroup;
+			children = (
+				"TEMP_FD0FC81F-C750-4C54-9C9E-4399E4A24903" /* Secrets.xcconfig */,
+			);
+			path = Spendcap;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		2AE65F54434F3E3C1E53649C /* SpendcapTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A3924A1287E301C11107D026 /* Build configuration list for PBXNativeTarget "SpendcapTests" */;
+			buildPhases = (
+				93962B60B5C62589C8C3F66F /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F62370A534AAE447CEADD95D /* PBXTargetDependency */,
+			);
+			name = SpendcapTests;
+			packageProductDependencies = (
+			);
+			productName = SpendcapTests;
+			productReference = 11C1CDBF21375608A48714E0 /* SpendcapTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		2DA9F33C1695B9B217529B33 /* Spendcap */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A17356E924D6B95FA4D967E8 /* Build configuration list for PBXNativeTarget "Spendcap" */;
+			buildPhases = (
+				B502BF12C7F2D101EA1A2E1E /* Sources */,
+				764F4BF8E7F57D76FAC68784 /* Resources */,
+				BA3EE33FB96B90557EC70969 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Spendcap;
+			packageProductDependencies = (
+				6D4157A0EC9B34B104554BB8 /* Supabase */,
+				591C3F772E60DFDA47F94614 /* LinkKit */,
+			);
+			productName = Spendcap;
+			productReference = 4B85634D8AC8E9652C0799DA /* Spendcap.app */;
+			productType = "com.apple.product-type.application";
+		};
+		CB09AD17FE9237AB0240C356 /* SpendcapUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7086F9FCE25BF9888033415C /* Build configuration list for PBXNativeTarget "SpendcapUITests" */;
+			buildPhases = (
+				0F51700C4F0FD79BC6C1FBB6 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CA2B95FBCB444414C415FE2E /* PBXTargetDependency */,
+			);
+			name = SpendcapUITests;
+			packageProductDependencies = (
+			);
+			productName = SpendcapUITests;
+			productReference = 5057C4A60D7494BDDA3566B4 /* SpendcapUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C959FF3FA5FE71456EA0F0DF /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					2DA9F33C1695B9B217529B33 = {
+						DevelopmentTeam = CG89RY4W6R;
+						ProvisioningStyle = Automatic;
+					};
+					CB09AD17FE9237AB0240C356 = {
+						TestTargetID = 2DA9F33C1695B9B217529B33;
+					};
+				};
+			};
+			buildConfigurationList = 4F1F9CF1D3DBAAB70FF0B344 /* Build configuration list for PBXProject "Spendcap" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 0DC26B0F364461925DC8ADD7;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				CFB01D6DC0A7C9ADA0888CA3 /* XCRemoteSwiftPackageReference "plaid-link-ios" */,
+				06A9267FAFCEDAA1BDBC7C47 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = A58D599721B3FA4F0161A4C9 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				2DA9F33C1695B9B217529B33 /* Spendcap */,
+				2AE65F54434F3E3C1E53649C /* SpendcapTests */,
+				CB09AD17FE9237AB0240C356 /* SpendcapUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		764F4BF8E7F57D76FAC68784 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				12634489AAFE054D8C991EEA /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0F51700C4F0FD79BC6C1FBB6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				016A393FE4C5BE4D0F88B13F /* SpendcapUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		93962B60B5C62589C8C3F66F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E373FF5521F5A6F0D564B865 /* BudgetMathTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B502BF12C7F2D101EA1A2E1E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CE06C0725FE2D69CC2D4A82F /* AuthView.swift in Sources */,
+				25817E7C2A717B4B39E54DF3 /* AuthViewModel.swift in Sources */,
+				664C3BC5D16F43B9FDE42BDB /* BudgetView.swift in Sources */,
+				97912CF4BDF3F9A95ED1709D /* Models.swift in Sources */,
+				7F9EC04BC9768D94D33B0685 /* PlaidLinkView.swift in Sources */,
+				97614B1520F832A21C0B3417 /* PushNotificationManager.swift in Sources */,
+				5D46D0B6D961BCF6CDC21422 /* SettingsView.swift in Sources */,
+				BA3281C114BBAA73B8B6136C /* SpendService.swift in Sources */,
+				4E527AF06B836FA43F3D205F /* SpendcapApp.swift in Sources */,
+				B6C2DD5373B227C420C7928E /* SupabaseManager.swift in Sources */,
+				288D2E6C6F1E68D857664DAE /* TodayView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		CA2B95FBCB444414C415FE2E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2DA9F33C1695B9B217529B33 /* Spendcap */;
+			targetProxy = 122E4AB8FDEDCC6DB9B2793B /* PBXContainerItemProxy */;
+		};
+		F62370A534AAE447CEADD95D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2DA9F33C1695B9B217529B33 /* Spendcap */;
+			targetProxy = C6D8AC343F254E8D678E8C8B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		29FE7735305C2C11F716BEEA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.divinedavis.spendcap.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Spendcap;
+			};
+			name = Debug;
+		};
+		568F0089E9BF72A888B8F68D /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = "TEMP_FD0FC81F-C750-4C54-9C9E-4399E4A24903" /* Secrets.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Spendcap/Spendcap.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = CG89RY4W6R;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Spendcap/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.divinedavis.spendcap;
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		5B1315298945E680FF7E87D3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.divinedavis.spendcap.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Spendcap;
+			};
+			name = Release;
+		};
+		6529B110E5CBF9BD95ABA8F6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.10;
+			};
+			name = Release;
+		};
+		8ABD3B6E4BDFE212E8506F61 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.divinedavis.spendcap.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Spendcap.app/Spendcap";
+			};
+			name = Release;
+		};
+		8DFE94A839B471C35D8261B7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.divinedavis.spendcap.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Spendcap.app/Spendcap";
+			};
+			name = Debug;
+		};
+		9C5B6C2FFD7176C18B1F44FB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.10;
+			};
+			name = Debug;
+		};
+		A2AF47695D6DE2F5696B08C5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = "TEMP_FD0FC81F-C750-4C54-9C9E-4399E4A24903" /* Secrets.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Spendcap/Spendcap.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = CG89RY4W6R;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Spendcap/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.divinedavis.spendcap;
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4F1F9CF1D3DBAAB70FF0B344 /* Build configuration list for PBXProject "Spendcap" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9C5B6C2FFD7176C18B1F44FB /* Debug */,
+				6529B110E5CBF9BD95ABA8F6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		7086F9FCE25BF9888033415C /* Build configuration list for PBXNativeTarget "SpendcapUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				29FE7735305C2C11F716BEEA /* Debug */,
+				5B1315298945E680FF7E87D3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A17356E924D6B95FA4D967E8 /* Build configuration list for PBXNativeTarget "Spendcap" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A2AF47695D6DE2F5696B08C5 /* Debug */,
+				568F0089E9BF72A888B8F68D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A3924A1287E301C11107D026 /* Build configuration list for PBXNativeTarget "SpendcapTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8DFE94A839B471C35D8261B7 /* Debug */,
+				8ABD3B6E4BDFE212E8506F61 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		06A9267FAFCEDAA1BDBC7C47 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.20.0;
+			};
+		};
+		CFB01D6DC0A7C9ADA0888CA3 /* XCRemoteSwiftPackageReference "plaid-link-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/plaid/plaid-link-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		591C3F772E60DFDA47F94614 /* LinkKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CFB01D6DC0A7C9ADA0888CA3 /* XCRemoteSwiftPackageReference "plaid-link-ios" */;
+			productName = LinkKit;
+		};
+		6D4157A0EC9B34B104554BB8 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 06A9267FAFCEDAA1BDBC7C47 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = C959FF3FA5FE71456EA0F0DF /* Project object */;
+}
