@@ -62,7 +62,7 @@
 		F1B2DC984C8DD235B85ADE4C /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		F33FF325AD3583F8C8C0766D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F3BA7D53E4C8AEC4EC9EDB50 /* BudgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetView.swift; sourceTree = "<group>"; };
-		"TEMP_FD0FC81F-C750-4C54-9C9E-4399E4A24903" /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
+		"TEMP_38D23213-8C4C-4409-A286-68CC82639112" /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -215,10 +215,10 @@
 			path = Notifications;
 			sourceTree = "<group>";
 		};
-		"TEMP_43CEB99F-7518-4672-A5EA-225EDFEFE326" /* Spendcap */ = {
+		"TEMP_EAD5F652-A797-48B7-81BD-98C59A0CF8B2" /* Spendcap */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_FD0FC81F-C750-4C54-9C9E-4399E4A24903" /* Secrets.xcconfig */,
+				"TEMP_38D23213-8C4C-4409-A286-68CC82639112" /* Secrets.xcconfig */,
 			);
 			path = Spendcap;
 			sourceTree = "<group>";
@@ -407,7 +407,7 @@
 		};
 		568F0089E9BF72A888B8F68D /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_FD0FC81F-C750-4C54-9C9E-4399E4A24903" /* Secrets.xcconfig */;
+			baseConfigurationReference = "TEMP_38D23213-8C4C-4409-A286-68CC82639112" /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Spendcap/Spendcap.entitlements;
@@ -479,7 +479,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -572,7 +572,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -606,7 +606,7 @@
 		};
 		A2AF47695D6DE2F5696B08C5 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_FD0FC81F-C750-4C54-9C9E-4399E4A24903" /* Secrets.xcconfig */;
+			baseConfigurationReference = "TEMP_38D23213-8C4C-4409-A286-68CC82639112" /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Spendcap/Spendcap.entitlements;

@@ -81,3 +81,9 @@ xcrun altool \
     --apiIssuer "$ASC_ISSUER_ID"
 
 echo "==> shipped build $next"
+
+# Keep internal-tester auto-distribution on — idempotent, so accidental
+# ASC UI changes don't break the next ship's distribution.
+echo "==> verifying internal tester auto-distribution"
+python3 scripts/configure_internal_testers.py || \
+    echo "warning: configure_internal_testers.py reported a problem; check ASC manually"

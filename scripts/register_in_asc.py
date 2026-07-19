@@ -50,6 +50,9 @@ def load_config() -> dict:
 def write_config_value(key: str, value: str) -> None:
     text = CONFIG_PATH.read_text()
     pattern = re.compile(rf"^{re.escape(key)}=.*$", re.MULTILINE)
+    # The env file is `source`d by ship.sh — quote anything with spaces.
+    if any(c in value for c in ' \t"'):
+        value = '"' + value.replace('"', '\\"') + '"'
     new_line = f"{key}={value}"
     if pattern.search(text):
         text = pattern.sub(new_line, text)
