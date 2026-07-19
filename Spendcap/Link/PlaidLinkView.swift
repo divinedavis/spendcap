@@ -69,37 +69,46 @@ struct PlaidLinkFlow: View {
 }
 
 /// Thin UIKit bridge for LinkKit's handler-based presentation.
+/// Link must be opened from viewDidAppear — presenting from a controller
+/// that isn't in the window hierarchy yet fails silently, leaving a blank
+/// sheet.
 private struct PlaidLinkController: UIViewControllerRepresentable {
     let linkToken: String
     let onSuccess: (_ publicToken: String, _ institutionName: String?) -> Void
     let onExit: () -> Void
 
-    final class Coordinator {
+    final class ContainerViewController: UIViewController {
         var handler: Handler?
-        var didOpen = false
+        var onFailure: (() -> Void)?
+        private var didOpen = false
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            guard !didOpen else { return }
+            didOpen = true
+            guard let handler else {
+                onFailure?()
+                return
+            }
+            handler.open(presentUsing: .viewController(self))
+        }
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    func makeUIViewController(context: Context) -> UIViewController {
-        UIViewController()
-    }
-
-    func updateUIViewController(_ viewController: UIViewController, context: Context) {
-        guard !context.coordinator.didOpen else { return }
-        context.coordinator.didOpen = true
+    func makeUIViewController(context: Context) -> ContainerViewController {
+        let container = ContainerViewController()
+        container.view.backgroundColor = .systemBackground
+        container.onFailure = onExit
 
         var configuration = LinkTokenConfiguration(token: linkToken) { success in
             onSuccess(success.publicToken, success.metadata.institution.name)
         }
         configuration.onExit = { _ in onExit() }
 
-        switch Plaid.create(configuration) {
-        case .success(let handler):
-            context.coordinator.handler = handler
-            handler.open(presentUsing: .viewController(viewController))
-        case .failure:
-            onExit()
+        if case .success(let handler) = Plaid.create(configuration) {
+            container.handler = handler
         }
+        return container
     }
+
+    func updateUIViewController(_ viewController: ContainerViewController, context: Context) {}
 }
