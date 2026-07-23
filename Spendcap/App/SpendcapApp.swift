@@ -35,6 +35,7 @@ struct SpendcapApp: App {
 
 struct RootView: View {
     @EnvironmentObject var auth: AuthViewModel
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -45,6 +46,33 @@ struct RootView: View {
             }
         }
         .animation(.default, value: auth.isSignedIn)
+        // Privacy: cover bank balances / transactions in the app-switcher
+        // snapshot whenever the scene isn't active (backgrounded or inactive).
+        .overlay {
+            if scenePhase != .active {
+                PrivacyRedactionView()
+            }
+        }
+    }
+}
+
+/// Opaque cover shown over the app whenever the scene leaves the active state.
+/// iOS snapshots the front-most view for the app-switcher when the app
+/// backgrounds; this ensures that snapshot never captures the user's balances,
+/// transactions, or daily-cap figures.
+struct PrivacyRedactionView: View {
+    var body: some View {
+        ZStack {
+            Color(.systemBackground).ignoresSafeArea()
+            VStack(spacing: 16) {
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 44))
+                    .foregroundStyle(.secondary)
+                Text("Spendcap")
+                    .font(.title.weight(.bold))
+            }
+        }
+        .accessibilityIdentifier("privacyRedaction")
     }
 }
 
