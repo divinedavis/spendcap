@@ -17,3 +17,6 @@ Spendcap.xcodeproj/project.xcworkspace/xcuserdata/
 # macOS
 .DS_Store
 supabase/.temp/
+
+# Marketing screenshot captures (regenerate with scripts/capture_screenshots.sh)
+screenshots/

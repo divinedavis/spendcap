@@ -12,6 +12,7 @@
 		25817E7C2A717B4B39E54DF3 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2821BA90CD0918DC2B9B032B /* AuthViewModel.swift */; };
 		288D2E6C6F1E68D857664DAE /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A715553EE1AD4E5BA4BDE98 /* TodayView.swift */; };
 		4E527AF06B836FA43F3D205F /* SpendcapApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D201FA4EDF3200B3EE53F1F9 /* SpendcapApp.swift */; };
+		520AECB32930FAA8091B71D9 /* MarketingScreenshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = D471AD2D03E0BE2CD100AC18 /* MarketingScreenshots.swift */; };
 		5D46D0B6D961BCF6CDC21422 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B56C80D9BC821F2190B3EBA1 /* SettingsView.swift */; };
 		664C3BC5D16F43B9FDE42BDB /* BudgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3BA7D53E4C8AEC4EC9EDB50 /* BudgetView.swift */; };
 		68AB7A7928D8CC3685476212 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 6D4157A0EC9B34B104554BB8 /* Supabase */; };
@@ -58,11 +59,12 @@
 		A97C47BF5E0792E242E013AF /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		B56C80D9BC821F2190B3EBA1 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		D201FA4EDF3200B3EE53F1F9 /* SpendcapApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendcapApp.swift; sourceTree = "<group>"; };
+		D471AD2D03E0BE2CD100AC18 /* MarketingScreenshots.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketingScreenshots.swift; sourceTree = "<group>"; };
 		DA45241441139C3B2067A7A8 /* Spendcap.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Spendcap.entitlements; sourceTree = "<group>"; };
 		F1B2DC984C8DD235B85ADE4C /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		F33FF325AD3583F8C8C0766D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F3BA7D53E4C8AEC4EC9EDB50 /* BudgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetView.swift; sourceTree = "<group>"; };
-		"TEMP_135829F9-D766-40C5-9AA0-A1464E6E77AE" /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
+		"TEMP_7BA4679F-5180-4B40-88FA-4A862996F0BF" /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -133,6 +135,7 @@
 		8C44EF1BA48F70ED60E6D4B5 /* SpendcapUITests */ = {
 			isa = PBXGroup;
 			children = (
+				D471AD2D03E0BE2CD100AC18 /* MarketingScreenshots.swift */,
 				4F5902D08BF2F679F3AF3FC9 /* SpendcapUITests.swift */,
 			);
 			path = SpendcapUITests;
@@ -215,10 +218,10 @@
 			path = Notifications;
 			sourceTree = "<group>";
 		};
-		"TEMP_EED80040-E8EB-447C-98A5-A1918F231C29" /* Spendcap */ = {
+		"TEMP_C7413D46-F173-42CD-ADB3-97C887A249DC" /* Spendcap */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_135829F9-D766-40C5-9AA0-A1464E6E77AE" /* Secrets.xcconfig */,
+				"TEMP_7BA4679F-5180-4B40-88FA-4A862996F0BF" /* Secrets.xcconfig */,
 			);
 			path = Spendcap;
 			sourceTree = "<group>";
@@ -342,6 +345,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				520AECB32930FAA8091B71D9 /* MarketingScreenshots.swift in Sources */,
 				016A393FE4C5BE4D0F88B13F /* SpendcapUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -407,7 +411,7 @@
 		};
 		568F0089E9BF72A888B8F68D /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_135829F9-D766-40C5-9AA0-A1464E6E77AE" /* Secrets.xcconfig */;
+			baseConfigurationReference = "TEMP_7BA4679F-5180-4B40-88FA-4A862996F0BF" /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Spendcap/Spendcap.entitlements;
@@ -606,7 +610,7 @@
 		};
 		A2AF47695D6DE2F5696B08C5 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_135829F9-D766-40C5-9AA0-A1464E6E77AE" /* Secrets.xcconfig */;
+			baseConfigurationReference = "TEMP_7BA4679F-5180-4B40-88FA-4A862996F0BF" /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Spendcap/Spendcap.entitlements;
