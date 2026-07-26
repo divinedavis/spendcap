@@ -44,6 +44,16 @@ struct AuthView: View {
                         .foregroundStyle(.red)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
+                        .accessibilityIdentifier("auth.error")
+                }
+
+                if let notice = auth.noticeMessage {
+                    Label(notice, systemImage: "envelope.badge")
+                        .font(.footnote)
+                        .foregroundStyle(.blue)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                        .accessibilityIdentifier("auth.notice")
                 }
 
                 Button {
@@ -66,6 +76,7 @@ struct AuthView: View {
                 Button(isSigningUp ? "Have an account? Sign in" : "New here? Create an account") {
                     isSigningUp.toggle()
                     auth.errorMessage = nil
+                    auth.noticeMessage = nil
                 }
                 .font(.footnote)
                 .accessibilityIdentifier("auth.toggleMode")

@@ -65,6 +65,7 @@
 		74AADE09BA636449F334A6FC /* SupabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseManager.swift; sourceTree = "<group>"; };
 		7A715553EE1AD4E5BA4BDE98 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
 		8DAC4FA3E421D906C40BA624 /* PlaidLinkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaidLinkView.swift; sourceTree = "<group>"; };
+		911D65A562BB83EC94D03E66 /* Spendcap 2.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Spendcap 2.entitlements"; sourceTree = "<group>"; };
 		9E11E4C62FD7150E69CBF1F7 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		A97C47BF5E0792E242E013AF /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		B4087935D49D831BDA9CFAE0 /* PlaidLinkStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaidLinkStoreTests.swift; sourceTree = "<group>"; };
@@ -78,7 +79,7 @@
 		F33FF325AD3583F8C8C0766D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F3BA7D53E4C8AEC4EC9EDB50 /* BudgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetView.swift; sourceTree = "<group>"; };
 		FC109E672012905CC6B889E6 /* MonthMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthMathTests.swift; sourceTree = "<group>"; };
-		"TEMP_E5D5820B-106C-420A-BC29-AC7553613DD9" /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
+		"TEMP_469B2E29-527C-4C41-8B51-F2ECAC5F7893" /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -188,6 +189,7 @@
 			isa = PBXGroup;
 			children = (
 				F33FF325AD3583F8C8C0766D /* Info.plist */,
+				911D65A562BB83EC94D03E66 /* Spendcap 2.entitlements */,
 				DA45241441139C3B2067A7A8 /* Spendcap.entitlements */,
 				4E056AD3C1A4E1DFA6756699 /* App */,
 				622BAF0B6CC9A603FA4EB7BE /* Auth */,
@@ -239,10 +241,10 @@
 			path = Notifications;
 			sourceTree = "<group>";
 		};
-		"TEMP_C309861B-74E0-4510-9C8F-6919D36C7B5F" /* Spendcap */ = {
+		"TEMP_1B6E31C0-3A19-4CF7-8FE6-0B30D76492DE" /* Spendcap */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_E5D5820B-106C-420A-BC29-AC7553613DD9" /* Secrets.xcconfig */,
+				"TEMP_469B2E29-527C-4C41-8B51-F2ECAC5F7893" /* Secrets.xcconfig */,
 			);
 			path = Spendcap;
 			sourceTree = "<group>";
@@ -439,7 +441,7 @@
 		};
 		568F0089E9BF72A888B8F68D /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_E5D5820B-106C-420A-BC29-AC7553613DD9" /* Secrets.xcconfig */;
+			baseConfigurationReference = "TEMP_469B2E29-527C-4C41-8B51-F2ECAC5F7893" /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Spendcap/Spendcap.entitlements;
@@ -638,7 +640,7 @@
 		};
 		A2AF47695D6DE2F5696B08C5 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_E5D5820B-106C-420A-BC29-AC7553613DD9" /* Secrets.xcconfig */;
+			baseConfigurationReference = "TEMP_469B2E29-527C-4C41-8B51-F2ECAC5F7893" /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Spendcap/Spendcap.entitlements;

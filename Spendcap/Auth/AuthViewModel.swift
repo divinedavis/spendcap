@@ -6,6 +6,8 @@ final class AuthViewModel: ObservableObject {
     @Published var session: Session?
     @Published var isLoading = false
     @Published var errorMessage: String?
+    /// Non-error feedback, e.g. "account made, go confirm your email".
+    @Published var noticeMessage: String?
 
     private let client = SupabaseManager.shared.client
 
@@ -37,7 +39,17 @@ final class AuthViewModel: ObservableObject {
 
     func signUp(email: String, password: String) async {
         await run {
-            try await self.client.auth.signUp(email: email, password: password)
+            let response = try await self.client.auth.signUp(email: email, password: password)
+            // With email confirmation required, signUp creates the account but
+            // returns no session — authStateChanges never fires, so without
+            // this the user taps Create Account and the screen just sits there
+            // with no error and no progress. Say what happened.
+            if response.session == nil {
+                self.noticeMessage = """
+                    Account created. Check \(email) for a confirmation link, \
+                    then come back and sign in.
+                    """
+            }
         }
     }
 
@@ -61,6 +73,7 @@ final class AuthViewModel: ObservableObject {
     private func run(_ block: @escaping () async throws -> Void) async {
         isLoading = true
         errorMessage = nil
+        noticeMessage = nil
         defer { isLoading = false }
         do {
             try await block()
