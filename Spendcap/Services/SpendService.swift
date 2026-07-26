@@ -48,6 +48,21 @@ final class SpendService {
             .value
     }
 
+    /// Every transaction in the calendar month containing `now`, oldest first —
+    /// the series the Trends chart and breakdown are built from.
+    func monthTransactions(now: Date = Date(), timeZone: TimeZone = .current) async throws -> [BankTransaction] {
+        let (start, end) = Self.monthBounds(now: now, timeZone: timeZone)
+        return try await client
+            .from("transactions")
+            .select("id, date, name, merchant_name, category, amount_cents, pending, is_removed")
+            .gte("date", value: Self.localDateString(now: start, timeZone: timeZone))
+            .lte("date", value: Self.localDateString(now: end, timeZone: timeZone))
+            .eq("is_removed", value: false)
+            .order("date", ascending: true)
+            .execute()
+            .value
+    }
+
     func budget() async throws -> Budget {
         try await client
             .from("budgets")
@@ -121,6 +136,19 @@ final class SpendService {
         formatter.timeZone = timeZone
         formatter.locale = Locale(identifier: "en_US_POSIX")
         return formatter.string(from: now)
+    }
+
+    /// First and last instant-bearing days of the calendar month containing
+    /// `now`, in the given timezone. Falls back to `now` for both if the
+    /// calendar can't resolve the interval (it always can for Gregorian).
+    static func monthBounds(now: Date = Date(), timeZone: TimeZone = .current) -> (start: Date, end: Date) {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        guard let interval = calendar.dateInterval(of: .month, for: now) else { return (now, now) }
+        // dateInterval's end is the first instant of the next month; step back a
+        // day so the inclusive `lte` query doesn't pull in the 1st.
+        let lastDay = calendar.date(byAdding: .day, value: -1, to: interval.end) ?? now
+        return (interval.start, lastDay)
     }
 
     /// Keep the server-side timezone in sync with the device so "today" and

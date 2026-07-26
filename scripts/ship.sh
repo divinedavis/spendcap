@@ -36,6 +36,16 @@ else
     ./scripts/run_tests.sh unit
 fi
 
+# A green suite does not prove the app starts — XCUITest launches through its
+# own harness. Prove a cold launch works before shipping. SHIP_SKIP_SMOKE=1
+# escapes it if no simulator is available.
+if [[ "${SHIP_SKIP_SMOKE:-0}" == "1" ]]; then
+    echo "==> skipping smoke test (SHIP_SKIP_SMOKE=1)"
+else
+    echo "==> smoke-testing a simulator launch"
+    ./scripts/smoke_test.sh
+fi
+
 current=$(grep -m1 'CURRENT_PROJECT_VERSION:' "$PROJECT_YML" | sed -E 's/.*"([0-9]+)".*/\1/')
 next=$((current + 1))
 echo "==> bumping build $current -> $next"

@@ -79,6 +79,12 @@ struct PrivacyRedactionView: View {
 struct MainTabView: View {
     var body: some View {
         TabView {
+            HomeView()
+                .tabItem { Label("Home", systemImage: "house.fill") }
+
+            TrendsView()
+                .tabItem { Label("Trends", systemImage: "chart.bar.fill") }
+
             TodayView()
                 .tabItem { Label("Today", systemImage: "gauge.with.needle") }
 

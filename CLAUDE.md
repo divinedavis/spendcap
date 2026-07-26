@@ -54,10 +54,13 @@ after every sync → check_overspend:
    (`xcodebuild ... CODE_SIGNING_ALLOWED=NO`), commit only if green, `git add`
    specific files (never `-A` blindly), verify no secret files staged, push.
 2. **Ship TestFlight after every app-code change** — `./scripts/ship.sh`
-   (`SHIP_RUN_UI=1` to gate on UI tests too). Smoke-test launch in the
-   simulator before shipping.
+   (`SHIP_RUN_UI=1` to gate on UI tests too). ship.sh now runs
+   `./scripts/smoke_test.sh` itself, so the launch gate is automatic
+   (`SHIP_SKIP_SMOKE=1` to escape it when no simulator is free).
 3. **Run `./scripts/run_tests.sh` before shipping.** Review whether each UI
    change needs a new XCUITest; note the decision in the commit message.
+   Filters: `run_tests.sh unit MonthMathTests`,
+   `run_tests.sh ui SpendcapUITests/testHomeAndTrendsTabs`.
 4. **Never commit secrets.** Gitignored: `Secrets.xcconfig`,
    `scripts/asc-config.env`, `scripts/asc_api_key.p8`, `supabase/.env`.
    Scan staged files before every push.
@@ -83,6 +86,31 @@ after every sync → check_overspend:
   (pushed to Supabase function secrets via `./scripts/set_plaid_keys.sh`)
 - `spendcap-test-account` — JSON `{email,password}` for XCUITest auto-sign-in
 - `supabase-pat-clockin` — Supabase management API PAT
+
+## Harness
+
+| Script | What it does |
+|---|---|
+| `generate.sh` | Regenerate `.xcodeproj` from `project.yml` (run after adding files) |
+| `run_tests.sh [unit\|ui\|all] [Class[/test]]` | Full sweep; gates every ship |
+| `smoke_test.sh` | Build → install → cold-launch in a sim; proves the app starts |
+| `capture_screenshots.sh` | Signed-in App Store / portfolio PNGs from XCUITest |
+| `ship.sh` | tests → smoke → bump build → archive → TestFlight → verify testers |
+| `register_in_asc.py` / `configure_internal_testers.py` | ASC bootstrap + tester group |
+| `set_plaid_keys.sh` | Push keychain Plaid creds to Supabase function secrets |
+
+### UI-test gotchas (both cost real debugging time — don't rediscover them)
+
+- **Tab taps need `app.tapTab(_:in:)`**, not `tabBars.buttons[x].tap()`. On
+  iOS 26's floating tab bar a plain `.tap()` reports success but does not
+  change the selection. The helper in `UITestSupport.swift` falls back to a
+  coordinate tap and confirms via `isSelected`.
+- **`simctl launch` needs `ENABLE_DEBUG_DYLIB=NO`.** The default Xcode 26 Debug
+  build makes a stub + `.debug.dylib` that `simctl` refuses with "denied by
+  service delegate (SBMainWorkspace)" — which reads as a crash and isn't one.
+- iOS may raise a **"Save Password?"** sheet after sign-in that swallows the
+  next tap; `dismissSavePasswordPromptIfPresent()` clears it. It is
+  intermittent, so it can't be reproduced on demand.
 
 ## Known quirks
 

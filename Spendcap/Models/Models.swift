@@ -63,6 +63,96 @@ enum SpendStatus: Equatable {
     case over
 }
 
+/// One day on the Trends chart: the day's own outflow and the running
+/// month-to-date total through that day.
+struct DailySpend: Identifiable, Equatable {
+    let date: Date
+    let spentCents: Int
+    let cumulativeCents: Int
+
+    var id: Date { date }
+}
+
+/// Month-to-date rollup driving the Trends screen. All pure math on top of a
+/// transaction list so it can be unit-tested without a network.
+struct MonthStats: Equatable {
+    var series: [DailySpend]
+    var spentCents: Int
+    var daysElapsed: Int
+    var daysInMonth: Int
+    var dailyLimitCents: Int
+
+    var monthCapCents: Int { dailyLimitCents * daysInMonth }
+    var remainingCents: Int { monthCapCents - spentCents }
+    var averagePerDayCents: Int { daysElapsed > 0 ? spentCents / daysElapsed : 0 }
+
+    /// Straight-line projection to month end at the current daily average.
+    var projectedCents: Int { averagePerDayCents * daysInMonth }
+
+    var daysOverCap: Int { series.filter { $0.spentCents > dailyLimitCents }.count }
+
+    /// Fraction of the month's cap already spent, clamped to [0, 1].
+    var capProgress: Double {
+        guard monthCapCents > 0 else { return 0 }
+        return min(1.0, max(0.0, Double(spentCents) / Double(monthCapCents)))
+    }
+}
+
+enum MonthMath {
+    /// Build the day-by-day series for the calendar month containing `now`.
+    /// Days with no transactions still get a row (flat cumulative line), and
+    /// the series stops at today rather than running to month end — an empty
+    /// tail would read as "spent nothing" instead of "hasn't happened yet".
+    static func stats(
+        transactions: [BankTransaction],
+        dailyLimitCents: Int,
+        now: Date = Date(),
+        timeZone: TimeZone = .current
+    ) -> MonthStats {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+
+        let parser = DateFormatter()
+        parser.dateFormat = "yyyy-MM-dd"
+        parser.timeZone = timeZone
+        parser.locale = Locale(identifier: "en_US_POSIX")
+
+        guard let interval = calendar.dateInterval(of: .month, for: now) else {
+            return MonthStats(series: [], spentCents: 0, daysElapsed: 0,
+                              daysInMonth: 0, dailyLimitCents: dailyLimitCents)
+        }
+        let daysInMonth = calendar.range(of: .day, in: .month, for: now)?.count ?? 30
+        let today = calendar.startOfDay(for: now)
+
+        // Outflow only (> 0 is money out, Plaid convention), bucketed by day.
+        var byDay: [Date: Int] = [:]
+        for txn in transactions where txn.amountCents > 0 {
+            guard let parsed = parser.date(from: txn.date) else { continue }
+            let day = calendar.startOfDay(for: parsed)
+            byDay[day, default: 0] += txn.amountCents
+        }
+
+        var series: [DailySpend] = []
+        var running = 0
+        var cursor = calendar.startOfDay(for: interval.start)
+        while cursor <= today, cursor < interval.end {
+            let spent = byDay[cursor] ?? 0
+            running += spent
+            series.append(DailySpend(date: cursor, spentCents: spent, cumulativeCents: running))
+            guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+            cursor = next
+        }
+
+        return MonthStats(
+            series: series,
+            spentCents: running,
+            daysElapsed: series.count,
+            daysInMonth: daysInMonth,
+            dailyLimitCents: dailyLimitCents
+        )
+    }
+}
+
 /// Mirrors the server-side threshold logic in check_overspend so the UI and
 /// pushes always agree.
 enum BudgetMath {

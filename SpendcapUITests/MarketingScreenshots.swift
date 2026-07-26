@@ -43,26 +43,45 @@ final class MarketingScreenshots: XCTestCase {
         passwordField.tap()
         passwordField.typeText(password)
         app.buttons["auth.submit"].tap()
+        dismissSavePasswordPromptIfPresent()
 
+        // Home is the landing tab.
+        XCTAssertTrue(app.staticTexts["home.remaining"].waitForExistence(timeout: 30),
+                      "Home hero card should appear after sign-in")
+        save(app, "02-home")
+
+        app.tapTab("Trends", in: self)
+        if true {
+            if app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20) {
+                save(app, "03-trends-spending")
+                // Capture the other two chart modes from the segmented control.
+                for (index, label) in ["Daily", "Target"].enumerated() {
+                    let segment = app.buttons[label]
+                    if segment.waitForExistence(timeout: 5) {
+                        segment.tap()
+                        save(app, "0\(4 + index)-trends-\(label.lowercased())")
+                    }
+                }
+            }
+        }
+
+        app.tapTab("Today", in: self)
         XCTAssertTrue(app.staticTexts["today.spent"].waitForExistence(timeout: 30),
-                      "Today ring should appear after sign-in")
-        // Let the transaction list finish its first load before capturing.
-        _ = app.staticTexts["today.spent"].waitForExistence(timeout: 3)
-        save(app, "02-today")
+                      "Today ring should appear")
+        save(app, "06-today")
 
         app.buttons["today.editBudget"].tap()
         let limitField = app.descendants(matching: .any)
             .matching(identifier: "budget.dailyLimit").firstMatch
         if limitField.waitForExistence(timeout: 10) {
-            save(app, "03-budget")
+            save(app, "07-budget")
             app.buttons["Cancel"].tap()
         }
 
-        let settingsTab = app.tabBars.buttons["Settings"]
-        if settingsTab.waitForExistence(timeout: 10) {
-            settingsTab.tap()
+        app.tapTab("Settings", in: self)
+        if true {
             if app.buttons["settings.signOut"].waitForExistence(timeout: 10) {
-                save(app, "04-settings")
+                save(app, "08-settings")
             }
         }
     }

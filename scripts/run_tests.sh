@@ -2,9 +2,11 @@
 # Spendcap — full test sweep (unit + UI).
 #
 # Usage:
-#   ./scripts/run_tests.sh           # both targets, all tests
-#   ./scripts/run_tests.sh unit      # XCTest unit suite only
-#   ./scripts/run_tests.sh ui        # XCUITest sweep only
+#   ./scripts/run_tests.sh                       # both targets, all tests
+#   ./scripts/run_tests.sh unit                  # XCTest unit suite only
+#   ./scripts/run_tests.sh ui                    # XCUITest sweep only
+#   ./scripts/run_tests.sh unit MonthMathTests                       # one class
+#   ./scripts/run_tests.sh ui SpendcapUITests/testHomeAndTrendsTabs  # one test
 #
 # Memory rule: this must pass before each TestFlight ship.
 
@@ -19,6 +21,7 @@ UI_TARGET="SpendcapUITests"
 DERIVED_DATA="${TMPDIR:-/tmp}/spendcap-derived-data"
 
 MODE="${1:-all}"
+ONLY="${2:-}"
 
 SIMULATOR_ID="${SIMULATOR_ID:-}"
 if [[ -z "$SIMULATOR_ID" ]]; then
@@ -61,7 +64,12 @@ run_xcodebuild_test() {
         test
     )
     if [[ -n "$only_target" ]]; then
-        args+=(-only-testing:"$only_target")
+        if [[ -n "$ONLY" ]]; then
+            # "Class" runs a whole class; "Class/testName" runs one test.
+            args+=(-only-testing:"$only_target/$ONLY")
+        else
+            args+=(-only-testing:"$only_target")
+        fi
     fi
     xcodebuild "${args[@]}"
 }
