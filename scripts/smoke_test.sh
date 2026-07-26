@@ -71,13 +71,36 @@ if [[ -z "$PID" ]]; then
     exit 1
 fi
 
-# A crash-on-launch still returns a pid, so confirm the process is alive after
+# A crash-on-launch still returns a pid, so confirm the process is alive once
 # the first frames have had time to render.
-sleep 5
-if ! xcrun simctl spawn "$SIMULATOR_ID" launchctl list 2>/dev/null | grep -q "$BUNDLE_ID"; then
-    echo "error: $BUNDLE_ID is not running 5s after launch — crashed on start" >&2
-    echo "recent crash reports:" >&2
-    ls -t ~/Library/Logs/DiagnosticReports/Spendcap* 2>/dev/null | head -3 >&2 || true
+#
+# Poll rather than checking once: straight after a UI-test run the simulator is
+# still settling and `simctl spawn` can transiently return nothing, which a
+# single check reports as a crash. A gate that cries wolf gets ignored, so it
+# must only fail when the app is genuinely absent.
+CRASH_GLOB=(~/Library/Logs/DiagnosticReports/Spendcap*)
+crash_seen() { [[ -e "${CRASH_GLOB[0]}" ]] && \
+    [[ -n "$(find ~/Library/Logs/DiagnosticReports -name 'Spendcap*' -newermt '-2 minutes' 2>/dev/null)" ]]; }
+
+alive=0
+for _ in $(seq 1 12); do   # up to ~24s
+    if xcrun simctl spawn "$SIMULATOR_ID" launchctl list 2>/dev/null | grep -q "$BUNDLE_ID"; then
+        alive=1
+        break
+    fi
+    # A fresh crash report is definitive — stop waiting.
+    if crash_seen; then break; fi
+    sleep 2
+done
+
+if [[ "$alive" -ne 1 ]]; then
+    echo "error: $BUNDLE_ID is not running after launch — crashed on start" >&2
+    if crash_seen; then
+        echo "recent crash reports:" >&2
+        find ~/Library/Logs/DiagnosticReports -name 'Spendcap*' -newermt '-2 minutes' 2>/dev/null | head -3 >&2
+    else
+        echo "(no crash report found — the simulator may be wedged; try re-running)" >&2
+    fi
     exit 1
 fi
 
