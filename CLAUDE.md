@@ -112,6 +112,45 @@ after every sync → check_overspend:
   next tap; `dismissSavePasswordPromptIfPresent()` clears it. It is
   intermittent, so it can't be reproduced on demand.
 
+## Plaid OAuth (real banks)
+
+Every major US bank — Chase, BofA, Wells Fargo, Capital One, US Bank, Schwab,
+PNC — uses OAuth, which needs a `redirect_uri` that is both registered with
+Plaid **and** a working iOS universal link. Built 2026-07-26; one manual step
+is outstanding.
+
+Redirect URI: **`https://divinedavis.com/spendcap/oauth/`** (trailing slash —
+without it nginx 301s, and a redirect on the redirect URI is trouble).
+
+| Piece | Where | State |
+|---|---|---|
+| AASA entry | `Personal-Website/.well-known/apple-app-site-association` → `/var/www/divinedavis` on 159.203.110.79 | done — **shared with Hidden Gems, merge never overwrite** |
+| Landing page | `Personal-Website/spendcap/oauth/index.html` | done (200, no redirect) |
+| Entitlement | `project.yml` → `applinks:divinedavis.com` | done |
+| App ID capability | `scripts/asc_enable_associated_domains.py` | done (ASSOCIATED_DOMAINS on) |
+| `redirect_uri` in link token | `plaid_create_link_token`, from `PLAID_REDIRECT_URI` | code deployed, **secret currently unset** |
+| Cold-launch resume | `PlaidLinkStore` + `resumeAfterTermination(from:)` | done |
+| Register URI in Plaid dashboard | dashboard-only | **OUTSTANDING — user action** |
+
+**The secret is deliberately unset.** Plaid rejects an unregistered redirect
+URI with `INVALID_FIELD ... must be configured in the developer dashboard`,
+which breaks bank linking *entirely* — verified live. So `redirect_uri` is sent
+only when `PLAID_REDIRECT_URI` exists. Once the URI is registered at
+dashboard.plaid.com → Developers → API → Allowed redirect URIs:
+
+```bash
+./scripts/set_oauth_redirect.sh on     # sets it, verifies, auto-reverts on failure
+./scripts/set_oauth_redirect.sh test   # check link-token creation any time
+```
+
+Going to production also needs the production Plaid secret in
+`spendcap-plaid-secret` and `./scripts/set_plaid_keys.sh production`.
+
+Cold-launch resume matters because iOS can terminate the app during the bank
+hand-off. LinkKit resumes on its own if the app survived; if not, it needs a
+*new* handler built from the **same** link token followed by
+`resumeAfterTermination(from:)` — hence the token in UserDefaults.
+
 ## Known quirks
 
 - Plaid sandbox: use institution `ins_109508` ("First Platypus Bank"),

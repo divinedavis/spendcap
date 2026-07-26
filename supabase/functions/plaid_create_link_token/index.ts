@@ -21,6 +21,13 @@ serve(async (req) => {
       });
     }
 
+    // OAuth banks (Chase, BofA, Wells Fargo, Capital One, US Bank, Schwab,
+    // PNC) require a redirect_uri that is registered in the Plaid dashboard
+    // AND configured as an iOS universal link. Sent only when configured:
+    // passing an unregistered URI is an INVALID_FIELD error, so sandbox setups
+    // without one keep working.
+    const redirectUri = Deno.env.get("PLAID_REDIRECT_URI") ?? "";
+
     const resp = await plaid("/link/token/create", {
       client_name: "Spendcap",
       user: { client_user_id: user.id },
@@ -28,6 +35,7 @@ serve(async (req) => {
       country_codes: ["US"],
       language: "en",
       webhook: `${SUPABASE_URL}/functions/v1/plaid_webhook`,
+      ...(redirectUri ? { redirect_uri: redirectUri } : {}),
     });
 
     return new Response(JSON.stringify({ link_token: resp.link_token }), {

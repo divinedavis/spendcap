@@ -36,6 +36,7 @@ struct SpendcapApp: App {
 struct RootView: View {
     @EnvironmentObject var auth: AuthViewModel
     @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var linkStore = PlaidLinkStore.shared
 
     var body: some View {
         Group {
@@ -46,6 +47,24 @@ struct RootView: View {
             }
         }
         .animation(.default, value: auth.isSignedIn)
+        // Plaid OAuth banks redirect back to divinedavis.com/spendcap/oauth/.
+        // Universal links arrive as a browsing user activity on a warm launch
+        // and via onOpenURL in some cold-launch paths, so handle both. Links
+        // that aren't ours are ignored — Hidden Gems shares the same domain.
+        .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+            if let url = activity.webpageURL { linkStore.handle(url: url) }
+        }
+        .onOpenURL { url in
+            linkStore.handle(url: url)
+        }
+        .sheet(isPresented: Binding(
+            get: { linkStore.pendingRedirect != nil },
+            set: { if !$0 { linkStore.clear() } }
+        )) {
+            if let redirect = linkStore.pendingRedirect {
+                PlaidLinkFlow(onLinked: {}, resumeFrom: redirect)
+            }
+        }
         // Privacy: cover bank balances / transactions in the app-switcher
         // snapshot whenever the scene isn't active (backgrounded or inactive).
         .overlay {

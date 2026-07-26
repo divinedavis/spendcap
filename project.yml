@@ -74,6 +74,13 @@ targets:
       path: Spendcap/Spendcap.entitlements
       properties:
         aps-environment: production
+        # Required for Plaid OAuth banks (Chase, BofA, Wells Fargo, Capital
+        # One, US Bank, Schwab, PNC): the bank redirects back to
+        # https://divinedavis.com/spendcap/oauth/, which must open the app as a
+        # universal link. The AASA is served from that domain's
+        # /.well-known/apple-app-site-association (shared with Hidden Gems).
+        com.apple.developer.associated-domains:
+          - applinks:divinedavis.com
 
   SpendcapTests:
     type: bundle.unit-test
