@@ -156,6 +156,13 @@ hand-off. LinkKit resumes on its own if the app survived; if not, it needs a
 - Plaid sandbox: use institution `ins_109508` ("First Platypus Bank"),
   credentials `user_good` / `pass_good`. Fire test transactions with
   `/sandbox/item/fire_webhook` or `sandbox/transactions/create`.
+- Plaid's returning-user phone screen (the first thing Link shows) **rejects
+  real phone numbers in Sandbox** — a real number gives "Invalid phone number",
+  which looks like an app bug but is not. Use a seeded test number:
+  `415-555-0010` (new user) or `415-555-0011` (returning user), OTP `123456`.
+  Nothing in our code sends `user.phone_number`; the screen comes from Link's
+  returning-user experience, toggled in the Plaid dashboard's Link
+  customization, not from `/link/token/create`.
 - Edge functions deployed with `--no-verify-jwt` (webhook + cron fns) are gated
   by secret headers instead; JWT-gated fns (`plaid_create_link_token`,
   `plaid_exchange_public_token`) authenticate the Supabase session user.
