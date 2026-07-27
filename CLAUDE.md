@@ -84,6 +84,9 @@ after every sync → check_overspend:
 - `spendcap-supabase-service-role` — service-role key (server-side only)
 - `spendcap-plaid-client-id` / `spendcap-plaid-secret` — Plaid sandbox creds
   (pushed to Supabase function secrets via `./scripts/set_plaid_keys.sh`)
+- `spendcap-plaid-secret-production` / `spendcap-plaid-redirect-uri` — the
+  production half of the above; both absent until Plaid grants Production
+  access (see "Going to production")
 - `spendcap-test-account` — JSON `{email,password}` for XCUITest auto-sign-in
 - `supabase-pat-clockin` — Supabase management API PAT
 
@@ -150,6 +153,32 @@ Cold-launch resume matters because iOS can terminate the app during the bank
 hand-off. LinkKit resumes on its own if the app survived; if not, it needs a
 *new* handler built from the **same** link token followed by
 `resumeAfterTermination(from:)` — hence the token in UserDefaults.
+
+## Going to production
+
+Everything below the Plaid credential is already in place — the blocker is that
+Plaid issues a production secret only after it approves a **Production access
+request** (dashboard > Team Settings > Company, business + use-case review).
+`transactions` is a subscription product: each connected bank bills monthly,
+for as long as it stays linked, so real users cost real money from day one.
+
+Once the production secret exists:
+
+1. `security add-generic-password -a divinedavis -s spendcap-plaid-secret-production -w '<secret>' -U`
+2. Register `https://divinedavis.com/spendcap/oauth/` under Developers > API in
+   the Plaid dashboard, then store it as `spendcap-plaid-redirect-uri`. The
+   `applinks:divinedavis.com` AASA already publishes `/spendcap/oauth*` for
+   `CG89RY4W6R.com.divinedavis.spendcap`.
+3. `./scripts/set_plaid_keys.sh production` — preflights both the credentials
+   and the redirect URI against `production.plaid.com` before writing anything.
+4. Redeploy all five edge functions (the command is printed by step 3);
+   `_shared/plaid.ts` reads `PLAID_ENV` at module load, so a running function
+   keeps the old host until it is replaced.
+5. Delete the sandbox rows — `plaid_items`, `plaid_item_secrets`, `accounts`,
+   `transactions`, `spend_alerts`. Sandbox access tokens are meaningless in
+   production and `sync_transactions` will error on every one of them forever.
+6. Re-link a real bank from a TestFlight build and confirm a real transaction
+   lands, then that an overspend push fires.
 
 ## Known quirks
 
