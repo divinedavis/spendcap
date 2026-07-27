@@ -157,10 +157,18 @@ hand-off. LinkKit resumes on its own if the app survived; if not, it needs a
 ## Going to production
 
 Everything below the Plaid credential is already in place — the blocker is that
-Plaid issues a production secret only after it approves a **Production access
-request** (dashboard > Team Settings > Company, business + use-case review).
-`transactions` is a subscription product: each connected bank bills monthly,
-for as long as it stays linked, so real users cost real money from day one.
+a production secret is issued only after Plaid approves the request behind
+**Get production access** in the dashboard sidebar (business + use-case review,
+a couple of business days).
+
+This team was created 2026-07-18, i.e. after the 2026-04-15 cutoff, so that
+flow lands on a **Trial plan**: free, real production data, real production
+keys, most OAuth institutions (Chase, BofA, Wells Fargo), and `transactions`
+bundled along with seven other products. The cap is **10 Production Items,
+consumed permanently** — deleting an Item does *not* give the slot back, so
+never burn one on a throwaway test. Upgrading to a paid plan starts the
+per-Item monthly subscription billing for `transactions`, and only the
+products named in the Production request form carry over.
 
 Once the production secret exists:
 
@@ -178,7 +186,14 @@ Once the production secret exists:
    `transactions`, `spend_alerts`. Sandbox access tokens are meaningless in
    production and `sync_transactions` will error on every one of them forever.
 6. Re-link a real bank from a TestFlight build and confirm a real transaction
-   lands, then that an overspend push fires.
+   lands, then that an overspend push fires. On a Trial plan this spends 1 of
+   the 10 Items for good, so link the account you actually want to keep.
+
+Note for the deferred monthly-statements feature: `statements` is bundled into
+the Trial plan, so it can be evaluated there without the separate paid add-on
+it would otherwise need. Storing statement PDFs is still a real risk step-up
+(full account numbers) and would need a private self-only bucket, a retention
+policy, and a privacy-policy line before it ships.
 
 ## Known quirks
 
