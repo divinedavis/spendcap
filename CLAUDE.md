@@ -10,7 +10,8 @@ crosses 80% ("getting close") and 100% ("over cap") of the cap.
 
 - **Platform:** iOS 17+, SwiftUI, Swift 5.10
 - **Backend:** Supabase — ref `gmzzbslcsswqjjswoaen` (auth + Postgres + edge functions, all RLS-enforced)
-- **Bank data:** Plaid `transactions` product. `PLAID_ENV=sandbox` until launch.
+- **Bank data:** Plaid `transactions` product. **`PLAID_ENV=production` since
+  2026-08-01** — real banks, real money, Trial plan (10 Production Items).
 - **Local path:** `~/Desktop/Spendcap`
 - **Bundle ID:** `com.divinedavis.spendcap`, team `CG89RY4W6R`
 - **APNs:** reusable team key `NVH34S83TM` (`~/.appstoreconnect/private_keys/AuthKey_NVH34S83TM.p8`)
@@ -85,8 +86,9 @@ after every sync → check_overspend:
 - `spendcap-plaid-client-id` / `spendcap-plaid-secret` — Plaid sandbox creds
   (pushed to Supabase function secrets via `./scripts/set_plaid_keys.sh`)
 - `spendcap-plaid-secret-production` / `spendcap-plaid-redirect-uri` — the
-  production half of the above; both absent until Plaid grants Production
-  access (see "Going to production")
+  production half of the above; **both present and live since 2026-08-01**.
+  `set_plaid_keys.sh production` reads these; the sandbox secret is untouched,
+  so switching back is `./scripts/set_plaid_keys.sh sandbox`.
 - `spendcap-test-account` — JSON `{email,password}` for XCUITest auto-sign-in
 - `supabase-pat-clockin` — Supabase management API PAT
 
@@ -119,8 +121,8 @@ after every sync → check_overspend:
 
 Every major US bank — Chase, BofA, Wells Fargo, Capital One, US Bank, Schwab,
 PNC — uses OAuth, which needs a `redirect_uri` that is both registered with
-Plaid **and** a working iOS universal link. Built 2026-07-26; one manual step
-is outstanding.
+Plaid **and** a working iOS universal link. Built 2026-07-26; **fully live
+since 2026-08-01** — nothing outstanding.
 
 Redirect URI: **`https://divinedavis.com/spendcap/oauth/`** (trailing slash —
 without it nginx 301s, and a redirect on the redirect URI is trouble).
@@ -131,35 +133,36 @@ without it nginx 301s, and a redirect on the redirect URI is trouble).
 | Landing page | `Personal-Website/spendcap/oauth/index.html` | done (200, no redirect) |
 | Entitlement | `project.yml` → `applinks:divinedavis.com` | done |
 | App ID capability | `scripts/asc_enable_associated_domains.py` | done (ASSOCIATED_DOMAINS on) |
-| `redirect_uri` in link token | `plaid_create_link_token`, from `PLAID_REDIRECT_URI` | code deployed, **secret currently unset** |
+| `redirect_uri` in link token | `plaid_create_link_token`, from `PLAID_REDIRECT_URI` | done — **secret set 2026-08-01** |
 | Cold-launch resume | `PlaidLinkStore` + `resumeAfterTermination(from:)` | done |
-| Register URI in Plaid dashboard | dashboard-only | **OUTSTANDING — user action** |
+| Register URI in Plaid dashboard | dashboard-only | done 2026-08-01 |
 
-**The secret is deliberately unset.** Plaid rejects an unregistered redirect
-URI with `INVALID_FIELD ... must be configured in the developer dashboard`,
-which breaks bank linking *entirely* — verified live. So `redirect_uri` is sent
-only when `PLAID_REDIRECT_URI` exists. Once the URI is registered at
-dashboard.plaid.com → Developers → API → Allowed redirect URIs:
+Plaid rejects an *unregistered* redirect URI with `INVALID_FIELD ... must be
+configured in the developer dashboard`, which breaks bank linking *entirely*,
+not just OAuth banks — verified live. So `redirect_uri` is sent only when
+`PLAID_REDIRECT_URI` exists, and the URI must be registered at
+dashboard.plaid.com → Developers → API → Allowed redirect URIs **first**. It is
+now, for both environments.
 
 ```bash
 ./scripts/set_oauth_redirect.sh on     # sets it, verifies, auto-reverts on failure
 ./scripts/set_oauth_redirect.sh test   # check link-token creation any time
 ```
 
-Going to production also needs the production Plaid secret in
-`spendcap-plaid-secret` and `./scripts/set_plaid_keys.sh production`.
+Verified live 2026-08-01: `/institutions/search` returns `ins_127991` Wells
+Fargo with `oauth: true`, and `plaid_create_link_token` issues a
+`link-production-…` token with the redirect attached.
 
 Cold-launch resume matters because iOS can terminate the app during the bank
 hand-off. LinkKit resumes on its own if the app survived; if not, it needs a
 *new* handler built from the **same** link token followed by
 `resumeAfterTermination(from:)` — hence the token in UserDefaults.
 
-## Going to production
+## Production — LIVE since 2026-08-01
 
-Everything below the Plaid credential is already in place — the blocker is that
-a production secret is issued only after Plaid approves the request behind
-**Get production access** in the dashboard sidebar (business + use-case review,
-a couple of business days).
+Cutover done. `PLAID_ENV=production`, production secret in Supabase, all five
+edge functions redeployed, redirect URI registered and on. Verified by the live
+`plaid_create_link_token` returning a `link-production-…` token.
 
 This team was created 2026-07-18, i.e. after the 2026-04-15 cutoff, so that
 flow lands on a **Trial plan**: free, real production data, real production
@@ -170,24 +173,30 @@ never burn one on a throwaway test. Upgrading to a paid plan starts the
 per-Item monthly subscription billing for `transactions`, and only the
 products named in the Production request form carry over.
 
-Once the production secret exists:
+What the cutover ran (2026-08-01), in order — repeat this shape if the team
+ever moves again:
 
 1. `security add-generic-password -a divinedavis -s spendcap-plaid-secret-production -w '<secret>' -U`
-2. Register `https://divinedavis.com/spendcap/oauth/` under Developers > API in
-   the Plaid dashboard, then store it as `spendcap-plaid-redirect-uri`. The
+2. Registered `https://divinedavis.com/spendcap/oauth/` under Developers > API
+   in the Plaid dashboard, then stored it as `spendcap-plaid-redirect-uri`. The
    `applinks:divinedavis.com` AASA already publishes `/spendcap/oauth*` for
    `CG89RY4W6R.com.divinedavis.spendcap`.
 3. `./scripts/set_plaid_keys.sh production` — preflights both the credentials
    and the redirect URI against `production.plaid.com` before writing anything.
-4. Redeploy all five edge functions (the command is printed by step 3);
+4. Redeployed all five edge functions (the command is printed by step 3);
    `_shared/plaid.ts` reads `PLAID_ENV` at module load, so a running function
    keeps the old host until it is replaced.
-5. Delete the sandbox rows — `plaid_items`, `plaid_item_secrets`, `accounts`,
-   `transactions`, `spend_alerts`. Sandbox access tokens are meaningless in
-   production and `sync_transactions` will error on every one of them forever.
-6. Re-link a real bank from a TestFlight build and confirm a real transaction
-   lands, then that an overspend push fires. On a Trial plan this spends 1 of
-   the 10 Items for good, so link the account you actually want to keep.
+5. `./scripts/set_oauth_redirect.sh on`.
+
+**Still open after the cutover:**
+
+- **Sandbox rows are orphaned.** `plaid_items`, `plaid_item_secrets`,
+  `accounts`, `transactions`, `spend_alerts` still hold the First Platypus
+  Bank item. Sandbox access tokens are meaningless in production, so
+  `sync_transactions` will error on every one of them forever. Delete them.
+- **No real bank linked yet.** Linking one spends 1 of the 10 Trial Items
+  *permanently* — deleting the Item does not return the slot — so link the
+  account you actually intend to keep, never a throwaway.
 
 Note for the deferred monthly-statements feature: `statements` is bundled into
 the Trial plan, so it can be evaluated there without the separate paid add-on
@@ -204,6 +213,8 @@ policy, and a privacy-policy line before it ships.
   real phone numbers in Sandbox** — a real number gives "Invalid phone number",
   which looks like an app bug but is not. Use a seeded test number:
   `415-555-0010` (new user) or `415-555-0011` (returning user), OTP `123456`.
+  In **production** a real mobile works, but VoIP and landline numbers are
+  still rejected — use a number that actually receives SMS.
   Nothing in our code sends `user.phone_number`; the screen comes from Link's
   returning-user experience, toggled in the Plaid dashboard's Link
   customization, not from `/link/token/create`.
