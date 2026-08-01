@@ -198,11 +198,50 @@ ever moves again:
   *permanently* — deleting the Item does not return the slot — so link the
   account you actually intend to keep, never a throwaway.
 
-Note for the deferred monthly-statements feature: `statements` is bundled into
-the Trial plan, so it can be evaluated there without the separate paid add-on
-it would otherwise need. Storing statement PDFs is still a real risk step-up
-(full account numbers) and would need a private self-only bucket, a retention
-policy, and a privacy-policy line before it ships.
+## Statements (shipped build 8, 2026-08-01)
+
+Past-year statement PDFs, behind their own Plaid consent. `statements` is
+bundled into the Trial plan, so there is no separate add-on cost.
+
+**Consent is the whole story.** Statements is a distinct product from
+transactions and the bank approves it separately — `/statements/list` against
+an item linked for transactions only answers `ADDITIONAL_CONSENT_REQUIRED`. It
+cannot be granted server-side. The user must go back through Link in **update
+mode**: `access_token` + `products: ["statements"]` on `/link/token/create`
+re-asks the bank against the *existing* item.
+
+**Never exchange the public token in consent mode.** Update mode still hands
+one back, and exchanging it mints a second Item — permanently consuming
+another of the Trial plan's 10 slots. `PlaidLinkFlow.Mode.statementsConsent`
+drops it deliberately and calls `syncStatements()` instead.
+
+| Piece | Where |
+|---|---|
+| Consent token | `plaid_create_update_link_token` |
+| List + download + store | `plaid_statements_sync` |
+| Raw PDF fetch | `_shared/plaid.ts` → `plaidDownload` (the JSON `plaid()` helper throws on PDF bytes) |
+| Schema + bucket | `0003_statements.sql` |
+| UI | `Spendcap/Statements/StatementsView.swift`, reached from Settings |
+
+**Security posture — these are the most sensitive bytes the app stores** (full
+account numbers, not the 4-digit `accounts.mask`):
+- Bucket `statements` is private; objects are `<uid>/<plaid_statement_id>.pdf`
+- Storage policies compare `(storage.foldername(name))[1]` to `auth.uid()`.
+  A bucket-level policy would let any signed-in user read every statement.
+- Reads go through short-lived signed URLs, minted per tap — never cached
+- `public.statements` has **no anon grant**, unlike the 0001 tables
+- `delete_account()` clears the bucket first; `storage.objects` does not
+  cascade from `auth.users`, so deletion would otherwise orphan the PDFs
+
+**Cost guard:** `MAX_DOWNLOADS_PER_RUN = 30`. Plaid bills statements per
+request, and accounts × 24 months could fan out into hundreds of paid calls
+from a single tap. Runs are idempotent — already-fetched statements are
+skipped, so a second pull picks up the remainder. A failed download still
+writes a row with a null `storage_path` so the month shows as unavailable
+rather than silently vanishing.
+
+Still worth doing before this is a public feature: a retention policy and a
+privacy-policy line covering stored statement PDFs.
 
 ## Known quirks
 
