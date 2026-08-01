@@ -19,7 +19,7 @@ final class HomeViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     var spentCents: Int {
-        transactions.filter { $0.amountCents > 0 }.reduce(0) { $0 + $1.amountCents }
+        transactions.filter(\.countsTowardDailyCap).reduce(0) { $0 + $1.amountCents }
     }
 
     var remainingCents: Int {

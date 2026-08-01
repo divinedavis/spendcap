@@ -9,7 +9,13 @@ final class TodayViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     var spentCents: Int {
-        transactions.filter { $0.amountCents > 0 }.reduce(0) { $0 + $1.amountCents }
+        transactions.filter(\.countsTowardDailyCap).reduce(0) { $0 + $1.amountCents }
+    }
+
+    /// Whether any of today's rows are excluded from the ring, so the list can
+    /// explain the gap instead of leaving it as an apparent bug.
+    var hasUncountedBackfill: Bool {
+        transactions.contains { $0.pending && $0.isBackfill && !$0.isRemoved }
     }
 
     var status: SpendStatus {
@@ -163,6 +169,11 @@ struct TodayView: View {
             if !model.transactions.isEmpty {
                 Text("Today's transactions")
                     .font(.headline)
+                if model.hasUncountedBackfill {
+                    Text("Charges your bank hadn't posted when you connected don't count toward today — they'll count on the day they actually happened.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             } else if model.hasBank {
                 Text("No transactions yet today.")
                     .font(.subheadline)
@@ -188,7 +199,14 @@ struct TodayView: View {
                         Text(BudgetMath.dollars(abs(txn.amountCents)))
                             .font(.body.monospacedDigit())
                             .foregroundStyle(txn.amountCents > 0 ? Color.primary : Color.green)
-                        if txn.pending {
+                        // A row excluded from the ring has to say so. Otherwise
+                        // the list reads as $400 of charges under a $0 total
+                        // and the app just looks broken.
+                        if txn.pending && txn.isBackfill {
+                            Text("Not counted")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        } else if txn.pending {
                             Text("Pending")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)

@@ -9,17 +9,68 @@ struct BankTransaction: Codable, Identifiable, Equatable {
     let amountCents: Int        // > 0 = money out (Plaid convention)
     let pending: Bool
     let isRemoved: Bool
+    /// Arrived in the item's first sync — see `countsTowardDailyCap`.
+    /// Defaults to false so older cached rows and test fixtures still decode.
+    let isBackfill: Bool
 
     enum CodingKeys: String, CodingKey {
         case id, date, name, pending, category
         case merchantName = "merchant_name"
         case amountCents = "amount_cents"
         case isRemoved = "is_removed"
+        case isBackfill = "is_backfill"
+    }
+
+    init(
+        id: UUID,
+        date: String,
+        name: String,
+        merchantName: String? = nil,
+        category: String? = nil,
+        amountCents: Int,
+        pending: Bool = false,
+        isRemoved: Bool = false,
+        isBackfill: Bool = false
+    ) {
+        self.id = id
+        self.date = date
+        self.name = name
+        self.merchantName = merchantName
+        self.category = category
+        self.amountCents = amountCents
+        self.pending = pending
+        self.isRemoved = isRemoved
+        self.isBackfill = isBackfill
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        date = try c.decode(String.self, forKey: .date)
+        name = try c.decode(String.self, forKey: .name)
+        merchantName = try c.decodeIfPresent(String.self, forKey: .merchantName)
+        category = try c.decodeIfPresent(String.self, forKey: .category)
+        amountCents = try c.decode(Int.self, forKey: .amountCents)
+        pending = try c.decodeIfPresent(Bool.self, forKey: .pending) ?? false
+        isRemoved = try c.decodeIfPresent(Bool.self, forKey: .isRemoved) ?? false
+        isBackfill = try c.decodeIfPresent(Bool.self, forKey: .isBackfill) ?? false
     }
 
     var displayName: String {
         let merchant = merchantName?.trimmingCharacters(in: .whitespaces) ?? ""
         return merchant.isEmpty ? name : merchant
+    }
+
+    /// Whether this row should count toward a day's spending.
+    ///
+    /// Must mirror `overspend_status()` exactly — the server sends the push and
+    /// the client draws the ring, and the two disagreeing is worse than either
+    /// being wrong. A row inherited in the item's first sync while still
+    /// pending carries the *link* date rather than a purchase date, because
+    /// banks report unposted charges with no authorized_date. It starts
+    /// counting on its real day once it posts.
+    var countsTowardDailyCap: Bool {
+        !isRemoved && amountCents > 0 && !(pending && isBackfill)
     }
 }
 
@@ -161,8 +212,10 @@ enum MonthMath {
         let today = calendar.startOfDay(for: now)
 
         // Outflow only (> 0 is money out, Plaid convention), bucketed by day.
+        // countsTowardDailyCap also drops pending rows inherited at link time,
+        // whose date is the link date rather than a purchase date.
         var byDay: [Date: Int] = [:]
-        for txn in transactions where txn.amountCents > 0 {
+        for txn in transactions where txn.countsTowardDailyCap {
             guard let parsed = parser.date(from: txn.date) else { continue }
             let day = calendar.startOfDay(for: parsed)
             byDay[day, default: 0] += txn.amountCents

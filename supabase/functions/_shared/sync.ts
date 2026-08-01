@@ -24,6 +24,16 @@ export async function syncItem(supabase: SupabaseClient, item: ItemRow): Promise
 
   let cursor = item.sync_cursor ?? undefined;
   let hasMore = true;
+
+  // No cursor means this is the item's first sync, so everything arriving now
+  // is history we inherited rather than spending we watched happen. That only
+  // matters for rows that are still pending: banks report those with no
+  // authorized_date, so Plaid dates them to the day they were seen — i.e. the
+  // link date — which would otherwise dump the whole unposted backlog onto the
+  // user's cap for that day. Marking them lets day totals skip them until they
+  // post with a real date. Captured before the loop, since `cursor` is
+  // reassigned on every page.
+  const isFirstSync = !item.sync_cursor;
   while (hasMore) {
     const page = await plaid("/transactions/sync", {
       access_token: secret.access_token,
@@ -45,6 +55,9 @@ export async function syncItem(supabase: SupabaseClient, item: ItemRow): Promise
         amount_cents: toCents(t.amount),
         pending: t.pending ?? false,
         is_removed: false,
+        // Later syncs clear the flag, so a backfilled charge starts counting
+        // on its true day the moment it posts.
+        is_backfill: isFirstSync,
         updated_at: new Date().toISOString(),
       }));
     if (upserts.length) {

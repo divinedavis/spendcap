@@ -29,7 +29,7 @@ final class SpendService {
         let today = Self.localDateString()
         return try await client
             .from("transactions")
-            .select("id, date, name, merchant_name, category, amount_cents, pending, is_removed")
+            .select("id, date, name, merchant_name, category, amount_cents, pending, is_removed, is_backfill")
             .eq("date", value: today)
             .eq("is_removed", value: false)
             .order("amount_cents", ascending: false)
@@ -40,7 +40,7 @@ final class SpendService {
     func recentTransactions(limit: Int = 100) async throws -> [BankTransaction] {
         try await client
             .from("transactions")
-            .select("id, date, name, merchant_name, category, amount_cents, pending, is_removed")
+            .select("id, date, name, merchant_name, category, amount_cents, pending, is_removed, is_backfill")
             .eq("is_removed", value: false)
             .order("date", ascending: false)
             .limit(limit)
@@ -54,7 +54,7 @@ final class SpendService {
         let (start, end) = Self.monthBounds(now: now, timeZone: timeZone)
         return try await client
             .from("transactions")
-            .select("id, date, name, merchant_name, category, amount_cents, pending, is_removed")
+            .select("id, date, name, merchant_name, category, amount_cents, pending, is_removed, is_backfill")
             .gte("date", value: Self.localDateString(now: start, timeZone: timeZone))
             .lte("date", value: Self.localDateString(now: end, timeZone: timeZone))
             .eq("is_removed", value: false)
