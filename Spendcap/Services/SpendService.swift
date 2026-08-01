@@ -126,6 +126,74 @@ final class SpendService {
         let accounts: Int?
     }
 
+    // MARK: - Statements
+
+    /// Statements for the past year, newest first.
+    func statements() async throws -> [BankStatement] {
+        try await client
+            .from("statements")
+            .select("id, year, month, storage_path, byte_size")
+            .order("year", ascending: false)
+            .order("month", ascending: false)
+            .execute()
+            .value
+    }
+
+    /// Link token for the *additional consent* flow — re-opens Link against the
+    /// bank the user already connected to add the statements product. Does not
+    /// create a second connection.
+    func createStatementsConsentToken() async throws -> String {
+        let response: LinkTokenResponse = try await client.functions
+            .invoke("plaid_create_update_link_token")
+        return response.linkToken
+    }
+
+    /// Pulls statements from Plaid into Storage. Throws `.consentRequired` when
+    /// the user has not been through the consent flow yet, which the UI turns
+    /// into a prompt instead of an error.
+    @discardableResult
+    func syncStatements() async throws -> StatementSyncAck {
+        do {
+            return try await client.functions.invoke("plaid_statements_sync") as StatementSyncAck
+        } catch let error as FunctionsError {
+            if case .httpError(let code, _) = error, code == 409 {
+                throw StatementsError.consentRequired
+            }
+            throw error
+        }
+    }
+
+    struct StatementSyncAck: Codable {
+        let ok: Bool
+        let found: Int
+        let downloaded: Int
+        let skipped: Int
+        let capped: Bool
+    }
+
+    enum StatementsError: LocalizedError {
+        case consentRequired
+
+        var errorDescription: String? {
+            switch self {
+            case .consentRequired:
+                return "Your bank needs to approve access to statements."
+            }
+        }
+    }
+
+    /// Short-lived signed URL for one statement PDF. The bucket is private, so
+    /// this is the only way to read a file — and the link expires, so it can't
+    /// be forwarded around.
+    func statementURL(_ statement: BankStatement, expiresIn: Int = 300) async throws -> URL {
+        guard let path = statement.storagePath else {
+            throw StatementsError.consentRequired
+        }
+        return try await client.storage
+            .from("statements")
+            .createSignedURL(path: path, expiresIn: expiresIn)
+    }
+
     // MARK: - Helpers
 
     /// Today's date in the device's local timezone, matching the server-side

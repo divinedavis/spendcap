@@ -131,4 +131,59 @@ final class SpendcapUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["today.spent"].waitForExistence(timeout: 20),
                       "Today ring should still be reachable")
     }
+
+    /// Statements is reachable from Settings and renders one of its two valid
+    /// states. The test account has no linked bank, so this exercises the
+    /// "nothing to show" path — the screen must still appear rather than hang
+    /// on a spinner or crash on an empty list. Skipped when creds are absent.
+    func testStatementsScreenIsReachable() throws {
+        guard let email = ProcessInfo.processInfo.environment["SPENDCAP_TEST_EMAIL"],
+              let password = ProcessInfo.processInfo.environment["SPENDCAP_TEST_PASSWORD"],
+              !email.isEmpty, !password.isEmpty else {
+            throw XCTSkip("SPENDCAP_TEST_EMAIL/PASSWORD not set")
+        }
+
+        let app = launch()
+        let emailField = app.textFields["auth.email"]
+        XCTAssertTrue(emailField.waitForExistence(timeout: 15))
+        emailField.tap()
+        emailField.typeText(email)
+        let passwordField = app.secureTextFields["auth.password"]
+        passwordField.tap()
+        passwordField.typeText(password)
+        app.buttons["auth.submit"].tap()
+        dismissSavePasswordPromptIfPresent()
+
+        XCTAssertTrue(app.staticTexts["home.remaining"].waitForExistence(timeout: 20),
+                      "Home hero card should appear after sign-in")
+
+        app.tapTab("Settings", in: self)
+
+        let statementsRow = app.buttons["settings.statements"]
+        if !statementsRow.waitForExistence(timeout: 5) {
+            app.tapTab("Settings", in: self)   // same dismissal race the sign-out test guards
+            XCTAssertTrue(statementsRow.waitForExistence(timeout: 10),
+                          "Statements row should exist in Settings")
+        }
+        statementsRow.tap()
+
+        XCTAssertTrue(app.navigationBars["Statements"].waitForExistence(timeout: 15),
+                      "Statements screen should push onto the navigation stack")
+
+        // Either state is correct here: the approval prompt when the bank has
+        // not consented, or the empty-state when it has but nothing is stored.
+        // Asserting on one specific copy string would make this brittle.
+        let approve = app.buttons["statements.approve"]
+        let refresh = app.buttons["statements.refresh"]
+        // Poll for whichever resolves first; XCTest has no built-in "wait for
+        // any of these elements", and two unwaited expectations would fail the
+        // test on their own.
+        let deadline = Date().addingTimeInterval(20)
+        var resolved = false
+        while Date() < deadline {
+            if approve.exists || refresh.exists { resolved = true; break }
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+        XCTAssertTrue(resolved, "Statements should settle into either the consent prompt or the list")
+    }
 }

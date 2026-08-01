@@ -5,6 +5,18 @@ import LinkKit
 /// The public token goes straight back to the exchange edge function — the
 /// client never sees a Plaid access token.
 struct PlaidLinkFlow: View {
+    /// What this Link session is for. The two modes diverge on success:
+    /// connecting exchanges the public token for an access token, whereas
+    /// consent runs against an item that already exists — Plaid hands back a
+    /// public token there too, but exchanging it would mint a second item and
+    /// burn another of the Trial plan's 10 permanent slots. So consent mode
+    /// deliberately drops it on the floor.
+    enum Mode {
+        case connect
+        case statementsConsent
+    }
+
+    var mode: Mode = .connect
     var onLinked: () -> Void
     /// Set when re-entering after an OAuth bank redirected back to us. Reuses
     /// the stored link token instead of minting a new one — Plaid requires the
@@ -23,7 +35,7 @@ struct PlaidLinkFlow: View {
             if isExchanging {
                 VStack(spacing: 12) {
                     ProgressView()
-                    Text("Connecting your bank…")
+                    Text(mode == .connect ? "Connecting your bank…" : "Downloading your statements…")
                         .foregroundStyle(.secondary)
                 }
             } else if let token = linkToken {
@@ -64,24 +76,45 @@ struct PlaidLinkFlow: View {
             return
         }
         do {
-            let token = try await SpendService.shared.createLinkToken()
+            let token = switch mode {
+            case .connect:           try await SpendService.shared.createLinkToken()
+            case .statementsConsent: try await SpendService.shared.createStatementsConsentToken()
+            }
             PlaidLinkStore.shared.remember(token: token)
             linkToken = token
         } catch {
-            errorMessage = "Couldn't start the bank connection. If this is a fresh install, Plaid keys may not be configured yet.\n\n\(error.localizedDescription)"
+            errorMessage = switch mode {
+            case .connect:
+                "Couldn't start the bank connection. If this is a fresh install, Plaid keys may not be configured yet.\n\n\(error.localizedDescription)"
+            case .statementsConsent:
+                "Couldn't start the statements approval.\n\n\(error.localizedDescription)"
+            }
         }
     }
 
     private func exchange(publicToken: String, institution: String?) async {
         isExchanging = true
         do {
-            try await SpendService.shared.exchangePublicToken(publicToken, institutionName: institution)
+            switch mode {
+            case .connect:
+                try await SpendService.shared.exchangePublicToken(publicToken, institutionName: institution)
+            case .statementsConsent:
+                // The item already exists; the bank has just widened what it
+                // will share. Pull the statements straight away so the user
+                // lands back on a populated list instead of an empty one.
+                try await SpendService.shared.syncStatements()
+            }
             PlaidLinkStore.shared.clear()
             onLinked()
             dismiss()
         } catch {
             isExchanging = false
-            errorMessage = "Connected to your bank, but saving the connection failed: \(error.localizedDescription)"
+            errorMessage = switch mode {
+            case .connect:
+                "Connected to your bank, but saving the connection failed: \(error.localizedDescription)"
+            case .statementsConsent:
+                "Your bank approved statements, but downloading them failed: \(error.localizedDescription)"
+            }
         }
     }
 }

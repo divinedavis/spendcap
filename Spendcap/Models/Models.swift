@@ -47,6 +47,42 @@ struct PlaidItem: Codable, Identifiable, Equatable {
     }
 }
 
+/// One monthly bank statement. The PDF itself lives in the private
+/// `statements` Storage bucket — this is only where to find it.
+/// `storagePath` is nil when Plaid listed the statement but the download
+/// failed, which the UI shows as unavailable rather than hiding the month.
+struct BankStatement: Codable, Identifiable, Equatable {
+    let id: UUID
+    let year: Int
+    let month: Int
+    let storagePath: String?
+    let byteSize: Int?
+
+    var isAvailable: Bool { storagePath != nil }
+
+    /// "August 2026" — built from components so it never depends on a parsed
+    /// date the row may not carry.
+    var periodLabel: String {
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        let calendar = Calendar(identifier: .gregorian)
+        guard let date = calendar.date(from: components) else { return "\(month)/\(year)" }
+        return date.formatted(.dateTime.month(.wide).year())
+    }
+
+    var sizeLabel: String? {
+        guard let byteSize else { return nil }
+        return ByteCountFormatter.string(fromByteCount: Int64(byteSize), countStyle: .file)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, year, month
+        case storagePath = "storage_path"
+        case byteSize = "byte_size"
+    }
+}
+
 struct Budget: Codable, Equatable {
     var dailyLimitCents: Int
     var warnPct: Int

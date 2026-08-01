@@ -34,6 +34,15 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Documents") {
+                    NavigationLink {
+                        StatementsView()
+                    } label: {
+                        Label("Statements", systemImage: "doc.text")
+                    }
+                    .accessibilityIdentifier("settings.statements")
+                }
+
                 Section {
                     Button("Sign Out") {
                         Task { await auth.signOut() }

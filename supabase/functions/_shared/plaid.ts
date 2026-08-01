@@ -31,6 +31,27 @@ export async function plaid<T = any>(path: string, body: Record<string, unknown>
   return json as T;
 }
 
+// /statements/download answers with raw PDF bytes, not JSON, so it cannot go
+// through plaid() above — resp.json() would throw on the first byte. Errors
+// still come back as JSON, which is what the content-type check distinguishes.
+export async function plaidDownload(path: string, body: Record<string, unknown>): Promise<Uint8Array> {
+  const resp = await fetch(`${HOSTS[PLAID_ENV] ?? HOSTS.sandbox}${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "PLAID-CLIENT-ID": PLAID_CLIENT_ID,
+      "PLAID-SECRET": PLAID_SECRET,
+    },
+    body: JSON.stringify(body),
+  });
+  const contentType = resp.headers.get("content-type") ?? "";
+  if (!resp.ok || contentType.includes("application/json")) {
+    const text = await resp.text();
+    throw new Error(`plaid ${path} ${resp.status}: ${text.slice(0, 300)}`);
+  }
+  return new Uint8Array(await resp.arrayBuffer());
+}
+
 export function toCents(amount: number): number {
   return Math.round(amount * 100);
 }
