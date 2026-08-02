@@ -242,6 +242,210 @@ enum MonthMath {
     }
 }
 
+/// One row of `monthly_spend()` — a month's outflow total, aggregated in
+/// Postgres so the client never pulls a year of transactions.
+struct MonthlySpendRow: Codable, Equatable {
+    let period: String          // "yyyy-MM-dd", first day of the month
+    let spentCents: Int
+    let txnCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case period
+        case spentCents = "spent_cents"
+        case txnCount = "txn_count"
+    }
+
+    init(period: String, spentCents: Int, txnCount: Int) {
+        self.period = period
+        self.spentCents = spentCents
+        self.txnCount = txnCount
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        period = try c.decode(String.self, forKey: .period)
+        // Postgres bigint reaches us as a JSON number through PostgREST but as
+        // a quoted string through some other serialisers, and a year of totals
+        // failing to decode over that is not a risk worth taking.
+        spentCents = try Self.flexibleInt(c, .spentCents)
+        txnCount = try Self.flexibleInt(c, .txnCount)
+    }
+
+    private static func flexibleInt(
+        _ c: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys
+    ) throws -> Int {
+        if let value = try? c.decode(Int.self, forKey: key) { return value }
+        if let text = try? c.decode(String.self, forKey: key), let value = Int(text) { return value }
+        if let value = try? c.decode(Double.self, forKey: key) { return Int(value) }
+        return 0
+    }
+}
+
+/// One calendar month on the Months tab.
+struct MonthlySpend: Identifiable, Equatable {
+    /// First day of the month, in the user's timezone.
+    let date: Date
+    let spentCents: Int
+    let txnCount: Int
+    /// Daily cap × days in this month — the month's own allowance.
+    let capCents: Int
+    /// Change against the previous month with data, as a fraction (0.12 = +12%).
+    /// Nil when there is no comparable month before it.
+    let changeFraction: Double?
+    /// False for months that predate the bank's shared history. A month with no
+    /// transactions on record is not the same claim as "spent nothing", and the
+    /// row has to say which one it is.
+    let hasData: Bool
+    /// The month still in progress — its total is partial by definition.
+    let isCurrent: Bool
+    /// "August 2026" and "Aug", rendered in the same timezone the month was
+    /// bucketed in. Formatting `date` on demand would use the *device*
+    /// timezone instead, which relabels every month by one whenever those two
+    /// disagree.
+    let label: String
+    let shortLabel: String
+
+    var id: Date { date }
+
+    var isOverCap: Bool { hasData && capCents > 0 && spentCents > capCents }
+
+    var changeLabel: String? {
+        guard let changeFraction else { return nil }
+        let pct = Int((changeFraction * 100).rounded())
+        if pct == 0 { return "flat" }
+        return (pct > 0 ? "+" : "\u{2212}") + "\(abs(pct))%"
+    }
+}
+
+/// Twelve-month rollup driving the Months tab. Pure math over the aggregate
+/// rows so it can be unit-tested without a network.
+struct YearStats: Equatable {
+    var months: [MonthlySpend]
+    var dailyLimitCents: Int
+
+    /// Months carrying real history, oldest first.
+    var withData: [MonthlySpend] { months.filter(\.hasData) }
+
+    /// Complete months only — the month in progress would drag every average
+    /// and "lowest month" toward whatever day of the month it is today.
+    var settled: [MonthlySpend] { withData.filter { !$0.isCurrent } }
+
+    /// Everything actually spent in the window, partial current month included.
+    var totalCents: Int { withData.reduce(0) { $0 + $1.spentCents } }
+
+    /// Mean over complete months, falling back to the current one when the bank
+    /// has not shared a full month yet.
+    var averageCents: Int {
+        let basis = settled.isEmpty ? withData : settled
+        guard !basis.isEmpty else { return 0 }
+        return basis.reduce(0) { $0 + $1.spentCents } / basis.count
+    }
+
+    var highest: MonthlySpend? {
+        (settled.isEmpty ? withData : settled).max { $0.spentCents < $1.spentCents }
+    }
+
+    var lowest: MonthlySpend? {
+        (settled.isEmpty ? withData : settled).min { $0.spentCents < $1.spentCents }
+    }
+
+    /// Months of real history in the window — what the header counts, since
+    /// "last 12 months" overstates a bank that only shared three.
+    var monthsCovered: Int { withData.count }
+
+    var monthsOverCap: Int { settled.filter(\.isOverCap).count }
+
+    /// Trend across the settled months: the later half against the earlier
+    /// half. Nil until there are four complete months, below which the swing
+    /// between any two months says more about timing than direction.
+    var trendFraction: Double? {
+        let basis = settled
+        guard basis.count >= 4 else { return nil }
+        let half = basis.count / 2
+        let older = Array(basis.prefix(half))
+        let newer = Array(basis.suffix(basis.count - half))
+        let olderAvg = Double(older.reduce(0) { $0 + $1.spentCents }) / Double(older.count)
+        let newerAvg = Double(newer.reduce(0) { $0 + $1.spentCents }) / Double(newer.count)
+        guard olderAvg > 0 else { return nil }
+        return (newerAvg - olderAvg) / olderAvg
+    }
+}
+
+enum YearMath {
+    /// Turn `monthly_spend()` rows into the Months series.
+    ///
+    /// The function already emits one row per month including empty ones, so
+    /// this fills in what only the client knows — the cap for each month, the
+    /// month-over-month change, and which empty months are genuinely empty
+    /// versus simply older than the history the bank shared.
+    static func stats(
+        rows: [MonthlySpendRow],
+        dailyLimitCents: Int,
+        now: Date = Date(),
+        timeZone: TimeZone = .current
+    ) -> YearStats {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+
+        let parser = DateFormatter()
+        parser.dateFormat = "yyyy-MM-dd"
+        parser.timeZone = timeZone
+        parser.locale = Locale(identifier: "en_US_POSIX")
+
+        let currentMonth = calendar.dateInterval(of: .month, for: now)?.start
+
+        let longLabel = DateFormatter()
+        longLabel.timeZone = timeZone
+        longLabel.setLocalizedDateFormatFromTemplate("MMMM y")
+        let shortLabel = DateFormatter()
+        shortLabel.timeZone = timeZone
+        shortLabel.setLocalizedDateFormatFromTemplate("MMM")
+
+        let parsed: [(date: Date, row: MonthlySpendRow)] = rows.compactMap { row in
+            guard let date = parser.date(from: row.period) else { return nil }
+            return (calendar.startOfDay(for: date), row)
+        }.sorted { $0.date < $1.date }
+
+        // History starts at the first month that has any transaction on record;
+        // everything before it is "no data", not "no spending".
+        let firstWithData = parsed.first(where: { $0.row.txnCount > 0 })?.date
+
+        var months: [MonthlySpend] = []
+        var previousWithData: Int?
+        for entry in parsed {
+            let hasData = firstWithData.map { entry.date >= $0 } ?? false
+            let days = calendar.range(of: .day, in: .month, for: entry.date)?.count ?? 30
+            let isCurrent = currentMonth.map {
+                calendar.isDate(entry.date, equalTo: $0, toGranularity: .month)
+            } ?? false
+
+            // A month still in progress compared against a full month reads as
+            // a collapse in spending on the 2nd and a surge on the 31st, so it
+            // gets no change figure at all.
+            var change: Double?
+            if hasData, !isCurrent, let previous = previousWithData, previous > 0 {
+                change = (Double(entry.row.spentCents) - Double(previous)) / Double(previous)
+            }
+
+            months.append(MonthlySpend(
+                date: entry.date,
+                spentCents: entry.row.spentCents,
+                txnCount: entry.row.txnCount,
+                capCents: dailyLimitCents * days,
+                changeFraction: change,
+                hasData: hasData,
+                isCurrent: isCurrent,
+                label: longLabel.string(from: entry.date),
+                shortLabel: shortLabel.string(from: entry.date)
+            ))
+
+            if hasData { previousWithData = entry.row.spentCents }
+        }
+
+        return YearStats(months: months, dailyLimitCents: dailyLimitCents)
+    }
+}
+
 /// Mirrors the server-side threshold logic in check_overspend so the UI and
 /// pushes always agree.
 enum BudgetMath {

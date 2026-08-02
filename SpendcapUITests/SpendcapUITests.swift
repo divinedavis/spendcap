@@ -28,9 +28,9 @@ final class SpendcapUITests: XCTestCase {
         XCTAssertTrue(app.buttons["auth.submit"].exists)
     }
 
-    /// Full round trip: sign in with the keychain test account, land on Today,
-    /// open the budget sheet, then sign out. Skipped when creds are absent.
-    func testSignInShowsTodayAndBudgetSheet() throws {
+    /// Full round trip: sign in with the keychain test account, open the budget
+    /// sheet from Home, then sign out. Skipped when creds are absent.
+    func testSignInShowsHomeAndBudgetSheet() throws {
         guard let email = ProcessInfo.processInfo.environment["SPENDCAP_TEST_EMAIL"],
               let password = ProcessInfo.processInfo.environment["SPENDCAP_TEST_PASSWORD"],
               !email.isEmpty, !password.isEmpty else {
@@ -48,16 +48,12 @@ final class SpendcapUITests: XCTestCase {
         app.buttons["auth.submit"].tap()
         dismissSavePasswordPromptIfPresent()
 
-        // Sign-in lands on Home; the ring lives on the Today tab.
+        // Sign-in lands on Home, which is where the cap is now adjusted — the
+        // Today tab (and its toolbar button) is gone.
         XCTAssertTrue(app.staticTexts["home.remaining"].waitForExistence(timeout: 20),
                       "Home hero card should appear after sign-in")
 
-        app.tapTab("Today", in: self)
-
-        let spent = app.staticTexts["today.spent"]
-        XCTAssertTrue(spent.waitForExistence(timeout: 20), "Today ring should appear on the Today tab")
-
-        app.buttons["today.editBudget"].tap()
+        app.buttons["home.adjustCap"].tap()
         // Form rows can merge accessibility children, so match any element kind.
         let limitField = app.descendants(matching: .any)
             .matching(identifier: "budget.dailyLimit").firstMatch
@@ -126,10 +122,49 @@ final class SpendcapUITests: XCTestCase {
                           "month spend should survive switching to \(label)")
         }
 
-        // Today still reachable now that it's no longer the landing tab.
-        app.tapTab("Today", in: self)
-        XCTAssertTrue(app.staticTexts["today.spent"].waitForExistence(timeout: 20),
-                      "Today ring should still be reachable")
+        // Months took the slot Today used to hold.
+        app.tapTab("Months", in: self)
+        XCTAssertTrue(app.staticTexts["months.total"].waitForExistence(timeout: 20),
+                      "Months should show the 12-month total")
+    }
+
+    /// The Months tab renders whichever of its two states applies: the totals
+    /// when the bank has shared history, or the "no monthly history yet" copy
+    /// when it hasn't. The test account has no linked bank, so this exercises
+    /// the empty path — the total tile is always present either way, and the
+    /// screen must settle rather than hang on a spinner. Skipped when creds are
+    /// absent.
+    func testMonthsTabShowsTwelveMonthTotal() throws {
+        guard let email = ProcessInfo.processInfo.environment["SPENDCAP_TEST_EMAIL"],
+              let password = ProcessInfo.processInfo.environment["SPENDCAP_TEST_PASSWORD"],
+              !email.isEmpty, !password.isEmpty else {
+            throw XCTSkip("SPENDCAP_TEST_EMAIL/PASSWORD not set")
+        }
+
+        let app = launch()
+        let emailField = app.textFields["auth.email"]
+        XCTAssertTrue(emailField.waitForExistence(timeout: 15))
+        emailField.tap()
+        emailField.typeText(email)
+        let passwordField = app.secureTextFields["auth.password"]
+        passwordField.tap()
+        passwordField.typeText(password)
+        app.buttons["auth.submit"].tap()
+        dismissSavePasswordPromptIfPresent()
+
+        XCTAssertTrue(app.staticTexts["home.remaining"].waitForExistence(timeout: 20),
+                      "Home hero card should appear after sign-in")
+
+        app.tapTab("Months", in: self)
+
+        XCTAssertTrue(app.navigationBars["Months"].waitForExistence(timeout: 15),
+                      "Months screen should appear")
+        XCTAssertTrue(app.staticTexts["months.total"].waitForExistence(timeout: 20),
+                      "Months should show a 12-month total in both states")
+
+        // Today is gone for good — a stale tab left in place would keep
+        // showing a partial daily figure this change exists to retire.
+        XCTAssertFalse(app.buttons["Today"].exists, "Today tab should no longer exist")
     }
 
     /// Statements is reachable from Settings and renders one of its two valid

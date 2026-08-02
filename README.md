@@ -31,8 +31,9 @@ and again at **100%** ("over cap"), one of each per day, no nagging.
    outflows *in the user's own timezone* (pending transactions included) and
    compares against the cap. Crossing a threshold sends one push, deduped per
    user/day/kind in `spend_alerts`.
-5. **The app** shows a today ring (spent vs. cap), the day's transactions, and
-   month-to-date pacing.
+5. **The app** shows what's left of today's cap, month-to-date pacing, and a
+   twelve-month view of monthly totals with the bank statement behind each
+   month.
 
 ```
 Plaid Link (LinkKit)
@@ -55,8 +56,9 @@ This app touches bank data, so a few things are deliberate:
 - **RLS on every table**, self-only, with explicit grants rather than inherited
   ones.
 - **Threshold math is duplicated on purpose.** The server decides when to push;
-  `BudgetMath` mirrors the same integer comparison client-side so the ring and
-  the notification can never disagree. Unit tests pin them together.
+  `BudgetMath` mirrors the same integer comparison client-side so the screen
+  and the notification can never disagree. Unit tests pin them together, and
+  the `monthly_spend()` rollup reuses the same outflow filter.
 - **Financial data is redacted in the app-switcher snapshot**, so balances
   don't leak into the multitasking view.
 - **No secrets in this repo.** Credentials come from `Secrets.xcconfig`
@@ -69,7 +71,7 @@ Spendcap/
   App/            app entry, settings
   Auth/           Supabase email auth
   Budget/         cap editing
-  Dashboard/      today ring + transaction list
+  Dashboard/      Home, Trends, Months
   Link/           Plaid Link (LinkKit) wrapper
   Notifications/  APNs registration + token upload
   Services/       spend queries, BudgetMath

@@ -65,12 +65,13 @@ final class MarketingScreenshots: XCTestCase {
             }
         }
 
-        app.tapTab("Today", in: self)
-        XCTAssertTrue(app.staticTexts["today.spent"].waitForExistence(timeout: 30),
-                      "Today ring should appear")
-        save(app, "06-today")
+        app.tapTab("Months", in: self)
+        XCTAssertTrue(app.staticTexts["months.total"].waitForExistence(timeout: 30),
+                      "Months total should appear")
+        save(app, "06-months")
 
-        app.buttons["today.editBudget"].tap()
+        app.tapTab("Home", in: self)
+        app.buttons["home.adjustCap"].tap()
         let limitField = app.descendants(matching: .any)
             .matching(identifier: "budget.dailyLimit").firstMatch
         if limitField.waitForExistence(timeout: 10) {

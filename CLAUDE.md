@@ -49,6 +49,32 @@ after every sync → check_overspend:
 - `spend_alerts` — alert dedupe log
 - `delete_account()` RPC — App Store 5.1.1 account deletion
 
+### Tabs
+
+**Home · Trends · Months · Settings.** The **Today** tab (the daily ring) was
+removed 2026-08-02: bank data settles over hours to days, so "spent today" was
+always a partial figure presented as a live one. The daily cap itself is
+untouched — it still drives `check_overspend`, the 80/100% pushes, and the Home
+hero card. `BudgetMath` and its tests stay as the mirror of the server math.
+
+**Months** is the 12-month view. Totals come from `monthly_spend(months_back)`
+(0005), a `security invoker` SQL function that aggregates in Postgres — a year
+of rows would blow past PostgREST's 1000-row default cap, and the client only
+needs twelve sums. Its outflow filter must stay identical to
+`overspend_status()` and `BankTransaction.countsTowardDailyCap`; month totals
+that disagree with the day totals behind the pushes are worse than no totals.
+`YearMath.stats` adds what only the client knows (per-month cap, change,
+partial current month) and is unit-tested in `YearMathTests`.
+
+Two rules that shaped that screen and are easy to undo by accident:
+
+- **A month with no rows is not a month with no spending.** Plaid only shares
+  history back to what the bank gives (this account: ~3 months), so months
+  before the first transaction on record are drawn as "no data", never as $0.
+- **Months never calls Plaid.** It reads the `statements` table to link a month
+  to its PDF, but fetching statements stays on the Statements screen, where the
+  per-request Plaid billing is behind a deliberate tap.
+
 ## Working rules — READ THESE
 
 1. **Push to GitHub after every change.** Build first
@@ -65,7 +91,9 @@ after every sync → check_overspend:
 4. **Never commit secrets.** Gitignored: `Secrets.xcconfig`,
    `scripts/asc-config.env`, `scripts/asc_api_key.p8`, `supabase/.env`.
    Scan staged files before every push.
-5. **DB changes** go in `supabase/schema.sql` (canonical) AND a numbered file in
+5. **DB changes** go in `supabase/schema.sql` (canonical — it had drifted to
+   0002 and was brought back in sync through 0005 on 2026-08-02) AND a
+   numbered file in
    `supabase/migrations/`, applied via the management API
    (`POST /v1/projects/gmzzbslcsswqjjswoaen/database/query`, PAT from keychain
    `supabase-pat-clockin`, non-default User-Agent or Cloudflare 403s, then

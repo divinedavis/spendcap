@@ -104,8 +104,12 @@ struct MainTabView: View {
             TrendsView()
                 .tabItem { Label("Trends", systemImage: "chart.bar.fill") }
 
-            TodayView()
-                .tabItem { Label("Today", systemImage: "gauge.with.needle") }
+            // Months replaced the Today ring: bank data settles over days, so a
+            // live "spent today" figure was always a partial one. Month totals
+            // are the number that can be trusted. The daily cap still drives
+            // the pushes and the Home hero card.
+            MonthsView()
+                .tabItem { Label("Months", systemImage: "calendar") }
 
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }

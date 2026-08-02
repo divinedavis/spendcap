@@ -63,6 +63,19 @@ final class SpendService {
             .value
     }
 
+    /// Monthly outflow totals for the last `monthsBack` calendar months, oldest
+    /// first, one row per month whether or not it has activity.
+    ///
+    /// Aggregated in Postgres (`monthly_spend()`): a year of transactions is
+    /// thousands of rows, past PostgREST's 1000-row default cap, and the client
+    /// only ever needs the twelve sums.
+    func monthlySpend(monthsBack: Int = 12) async throws -> [MonthlySpendRow] {
+        try await client
+            .rpc("monthly_spend", params: ["months_back": monthsBack])
+            .execute()
+            .value
+    }
+
     func budget() async throws -> Budget {
         try await client
             .from("budgets")
