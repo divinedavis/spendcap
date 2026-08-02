@@ -76,6 +76,57 @@ final class SpendService {
             .value
     }
 
+    // MARK: - Category budgets
+
+    /// Planned vs actual per category for the last `monthsBack` months, newest
+    /// month first, including an Uncategorized line per month.
+    func categorySpend(monthsBack: Int = 2) async throws -> [CategorySpendRow] {
+        try await client
+            .rpc("category_spend", params: ["months_back": monthsBack])
+            .execute()
+            .value
+    }
+
+    /// Every transaction that landed in one category in one month. Pass a nil
+    /// id for the Uncategorized line.
+    func categoryTransactions(categoryId: UUID?, period: Date) async throws -> [BankTransaction] {
+        try await client
+            .rpc("category_transactions", params: [
+                "category": categoryId.map { AnyJSON.string($0.uuidString.lowercased()) } ?? AnyJSON.null,
+                "period": AnyJSON.string(Self.localDateString(now: period)),
+            ])
+            .execute()
+            .value
+    }
+
+    /// Creates the starter set of lines. Server-side no-op once any category
+    /// exists, so a double tap can't duplicate the budget.
+    @discardableResult
+    func seedStarterBudget() async throws -> Int {
+        try await client.rpc("seed_starter_budget").execute().value
+    }
+
+    func categories() async throws -> [BudgetCategory] {
+        try await client
+            .from("budget_categories")
+            .select("id, name, planned_cents, sort_order")
+            .order("sort_order", ascending: true)
+            .execute()
+            .value
+    }
+
+    func updateCategory(id: UUID, name: String, plannedCents: Int) async throws {
+        try await client
+            .from("budget_categories")
+            .update([
+                "name": AnyJSON.string(name),
+                "planned_cents": AnyJSON.integer(plannedCents),
+                "updated_at": AnyJSON.string(ISO8601DateFormatter().string(from: Date())),
+            ])
+            .eq("id", value: id.uuidString.lowercased())
+            .execute()
+    }
+
     func budget() async throws -> Budget {
         try await client
             .from("budgets")

@@ -78,6 +78,7 @@ struct MonthsView: View {
                     VStack(spacing: 14) {
                         capCard
                         summaryCard
+                        categoryBudgetCard
                         // The month list is what the screen is for, so it sits
                         // above the year-level rollup rather than below it.
                         monthsCard
@@ -451,6 +452,37 @@ struct MonthsView: View {
             parts.append("statement")
         }
         return parts.joined(separator: " \u{00B7} ")
+    }
+
+    // MARK: - Category budget
+
+    /// A month total says the month went wrong; the budget lines say where.
+    private var categoryBudgetCard: some View {
+        NavigationLink {
+            CategoriesView()
+        } label: {
+            SurfaceCard {
+                HStack(alignment: .top, spacing: 12) {
+                    RowIcon(systemName: "list.bullet.rectangle", tint: .purple)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Budget by category")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        Text("Planned against actual for this month and last, line by line.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .multilineTextAlignment(.leading)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("months.categories")
     }
 
     // MARK: - Statements

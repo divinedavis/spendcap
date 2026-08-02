@@ -184,6 +184,55 @@ final class SpendcapUITests: XCTestCase {
         }
     }
 
+    /// The category budget is reachable from Months and settles into one of its
+    /// two valid states: the starter-budget prompt when no lines exist, or the
+    /// planned-vs-actual list when they do. Asserting on one would make the
+    /// test depend on whether the shared test account has been seeded.
+    /// Skipped when creds are absent.
+    func testCategoryBudgetIsReachableFromMonths() throws {
+        guard let email = ProcessInfo.processInfo.environment["SPENDCAP_TEST_EMAIL"],
+              let password = ProcessInfo.processInfo.environment["SPENDCAP_TEST_PASSWORD"],
+              !email.isEmpty, !password.isEmpty else {
+            throw XCTSkip("SPENDCAP_TEST_EMAIL/PASSWORD not set")
+        }
+
+        let app = launch()
+        let emailField = app.textFields["auth.email"]
+        XCTAssertTrue(emailField.waitForExistence(timeout: 15))
+        emailField.tap()
+        emailField.typeText(email)
+        let passwordField = app.secureTextFields["auth.password"]
+        passwordField.tap()
+        passwordField.typeText(password)
+        app.buttons["auth.submit"].tap()
+        dismissSavePasswordPromptIfPresent()
+
+        XCTAssertTrue(app.staticTexts["home.remaining"].waitForExistence(timeout: 20),
+                      "Home hero card should appear after sign-in")
+
+        app.tapTab("Months", in: self)
+        XCTAssertTrue(app.staticTexts["months.total"].waitForExistence(timeout: 20))
+
+        let entry = app.buttons["months.categories"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 10),
+                      "Months should link to the category budget")
+        entry.tap()
+
+        XCTAssertTrue(app.navigationBars["Budget"].waitForExistence(timeout: 15),
+                      "Budget screen should push onto the navigation stack")
+
+        // Whichever state it lands in, it must settle rather than spin.
+        let actual = app.staticTexts["categories.actual"]
+        let seed = app.buttons["categories.seed"]
+        let deadline = Date().addingTimeInterval(20)
+        var resolved = false
+        while Date() < deadline {
+            if actual.exists || seed.exists { resolved = true; break }
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+        XCTAssertTrue(resolved, "Budget should settle into either the list or the starter prompt")
+    }
+
     /// Statements is reachable from Settings and renders one of its two valid
     /// states. The test account has no linked bank, so this exercises the
     /// "nothing to show" path — the screen must still appear rather than hang

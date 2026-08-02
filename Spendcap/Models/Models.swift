@@ -488,6 +488,153 @@ enum YearMath {
     }
 }
 
+// MARK: - Category budgets
+
+/// One budget line. `id` nil is impossible here; the *rollup* row below uses a
+/// nil category id for the synthetic Uncategorized line.
+struct BudgetCategory: Codable, Identifiable, Equatable {
+    let id: UUID
+    var name: String
+    var plannedCents: Int
+    var sortOrder: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id, name
+        case plannedCents = "planned_cents"
+        case sortOrder = "sort_order"
+    }
+}
+
+/// One row of `category_spend()` — a category's planned and actual for a month.
+struct CategorySpendRow: Codable, Identifiable, Equatable {
+    let period: String              // "yyyy-MM-dd", first day of the month
+    /// Nil for the Uncategorized line, which is spending no rule claimed.
+    let categoryId: UUID?
+    let categoryName: String
+    let plannedCents: Int
+    let spentCents: Int
+    let txnCount: Int
+    let sortOrder: Int
+
+    var id: String { "\(period)-\(categoryId?.uuidString ?? "uncategorized")" }
+    var isUncategorized: Bool { categoryId == nil }
+
+    /// Positive means room left, negative means over. The sign is the answer.
+    var remainingCents: Int { plannedCents - spentCents }
+    var isOver: Bool { plannedCents > 0 && spentCents > plannedCents }
+
+    var progress: Double {
+        guard plannedCents > 0 else { return 0 }
+        return min(1.0, max(0.0, Double(spentCents) / Double(plannedCents)))
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case period
+        case categoryId = "category_id"
+        case categoryName = "category_name"
+        case plannedCents = "planned_cents"
+        case spentCents = "spent_cents"
+        case txnCount = "txn_count"
+        case sortOrder = "sort_order"
+    }
+
+    init(period: String, categoryId: UUID?, categoryName: String,
+         plannedCents: Int, spentCents: Int, txnCount: Int, sortOrder: Int) {
+        self.period = period
+        self.categoryId = categoryId
+        self.categoryName = categoryName
+        self.plannedCents = plannedCents
+        self.spentCents = spentCents
+        self.txnCount = txnCount
+        self.sortOrder = sortOrder
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        period = try c.decode(String.self, forKey: .period)
+        categoryId = try c.decodeIfPresent(UUID.self, forKey: .categoryId)
+        categoryName = try c.decode(String.self, forKey: .categoryName)
+        plannedCents = try c.decode(Int.self, forKey: .plannedCents)
+        // spent_cents is a Postgres bigint — same string/number ambiguity as
+        // MonthlySpendRow, and the same reason not to gamble on it.
+        if let value = try? c.decode(Int.self, forKey: .spentCents) {
+            spentCents = value
+        } else if let text = try? c.decode(String.self, forKey: .spentCents), let value = Int(text) {
+            spentCents = value
+        } else {
+            spentCents = 0
+        }
+        txnCount = try c.decode(Int.self, forKey: .txnCount)
+        sortOrder = try c.decode(Int.self, forKey: .sortOrder)
+    }
+}
+
+/// A month's worth of budget lines, newest month first on the screen.
+struct CategoryMonth: Identifiable, Equatable {
+    let period: Date
+    let label: String
+    let shortLabel: String
+    let isCurrent: Bool
+    let rows: [CategorySpendRow]
+
+    var id: Date { period }
+
+    /// Planned totals exclude Uncategorized — it has no plan by definition,
+    /// and counting its zero would make the budget look bigger than it is.
+    var plannedCents: Int { rows.filter { !$0.isUncategorized }.reduce(0) { $0 + $1.plannedCents } }
+    /// Spent totals include it: the money left the account either way.
+    var spentCents: Int { rows.reduce(0) { $0 + $1.spentCents } }
+    var overCount: Int { rows.filter(\.isOver).count }
+    var uncategorizedCents: Int { rows.first(where: \.isUncategorized)?.spentCents ?? 0 }
+}
+
+enum CategoryMath {
+    /// Group flat rollup rows into months, newest first, each month's lines in
+    /// the user's own order with Uncategorized last.
+    static func months(
+        rows: [CategorySpendRow],
+        now: Date = Date(),
+        timeZone: TimeZone = .current
+    ) -> [CategoryMonth] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+
+        let parser = DateFormatter()
+        parser.dateFormat = "yyyy-MM-dd"
+        parser.timeZone = timeZone
+        parser.locale = Locale(identifier: "en_US_POSIX")
+
+        let longLabel = DateFormatter()
+        longLabel.timeZone = timeZone
+        longLabel.setLocalizedDateFormatFromTemplate("MMMM y")
+        let shortLabel = DateFormatter()
+        shortLabel.timeZone = timeZone
+        shortLabel.setLocalizedDateFormatFromTemplate("MMMM")
+
+        let currentMonth = calendar.dateInterval(of: .month, for: now)?.start
+
+        var byPeriod: [Date: [CategorySpendRow]] = [:]
+        for row in rows {
+            guard let date = parser.date(from: row.period) else { continue }
+            byPeriod[calendar.startOfDay(for: date), default: []].append(row)
+        }
+
+        return byPeriod.keys.sorted(by: >).map { period in
+            CategoryMonth(
+                period: period,
+                label: longLabel.string(from: period),
+                shortLabel: shortLabel.string(from: period),
+                isCurrent: currentMonth.map {
+                    calendar.isDate(period, equalTo: $0, toGranularity: .month)
+                } ?? false,
+                rows: (byPeriod[period] ?? []).sorted {
+                    ($0.sortOrder, $0.categoryName) < ($1.sortOrder, $1.categoryName)
+                }
+            )
+        }
+    }
+}
+
 /// Mirrors the server-side threshold logic in check_overspend so the UI and
 /// pushes always agree.
 enum BudgetMath {

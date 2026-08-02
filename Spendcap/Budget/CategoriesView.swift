@@ -1,0 +1,413 @@
+import SwiftUI
+
+// Budget by category — the spreadsheet view: a planned amount per line, what
+// actually landed against it this month and last, and how far over each one is.
+//
+// The screen deliberately shows an Uncategorized line. Plaid's categories are a
+// first pass, not an answer, so some spending will always be sitting outside
+// the budget; a total that quietly excluded it would be the most misleading
+// number on the screen.
+
+@MainActor
+final class CategoriesViewModel: ObservableObject {
+    @Published var months: [CategoryMonth] = []
+    @Published var selectedPeriod: Date?
+    @Published var isLoading = false
+    @Published var isSeeding = false
+    @Published var errorMessage: String?
+
+    /// True once loaded and the user has no categories at all — the only state
+    /// where seeding a starter budget is offered.
+    var isEmpty: Bool {
+        !isLoading && months.allSatisfy { $0.rows.allSatisfy(\.isUncategorized) }
+    }
+
+    var selected: CategoryMonth? {
+        months.first { $0.period == selectedPeriod } ?? months.first
+    }
+
+    func load() async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+        do {
+            let rows = try await SpendService.shared.categorySpend(monthsBack: 2)
+            months = CategoryMath.months(rows: rows)
+            if selectedPeriod == nil || !months.contains(where: { $0.period == selectedPeriod }) {
+                selectedPeriod = months.first?.period
+            }
+        } catch {
+            errorMessage = MonthsViewModel.isCancellation(error) ? nil : error.localizedDescription
+        }
+    }
+
+    func seed() async {
+        isSeeding = true
+        defer { isSeeding = false }
+        do {
+            _ = try await SpendService.shared.seedStarterBudget()
+            await load()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+struct CategoriesView: View {
+    @StateObject private var model = CategoriesViewModel()
+
+    var body: some View {
+        ZStack {
+            DashboardBackground()
+            ScrollView {
+                VStack(spacing: 14) {
+                    if model.months.count > 1 { monthPicker }
+
+                    if model.isEmpty {
+                        starterCard
+                    } else if let month = model.selected {
+                        summaryCard(month)
+                        categoriesCard(month)
+                    } else if model.isLoading {
+                        ProgressView().padding(.top, 40)
+                    }
+
+                    if let errorMessage = model.errorMessage {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
+            }
+        }
+        .navigationTitle("Budget")
+        .navigationBarTitleDisplayMode(.inline)
+        .refreshable { await model.load() }
+        .task { await model.load() }
+    }
+
+    // MARK: - Month picker
+
+    private var monthPicker: some View {
+        Picker("Month", selection: Binding(
+            get: { model.selectedPeriod ?? model.months.first?.period ?? Date() },
+            set: { model.selectedPeriod = $0 }
+        )) {
+            ForEach(model.months) { month in
+                Text(month.shortLabel).tag(month.period)
+            }
+        }
+        .pickerStyle(.segmented)
+        .accessibilityIdentifier("categories.month")
+    }
+
+    // MARK: - Summary
+
+    private func summaryCard(_ month: CategoryMonth) -> some View {
+        SurfaceCard {
+            HStack(alignment: .firstTextBaseline) {
+                Text(month.label)
+                    .font(.title3.weight(.bold))
+                Spacer(minLength: 12)
+                Text(BudgetMath.wholeDollars(month.spentCents))
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .accessibilityIdentifier("categories.actual")
+            }
+
+            HStack(alignment: .firstTextBaseline) {
+                Text(month.isCurrent ? "So far this month" : "Spent")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 12)
+                Text("of \(BudgetMath.wholeDollars(month.plannedCents)) planned")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Divider()
+
+            HStack(spacing: 10) {
+                verdictChip(
+                    count: month.overCount,
+                    label: month.overCount == 1 ? "line over" : "lines over",
+                    tint: month.overCount > 0 ? .red : .green
+                )
+                if month.uncategorizedCents > 0 {
+                    verdictChip(
+                        count: nil,
+                        label: "\(BudgetMath.wholeDollars(month.uncategorizedCents)) unbudgeted",
+                        tint: .orange
+                    )
+                }
+                Spacer()
+            }
+        }
+    }
+
+    private func verdictChip(count: Int?, label: String, tint: Color) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(tint).frame(width: 8, height: 8)
+            Text(count.map { "\($0) \(label)" } ?? label)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Category rows
+
+    private func categoriesCard(_ month: CategoryMonth) -> some View {
+        SurfaceCard {
+            SectionHeader(title: "By category", actionSystemImage: nil, action: nil)
+
+            ForEach(Array(month.rows.enumerated()), id: \.element.id) { index, row in
+                NavigationLink {
+                    CategoryDetailView(row: row, period: month.period) {
+                        Task { await model.load() }
+                    }
+                } label: {
+                    categoryRow(row)
+                }
+                .buttonStyle(.plain)
+                if index < month.rows.count - 1 { Divider() }
+            }
+        }
+    }
+
+    private func categoryRow(_ row: CategorySpendRow) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(row.categoryName)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(row.isUncategorized ? .secondary : .primary)
+                Spacer(minLength: 8)
+                Text(BudgetMath.wholeDollars(row.spentCents))
+                    .font(.body.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(row.isOver ? Color.red : Color.primary)
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            if row.plannedCents > 0 {
+                ProgressView(value: row.progress)
+                    .tint(row.isOver ? .red : (row.progress >= 0.8 ? .orange : .accentColor))
+
+                HStack {
+                    Text("of \(BudgetMath.wholeDollars(row.plannedCents)) planned")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(row.isOver
+                         ? "\(BudgetMath.wholeDollars(-row.remainingCents)) over"
+                         : "\(BudgetMath.wholeDollars(row.remainingCents)) left")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(row.isOver ? .red : .secondary)
+                }
+            } else {
+                Text(row.isUncategorized
+                     ? "\(row.txnCount) transaction\(row.txnCount == 1 ? "" : "s") that no category claims"
+                     : "No planned amount set")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+    }
+
+    // MARK: - Empty state
+
+    private var starterCard: some View {
+        PromptCard(
+            icon: "list.bullet.rectangle",
+            tint: .blue,
+            title: "Budget by category",
+            message: "Start from a standard set of lines — food, transport, rent, debts — with your transactions already routed into them. Every amount is yours to change.",
+            ctaTitle: model.isSeeding ? "Setting up\u{2026}" : "Create a starter budget"
+        ) {
+            Task { await model.seed() }
+        }
+        .disabled(model.isSeeding)
+        .accessibilityIdentifier("categories.seed")
+    }
+}
+
+// MARK: - Detail
+
+/// One category in one month: what it planned, what landed, and every
+/// transaction behind the number — which is the only way to spot a merchant
+/// filed in the wrong place.
+struct CategoryDetailView: View {
+    let row: CategorySpendRow
+    let period: Date
+    let onChange: () -> Void
+
+    @State private var transactions: [BankTransaction] = []
+    @State private var isLoading = true
+    @State private var showingEdit = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        List {
+            Section {
+                LabeledContent("Spent", value: BudgetMath.dollars(row.spentCents))
+                if row.plannedCents > 0 {
+                    LabeledContent("Planned", value: BudgetMath.dollars(row.plannedCents))
+                    LabeledContent(row.isOver ? "Over by" : "Left") {
+                        Text(BudgetMath.dollars(abs(row.remainingCents)))
+                            .foregroundStyle(row.isOver ? .red : .primary)
+                    }
+                }
+            } header: {
+                Text(period.formatted(.dateTime.month(.wide).year()))
+            }
+
+            Section("Transactions") {
+                if isLoading {
+                    ProgressView()
+                } else if transactions.isEmpty {
+                    Text("Nothing landed here this month.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(transactions) { txn in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(txn.displayName).lineLimit(1)
+                                Text(txn.date)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text(BudgetMath.dollars(txn.amountCents))
+                                .font(.body.monospacedDigit())
+                        }
+                    }
+                }
+            }
+
+            if let errorMessage {
+                Section { Text(errorMessage).foregroundStyle(.red).font(.callout) }
+            }
+        }
+        .navigationTitle(row.categoryName)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let id = row.categoryId {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Edit") { showingEdit = true }
+                        .accessibilityIdentifier("category.edit")
+                        .id(id)
+                }
+            }
+        }
+        .sheet(isPresented: $showingEdit) {
+            CategoryEditView(row: row) {
+                onChange()
+                showingEdit = false
+            }
+        }
+        .task { await load() }
+    }
+
+    private func load() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            transactions = try await SpendService.shared.categoryTransactions(
+                categoryId: row.categoryId, period: period
+            )
+        } catch {
+            errorMessage = MonthsViewModel.isCancellation(error) ? nil : error.localizedDescription
+        }
+    }
+}
+
+/// Rename a line or change what it plans to spend.
+struct CategoryEditView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let row: CategorySpendRow
+    let onSave: () -> Void
+
+    @State private var name: String
+    @State private var plannedText: String
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    init(row: CategorySpendRow, onSave: @escaping () -> Void) {
+        self.row = row
+        self.onSave = onSave
+        _name = State(initialValue: row.categoryName)
+        _plannedText = State(initialValue: String(format: "%.0f", Double(row.plannedCents) / 100))
+    }
+
+    private var plannedCents: Int? {
+        let cleaned = plannedText
+            .replacingOccurrences(of: "$", with: "")
+            .replacingOccurrences(of: ",", with: "")
+            .trimmingCharacters(in: .whitespaces)
+        guard let value = Double(cleaned), value >= 0 else { return nil }
+        return Int((value * 100).rounded())
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Name") {
+                    TextField("Food", text: $name)
+                        .accessibilityIdentifier("category.name")
+                }
+                Section {
+                    HStack {
+                        Text("$")
+                        TextField("600", text: $plannedText)
+                            .keyboardType(.decimalPad)
+                            .accessibilityIdentifier("category.planned")
+                    }
+                } header: {
+                    Text("Planned each month")
+                } footer: {
+                    Text("What this line is meant to cost. Months are measured against it.")
+                }
+
+                if let errorMessage {
+                    Text(errorMessage).foregroundStyle(.red).font(.footnote)
+                }
+            }
+            .navigationTitle("Edit line")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { Task { await save() } }
+                        .disabled(plannedCents == nil || name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
+                        .accessibilityIdentifier("category.save")
+                }
+            }
+        }
+    }
+
+    private func save() async {
+        guard let id = row.categoryId, let cents = plannedCents else { return }
+        isSaving = true
+        errorMessage = nil
+        do {
+            try await SpendService.shared.updateCategory(
+                id: id,
+                name: name.trimmingCharacters(in: .whitespaces),
+                plannedCents: cents
+            )
+            onSave()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            isSaving = false
+        }
+    }
+}

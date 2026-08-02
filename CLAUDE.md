@@ -76,6 +76,28 @@ resolve it through `Budget.capCents(daysInMonth:)` / `MonthStats.monthCapCents`
 so they can never disagree. Nothing pushes on the monthly cap yet — that would
 need a server-side counterpart in `check_overspend`.
 
+**Category budgets (0007).** `budget_categories` (a planned amount per line) +
+`category_rules` (what routes into it) + `category_spend(months_back)` /
+`category_transactions(category, period)` / `seed_starter_budget()`. Reached
+from Months → Budget by category.
+
+- **Rules live in the database, not in Swift.** The mapping is personal and
+  wrong out of the box: this account has a steakhouse under `GENERAL_SERVICES`
+  and $5.7k of Airbnb under `TRAVEL`. Plaid's `personal_finance_category` is
+  the first pass, merchant rules are the correction.
+- **Precedence: merchant beats category, longer match beats shorter.** Changing
+  that ordering silently re-buckets months of history.
+- **Unmatched spending is an explicit Uncategorized line**, never dropped. It
+  is excluded from the planned total (it has no plan) and included in the spent
+  total (the money left the account). Getting that backwards makes the budget
+  look either bigger or cheaper than it is.
+- `seed_starter_budget()` is a no-op once any category exists, so a double tap
+  cannot duplicate the budget.
+- Every rollup here reuses the same outflow filter as `overspend_status()`.
+
+Still to build: editing rules from the app (reassigning a merchant needs a
+round trip to SQL today), and per-category push alerts.
+
 Anything that opens `BudgetView` must pass the **real** `Budget` row, never one
 rebuilt from stats: saving a reconstructed one resets `warn_pct` and wipes the
 monthly cap, since `updateBudget` upserts every column.
