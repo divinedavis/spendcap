@@ -115,6 +115,46 @@ final class SpendService {
             .value
     }
 
+    /// Route every transaction from a merchant into a category, from now on and
+    /// retroactively — the rollups apply rules at read time, so past months
+    /// re-bucket too. Upsert on the match value: one merchant, one home.
+    func assignMerchant(_ merchant: String, to categoryId: UUID) async throws {
+        guard let userId = client.auth.currentUser?.id else { return }
+        try await client
+            .from("category_rules")
+            .upsert([
+                "user_id": AnyJSON.string(userId.uuidString.lowercased()),
+                "category_id": AnyJSON.string(categoryId.uuidString.lowercased()),
+                "match_type": AnyJSON.string("merchant_contains"),
+                "match_value": AnyJSON.string(merchant),
+            ], onConflict: "user_id,match_type,match_value")
+            .execute()
+    }
+
+    /// Drop a merchant rule, letting the transaction fall back to whatever its
+    /// Plaid category maps to — or to Uncategorized.
+    func clearMerchantRule(_ merchant: String) async throws {
+        try await client
+            .from("category_rules")
+            .delete()
+            .eq("match_type", value: "merchant_contains")
+            .eq("match_value", value: merchant)
+            .execute()
+    }
+
+    /// The merchant rule currently claiming this exact name, if any.
+    func merchantRule(_ merchant: String) async throws -> CategoryRule? {
+        let rules: [CategoryRule] = try await client
+            .from("category_rules")
+            .select("id, category_id, match_type, match_value")
+            .eq("match_type", value: "merchant_contains")
+            .eq("match_value", value: merchant)
+            .limit(1)
+            .execute()
+            .value
+        return rules.first
+    }
+
     func updateCategory(id: UUID, name: String, plannedCents: Int) async throws {
         try await client
             .from("budget_categories")

@@ -95,8 +95,13 @@ from Months → Budget by category.
   cannot duplicate the budget.
 - Every rollup here reuses the same outflow filter as `overspend_status()`.
 
-Still to build: editing rules from the app (reassigning a merchant needs a
-round trip to SQL today), and per-category push alerts.
+**Reassigning a merchant is in the app** (Budget > a line > tap a transaction).
+It writes a `merchant_contains` rule, upserted on `(user_id, match_type,
+match_value)` so a merchant can only ever have one home. Rules are applied at
+*read* time by the rollups, so a reassignment re-buckets every month on record
+— that is intended: a merchant filed wrongly was filed wrongly in April too.
+
+Still to build: per-category push alerts.
 
 Anything that opens `BudgetView` must pass the **real** `Budget` row, never one
 rebuilt from stats: saving a reconstructed one resets `warn_pct` and wipes the

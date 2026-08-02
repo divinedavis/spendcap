@@ -505,6 +505,22 @@ struct BudgetCategory: Codable, Identifiable, Equatable {
     }
 }
 
+/// A rule routing transactions into a category. Merchant rules beat Plaid
+/// category rules, and a longer merchant string beats a shorter one.
+struct CategoryRule: Codable, Identifiable, Equatable {
+    let id: UUID
+    let categoryId: UUID
+    let matchType: String
+    let matchValue: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case categoryId = "category_id"
+        case matchType = "match_type"
+        case matchValue = "match_value"
+    }
+}
+
 /// One row of `category_spend()` — a category's planned and actual for a month.
 struct CategorySpendRow: Codable, Identifiable, Equatable {
     let period: String              // "yyyy-MM-dd", first day of the month

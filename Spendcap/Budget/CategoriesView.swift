@@ -280,9 +280,23 @@ struct CategoryDetailView: View {
     let period: Date
     let onChange: () -> Void
 
+    /// One sheet modifier, several destinations — two `.sheet(isPresented:)`
+    /// on one view silently leaves the second one dead.
+    private enum Sheet: Identifiable {
+        case editLine
+        case merchant(String)
+
+        var id: String {
+            switch self {
+            case .editLine: return "edit"
+            case .merchant(let name): return "merchant-\(name)"
+            }
+        }
+    }
+
     @State private var transactions: [BankTransaction] = []
     @State private var isLoading = true
-    @State private var showingEdit = false
+    @State private var sheet: Sheet?
     @State private var errorMessage: String?
 
     var body: some View {
@@ -300,7 +314,7 @@ struct CategoryDetailView: View {
                 Text(period.formatted(.dateTime.month(.wide).year()))
             }
 
-            Section("Transactions") {
+            Section {
                 if isLoading {
                     ProgressView()
                 } else if transactions.isEmpty {
@@ -308,18 +322,33 @@ struct CategoryDetailView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(transactions) { txn in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(txn.displayName).lineLimit(1)
-                                Text(txn.date)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                        Button {
+                            sheet = .merchant(txn.displayName)
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(txn.displayName)
+                                        .lineLimit(1)
+                                        .foregroundStyle(.primary)
+                                    Text(txn.date)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Text(BudgetMath.dollars(txn.amountCents))
+                                    .font(.body.monospacedDigit())
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
                             }
-                            Spacer()
-                            Text(BudgetMath.dollars(txn.amountCents))
-                                .font(.body.monospacedDigit())
                         }
                     }
+                }
+            } header: {
+                Text("Transactions")
+            } footer: {
+                if !transactions.isEmpty {
+                    Text("Tap a transaction to move that merchant to another line. Past months move with it.")
                 }
             }
 
@@ -332,16 +361,25 @@ struct CategoryDetailView: View {
         .toolbar {
             if let id = row.categoryId {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Edit") { showingEdit = true }
+                    Button("Edit") { sheet = .editLine }
                         .accessibilityIdentifier("category.edit")
                         .id(id)
                 }
             }
         }
-        .sheet(isPresented: $showingEdit) {
-            CategoryEditView(row: row) {
-                onChange()
-                showingEdit = false
+        .sheet(item: $sheet) { which in
+            switch which {
+            case .editLine:
+                CategoryEditView(row: row) {
+                    onChange()
+                    sheet = nil
+                }
+            case .merchant(let name):
+                MerchantRuleView(merchant: name) {
+                    sheet = nil
+                    onChange()
+                    Task { await load() }
+                }
             }
         }
         .task { await load() }
@@ -437,6 +475,118 @@ struct CategoryEditView: View {
                 name: name.trimmingCharacters(in: .whitespaces),
                 plannedCents: cents
             )
+            onSave()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            isSaving = false
+        }
+    }
+}
+
+/// Pick the budget line a merchant belongs to.
+///
+/// The rollups apply rules at read time, so choosing here re-buckets every
+/// month on record, not just the one being looked at. That is the point: a
+/// merchant filed wrongly was filed wrongly in April too.
+struct MerchantRuleView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let merchant: String
+    let onSave: () -> Void
+
+    @State private var categories: [BudgetCategory] = []
+    @State private var currentCategoryId: UUID?
+    @State private var isLoading = true
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    if isLoading {
+                        ProgressView()
+                    } else {
+                        ForEach(categories) { category in
+                            Button {
+                                Task { await assign(category.id) }
+                            } label: {
+                                HStack {
+                                    Text(category.name)
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                    if category.id == currentCategoryId {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(Color.accentColor)
+                                    }
+                                }
+                            }
+                            .disabled(isSaving)
+                        }
+                    }
+                } header: {
+                    Text("Always put \(merchant) in")
+                } footer: {
+                    Text("Every month on record moves, not just this one.")
+                }
+
+                if currentCategoryId != nil {
+                    Section {
+                        Button("Use the bank's category instead", role: .destructive) {
+                            Task { await clear() }
+                        }
+                        .disabled(isSaving)
+                        .accessibilityIdentifier("merchant.clearRule")
+                    } footer: {
+                        Text("Drops the rule. \(merchant) falls back to however its bank category is mapped, or to Uncategorized.")
+                    }
+                }
+
+                if let errorMessage {
+                    Section { Text(errorMessage).foregroundStyle(.red).font(.callout) }
+                }
+            }
+            .navigationTitle(merchant)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .task { await load() }
+        }
+    }
+
+    private func load() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            categories = try await SpendService.shared.categories()
+            currentCategoryId = try await SpendService.shared.merchantRule(merchant)?.categoryId
+        } catch {
+            errorMessage = MonthsViewModel.isCancellation(error) ? nil : error.localizedDescription
+        }
+    }
+
+    private func assign(_ categoryId: UUID) async {
+        isSaving = true
+        errorMessage = nil
+        do {
+            try await SpendService.shared.assignMerchant(merchant, to: categoryId)
+            onSave()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            isSaving = false
+        }
+    }
+
+    private func clear() async {
+        isSaving = true
+        errorMessage = nil
+        do {
+            try await SpendService.shared.clearMerchantRule(merchant)
             onSave()
             dismiss()
         } catch {
