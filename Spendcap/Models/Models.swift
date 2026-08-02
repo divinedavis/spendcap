@@ -535,6 +535,16 @@ struct CategorySpendRow: Codable, Identifiable, Equatable {
     var id: String { "\(period)-\(categoryId?.uuidString ?? "uncategorized")" }
     var isUncategorized: Bool { categoryId == nil }
 
+    /// The month this row covers, for the queries that take a date. Parsed in
+    /// the device timezone so it round-trips back to the same "yyyy-MM-01".
+    var periodDate: Date? {
+        let parser = DateFormatter()
+        parser.dateFormat = "yyyy-MM-dd"
+        parser.timeZone = .current
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        return parser.date(from: period)
+    }
+
     /// Positive means room left, negative means over. The sign is the answer.
     var remainingCents: Int { plannedCents - spentCents }
     var isOver: Bool { plannedCents > 0 && spentCents > plannedCents }

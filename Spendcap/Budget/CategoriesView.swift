@@ -59,6 +59,7 @@ struct CategoriesView: View {
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var model = CategoriesViewModel()
+    @State private var editing: CategorySpendRow?
 
     var body: some View {
         ZStack {
@@ -94,6 +95,11 @@ struct CategoriesView: View {
                     Button("Done") { dismiss() }
                         .accessibilityIdentifier("categories.done")
                 }
+            }
+        }
+        .sheet(item: $editing) { row in
+            CategoryEditView(row: row) {
+                Task { await model.load() }
             }
         }
         .refreshable { await model.load() }
@@ -176,10 +182,8 @@ struct CategoriesView: View {
             SectionHeader(title: "By category", actionSystemImage: nil, action: nil)
 
             ForEach(Array(month.rows.enumerated()), id: \.element.id) { index, row in
-                NavigationLink {
-                    CategoryDetailView(row: row, period: month.period) {
-                        Task { await model.load() }
-                    }
+                Button {
+                    editing = row
                 } label: {
                     categoryRow(row)
                 }
@@ -270,136 +274,14 @@ struct CategoryLineRow: View {
     }
 }
 
-// MARK: - Detail
-
-/// One category in one month: what it planned, what landed, and every
-/// transaction behind the number — which is the only way to spot a merchant
-/// filed in the wrong place.
-struct CategoryDetailView: View {
-    let row: CategorySpendRow
-    let period: Date
-    let onChange: () -> Void
-
-    /// One sheet modifier, several destinations. Stacking
-    /// `.sheet(isPresented:)` modifiers on one view risks one that never
-    /// presents, so both destinations run through a single item-driven sheet.
-    private enum Sheet: Identifiable {
-        case editLine
-        case merchant(String)
-
-        var id: String {
-            switch self {
-            case .editLine: return "edit"
-            case .merchant(let name): return "merchant-\(name)"
-            }
-        }
-    }
-
-    @State private var transactions: [BankTransaction] = []
-    @State private var isLoading = true
-    @State private var sheet: Sheet?
-    @State private var errorMessage: String?
-
-    var body: some View {
-        List {
-            Section {
-                LabeledContent("Spent", value: BudgetMath.dollars(row.spentCents))
-                if row.plannedCents > 0 {
-                    LabeledContent("Planned", value: BudgetMath.dollars(row.plannedCents))
-                    LabeledContent(row.isOver ? "Over by" : "Left") {
-                        Text(BudgetMath.dollars(abs(row.remainingCents)))
-                            .foregroundStyle(row.isOver ? .red : .primary)
-                    }
-                }
-            } header: {
-                Text(period.formatted(.dateTime.month(.wide).year()))
-            }
-
-            Section {
-                if isLoading {
-                    ProgressView()
-                } else if transactions.isEmpty {
-                    Text("Nothing landed here this month.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(transactions) { txn in
-                        Button {
-                            sheet = .merchant(txn.displayName)
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(txn.displayName)
-                                        .lineLimit(1)
-                                        .foregroundStyle(.primary)
-                                    Text(txn.date)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Text(BudgetMath.dollars(txn.amountCents))
-                                    .font(.body.monospacedDigit())
-                                Image(systemName: "chevron.right")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
-                        }
-                    }
-                }
-            } header: {
-                Text("Transactions")
-            } footer: {
-                if !transactions.isEmpty {
-                    Text("Tap a transaction to move that merchant to another line. Past months move with it.")
-                }
-            }
-
-            if let errorMessage {
-                Section { Text(errorMessage).foregroundStyle(.red).font(.callout) }
-            }
-        }
-        .navigationTitle(row.categoryName)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if let id = row.categoryId {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Edit") { sheet = .editLine }
-                        .accessibilityIdentifier("category.edit")
-                        .id(id)
-                }
-            }
-        }
-        .sheet(item: $sheet) { which in
-            switch which {
-            case .editLine:
-                CategoryEditView(row: row) {
-                    onChange()
-                    sheet = nil
-                }
-            case .merchant(let name):
-                MerchantRuleView(merchant: name) {
-                    sheet = nil
-                    onChange()
-                    Task { await load() }
-                }
-            }
-        }
-        .task { await load() }
-    }
-
-    private func load() async {
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            transactions = try await SpendService.shared.categoryTransactions(
-                categoryId: row.categoryId, period: period
-            )
-        } catch {
-            errorMessage = MonthsViewModel.isCancellation(error) ? nil : error.localizedDescription
-        }
-    }
+/// Rename a line or change what it plans to spend.
+/// A merchant name, boxed so it can drive `.sheet(item:)` — String is not
+/// Identifiable, and extending the stdlib to make it so would leak far past
+/// this screen.
+struct MerchantSelection: Identifiable {
+    let id: String
 }
 
-/// Rename a line or change what it plans to spend.
 struct CategoryEditView: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -408,6 +290,9 @@ struct CategoryEditView: View {
 
     @State private var name: String
     @State private var plannedText: String
+    @State private var transactions: [BankTransaction] = []
+    @State private var isLoadingTransactions = true
+    @State private var reassigning: MerchantSelection?
     @State private var isSaving = false
     @State private var errorMessage: String?
 
@@ -417,6 +302,10 @@ struct CategoryEditView: View {
         _name = State(initialValue: row.categoryName)
         _plannedText = State(initialValue: String(format: "%.0f", Double(row.plannedCents) / 100))
     }
+
+    /// The Uncategorized line has no name or plan to edit — but its
+    /// transactions are the whole reason to open it, so it still opens.
+    private var isEditable: Bool { row.categoryId != nil }
 
     private var plannedCents: Int? {
         let cleaned = plannedText
@@ -430,39 +319,113 @@ struct CategoryEditView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Name") {
-                    TextField("Food", text: $name)
-                        .accessibilityIdentifier("category.name")
+                if isEditable {
+                    Section("Name") {
+                        TextField("Food", text: $name)
+                            .accessibilityIdentifier("category.name")
+                    }
+                    Section {
+                        HStack {
+                            Text("$")
+                            TextField("600", text: $plannedText)
+                                .keyboardType(.decimalPad)
+                                .accessibilityIdentifier("category.planned")
+                        }
+                    } header: {
+                        Text("Planned each month")
+                    } footer: {
+                        Text("What this line is meant to cost. Months are measured against it.")
+                    }
                 }
+
+                // The transactions behind the number, which is the only way to
+                // see why a line is over and to spot a merchant filed wrongly.
                 Section {
-                    HStack {
-                        Text("$")
-                        TextField("600", text: $plannedText)
-                            .keyboardType(.decimalPad)
-                            .accessibilityIdentifier("category.planned")
+                    if isLoadingTransactions {
+                        ProgressView()
+                    } else if transactions.isEmpty {
+                        Text("Nothing landed here this month.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(transactions) { txn in
+                            Button {
+                                reassigning = MerchantSelection(id: txn.displayName)
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(txn.displayName)
+                                            .lineLimit(1)
+                                            .foregroundStyle(.primary)
+                                        Text(txn.date)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Text(BudgetMath.dollars(txn.amountCents))
+                                        .font(.body.monospacedDigit())
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                        }
                     }
                 } header: {
-                    Text("Planned each month")
+                    HStack {
+                        Text(periodLabel)
+                        Spacer()
+                        Text(BudgetMath.dollars(row.spentCents))
+                            .foregroundStyle(row.isOver ? .red : .secondary)
+                    }
                 } footer: {
-                    Text("What this line is meant to cost. Months are measured against it.")
+                    if !transactions.isEmpty {
+                        Text("Tap a transaction to move that merchant to another line. Every month on record moves with it.")
+                    }
                 }
 
                 if let errorMessage {
                     Text(errorMessage).foregroundStyle(.red).font(.footnote)
                 }
             }
-            .navigationTitle("Edit line")
+            .navigationTitle(isEditable ? "Edit line" : row.categoryName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(isEditable ? "Cancel" : "Done") { dismiss() }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { Task { await save() } }
-                        .disabled(plannedCents == nil || name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
-                        .accessibilityIdentifier("category.save")
+                if isEditable {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") { Task { await save() } }
+                            .disabled(plannedCents == nil || name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
+                            .accessibilityIdentifier("category.save")
+                    }
                 }
             }
+            .sheet(item: $reassigning) { selection in
+                MerchantRuleView(merchant: selection.id) {
+                    reassigning = nil
+                    onSave()
+                    Task { await loadTransactions() }
+                }
+            }
+            .task { await loadTransactions() }
+        }
+    }
+
+    private var periodLabel: String {
+        row.periodDate?.formatted(.dateTime.month(.wide).year()) ?? "This month"
+    }
+
+    private func loadTransactions() async {
+        isLoadingTransactions = true
+        defer { isLoadingTransactions = false }
+        guard let period = row.periodDate else { return }
+        do {
+            transactions = try await SpendService.shared.categoryTransactions(
+                categoryId: row.categoryId, period: period
+            )
+        } catch {
+            errorMessage = MonthsViewModel.isCancellation(error) ? nil : error.localizedDescription
         }
     }
 

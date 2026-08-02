@@ -547,15 +547,16 @@ struct MonthsView: View {
                 }
 
                 ForEach(Array(month.rows.enumerated()), id: \.element.id) { index, row in
-                    // Tapping a line edits what it plans to spend. The
-                    // Uncategorized line has nothing to plan, so it stays inert.
+                    // Tapping a line opens what it plans to spend and the
+                    // transactions behind it. Uncategorized opens too — it has
+                    // nothing to plan, but routing those out of it is the whole
+                    // point of being able to see them.
                     Button {
                         sheet = .editLine(row)
                     } label: {
-                        CategoryLineRow(row: row, showsChevron: !row.isUncategorized)
+                        CategoryLineRow(row: row, showsChevron: true)
                     }
                     .buttonStyle(.plain)
-                    .disabled(row.isUncategorized)
                     .accessibilityIdentifier("months.line")
                     if index < month.rows.count - 1 { Divider() }
                 }
