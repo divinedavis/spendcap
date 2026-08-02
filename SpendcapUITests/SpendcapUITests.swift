@@ -213,9 +213,18 @@ final class SpendcapUITests: XCTestCase {
         app.tapTab("Months", in: self)
         XCTAssertTrue(app.staticTexts["months.total"].waitForExistence(timeout: 20))
 
-        let entry = app.buttons["months.categories"]
-        XCTAssertTrue(entry.waitForExistence(timeout: 10),
-                      "Months should link to the category budget")
+        // Months carries the breakdown inline, so nothing there needs tapping.
+        // Editing lives in Settings: buttons low in the Months scroll view do
+        // not receive taps on iOS 26 — measured by giving one a known-good
+        // action and watching nothing happen — so the entry point is a List
+        // row, which is the pattern that reliably works.
+        app.tapTab("Settings", in: self)
+        let entry = app.buttons["settings.categories"]
+        if !entry.waitForExistence(timeout: 5) {
+            app.tapTab("Settings", in: self)   // same dismissal race the sign-out test guards
+            XCTAssertTrue(entry.waitForExistence(timeout: 10),
+                          "Settings should list the category budget")
+        }
         entry.tap()
 
         XCTAssertTrue(app.navigationBars["Budget"].waitForExistence(timeout: 15),

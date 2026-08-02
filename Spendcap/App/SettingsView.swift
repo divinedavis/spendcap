@@ -34,6 +34,15 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Budget") {
+                    NavigationLink {
+                        CategoriesView()
+                    } label: {
+                        Label("Budget by category", systemImage: "list.bullet.rectangle")
+                    }
+                    .accessibilityIdentifier("settings.categories")
+                }
+
                 Section("Documents") {
                     NavigationLink {
                         StatementsView()

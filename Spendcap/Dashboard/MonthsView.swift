@@ -15,8 +15,22 @@ final class MonthsViewModel: ObservableObject {
     @Published var stats = YearStats(months: [], budget: Budget(dailyLimitCents: 5000, warnPct: 80))
     /// Statements keyed by year * 100 + month, so a row can find its own PDF.
     @Published var statementsByMonth: [Int: BankStatement] = [:]
+    /// This month and last, by budget line — the same rollup the Budget screen
+    /// uses, shown inline here.
+    @Published var categoryMonths: [CategoryMonth] = []
+    @Published var selectedCategoryPeriod: Date?
     @Published var isLoading = false
     @Published var errorMessage: String?
+
+    var selectedCategoryMonth: CategoryMonth? {
+        categoryMonths.first { $0.period == selectedCategoryPeriod } ?? categoryMonths.first
+    }
+
+    /// True once loaded and nothing but the Uncategorized line came back, i.e.
+    /// no budget has been set up yet.
+    var hasCategoryBudget: Bool {
+        categoryMonths.contains { month in month.rows.contains { !$0.isUncategorized } }
+    }
 
     func load() async {
         isLoading = true
@@ -32,6 +46,16 @@ final class MonthsViewModel: ObservableObject {
             // and "cancelled" printed in red under the chart reads as a real
             // failure. Nothing went wrong, so say nothing.
             errorMessage = Self.isCancellation(error) ? nil : error.localizedDescription
+        }
+
+        // Budget lines are a second read of the same months; a failure here
+        // must not blank the totals above them.
+        if let rows = try? await SpendService.shared.categorySpend(monthsBack: 2) {
+            categoryMonths = CategoryMath.months(rows: rows)
+            if selectedCategoryPeriod == nil
+                || !categoryMonths.contains(where: { $0.period == selectedCategoryPeriod }) {
+                selectedCategoryPeriod = categoryMonths.first?.period
+            }
         }
 
         // Statements are context, not the point of the screen — reading the
@@ -66,9 +90,17 @@ final class MonthsViewModel: ObservableObject {
 }
 
 struct MonthsView: View {
+    /// One sheet, one modifier. Two `.sheet(isPresented:)` on a single view is
+    /// a silent bug — SwiftUI honours only one — so this stays item-driven even
+    /// with a single case.
+    private enum Sheet: Int, Identifiable {
+        case caps
+        var id: Int { rawValue }
+    }
+
     @StateObject private var model = MonthsViewModel()
     @State private var previewURL: URL?
-    @State private var showingBudget = false
+    @State private var sheet: Sheet?
 
     var body: some View {
         NavigationStack {
@@ -92,10 +124,16 @@ struct MonthsView: View {
             }
             .navigationTitle("Months")
             .navigationBarTitleDisplayMode(.inline)
+            // Exactly one toolbar button, deliberately. A second one on this
+            // bar is inert: with two present, the first never registers a tap,
+            // as either a ToolbarItem pair or a ToolbarItemGroup. Proved by
+            // giving both the same action — the second opened its sheet, the
+            // first did nothing. Everything else opens from the cards, where
+            // taps behave.
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        showingBudget = true
+                        sheet = .caps
                     } label: {
                         Image(systemName: "slider.horizontal.3")
                     }
@@ -106,9 +144,12 @@ struct MonthsView: View {
             .refreshable { await model.load() }
             .task { await model.load() }
             .quickLookPreview($previewURL)
-            .sheet(isPresented: $showingBudget) {
-                BudgetView(budget: model.stats.budget, focus: .monthly) { _ in
-                    Task { await model.load() }
+            .sheet(item: $sheet) { which in
+                switch which {
+                case .caps:
+                    BudgetView(budget: model.stats.budget, focus: .monthly) { _ in
+                        Task { await model.load() }
+                    }
                 }
             }
         }
@@ -129,7 +170,7 @@ struct MonthsView: View {
                     .foregroundStyle(.white.opacity(0.9))
                 Spacer()
                 Button {
-                    showingBudget = true
+                    sheet = .caps
                 } label: {
                     Text(model.stats.budget.monthlyLimitCents == nil ? "Set cap" : "Edit")
                         .font(.footnote.weight(.bold))
@@ -456,33 +497,71 @@ struct MonthsView: View {
 
     // MARK: - Category budget
 
-    /// A month total says the month went wrong; the budget lines say where.
+    /// A month total says the month went wrong; the budget lines say where —
+    /// so they belong on this screen, not one tap away behind it.
+    @ViewBuilder
     private var categoryBudgetCard: some View {
-        NavigationLink {
-            CategoriesView()
-        } label: {
+        if model.hasCategoryBudget, let month = model.selectedCategoryMonth {
+            SurfaceCard {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("By category")
+                        .font(.title3.weight(.bold))
+                    Spacer(minLength: 8)
+                    if month.overCount > 0 {
+                        Text("\(month.overCount) over")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.red)
+                    }
+                }
+
+                // Two months is the comparison that matters: is this month
+                // tracking better or worse than the one that just closed.
+                if model.categoryMonths.count > 1 {
+                    Picker("Month", selection: Binding(
+                        get: { model.selectedCategoryPeriod ?? month.period },
+                        set: { model.selectedCategoryPeriod = $0 }
+                    )) {
+                        ForEach(model.categoryMonths) { m in
+                            Text(m.shortLabel).tag(m.period)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("months.categoryMonth")
+                }
+
+                ForEach(Array(month.rows.enumerated()), id: \.element.id) { index, row in
+                    CategoryLineRow(row: row)
+                    if index < month.rows.count - 1 { Divider() }
+                }
+
+                // Editing the lines lives in Settings > Budget by category.
+                // Buttons this far down the scroll view do not receive taps —
+                // measured, not assumed — so this points there rather than
+                // pretending to be one.
+                Text("Edit these lines in Settings \u{203A} Budget by category")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 2)
+                    .accessibilityIdentifier("months.budgetHint")
+            }
+        } else {
+            // Nothing to break down yet.
             SurfaceCard {
                 HStack(alignment: .top, spacing: 12) {
                     RowIcon(systemName: "list.bullet.rectangle", tint: .purple)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Budget by category")
                             .font(.headline)
-                            .foregroundStyle(.primary)
-                        Text("Planned against actual for this month and last, line by line.")
+                        Text("Set a planned amount per line in Settings \u{203A} Budget by category, and this month and last will be measured against it here.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .multilineTextAlignment(.leading)
                     }
-                    Spacer(minLength: 4)
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
                 }
             }
+            .accessibilityIdentifier("months.categories")
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("months.categories")
     }
 
     // MARK: - Statements

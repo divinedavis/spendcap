@@ -54,6 +54,10 @@ final class CategoriesViewModel: ObservableObject {
 }
 
 struct CategoriesView: View {
+    /// Presented as a sheet rather than pushed, so it needs its own dismissal.
+    var isModal = false
+
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var model = CategoriesViewModel()
 
     var body: some View {
@@ -84,6 +88,14 @@ struct CategoriesView: View {
         }
         .navigationTitle("Budget")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if isModal {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .accessibilityIdentifier("categories.done")
+                }
+            }
+        }
         .refreshable { await model.load() }
         .task { await model.load() }
     }
@@ -178,23 +190,61 @@ struct CategoriesView: View {
     }
 
     private func categoryRow(_ row: CategorySpendRow) -> some View {
+        CategoryLineRow(row: row, showsChevron: true)
+    }
+
+    // MARK: - Empty state
+
+    private var starterCard: some View {
+        PromptCard(
+            icon: "list.bullet.rectangle",
+            tint: .blue,
+            title: "Budget by category",
+            message: "Start from a standard set of lines — food, transport, rent, debts — with your transactions already routed into them. Every amount is yours to change.",
+            ctaTitle: model.isSeeding ? "Setting up\u{2026}" : "Create a starter budget"
+        ) {
+            Task { await model.seed() }
+        }
+        .disabled(model.isSeeding)
+        .accessibilityIdentifier("categories.seed")
+    }
+}
+
+// MARK: - Shared row
+
+/// One budget line: spent against planned, with the bar carrying the verdict.
+/// Shared by the Budget screen and the Months widget so the two can't drift
+/// into showing the same line differently.
+struct CategoryLineRow: View {
+    let row: CategorySpendRow
+    var showsChevron = false
+
+    private var barTint: Color {
+        if row.isOver { return .red }
+        return row.progress >= 0.8 ? .orange : .accentColor
+    }
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text(row.categoryName)
                     .font(.body.weight(.medium))
                     .foregroundStyle(row.isUncategorized ? .secondary : .primary)
+                    .lineLimit(1)
                 Spacer(minLength: 8)
                 Text(BudgetMath.wholeDollars(row.spentCents))
                     .font(.body.weight(.semibold).monospacedDigit())
                     .foregroundStyle(row.isOver ? Color.red : Color.primary)
-                Image(systemName: "chevron.right")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                if showsChevron {
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
             }
 
             if row.plannedCents > 0 {
                 ProgressView(value: row.progress)
-                    .tint(row.isOver ? .red : (row.progress >= 0.8 ? .orange : .accentColor))
+                    .tint(barTint)
 
                 HStack {
                     Text("of \(BudgetMath.wholeDollars(row.plannedCents)) planned")
@@ -217,22 +267,6 @@ struct CategoriesView: View {
         }
         .padding(.vertical, 8)
         .contentShape(Rectangle())
-    }
-
-    // MARK: - Empty state
-
-    private var starterCard: some View {
-        PromptCard(
-            icon: "list.bullet.rectangle",
-            tint: .blue,
-            title: "Budget by category",
-            message: "Start from a standard set of lines — food, transport, rent, debts — with your transactions already routed into them. Every amount is yours to change.",
-            ctaTitle: model.isSeeding ? "Setting up\u{2026}" : "Create a starter budget"
-        ) {
-            Task { await model.seed() }
-        }
-        .disabled(model.isSeeding)
-        .accessibilityIdentifier("categories.seed")
     }
 }
 
