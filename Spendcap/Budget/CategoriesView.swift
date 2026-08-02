@@ -280,8 +280,9 @@ struct CategoryDetailView: View {
     let period: Date
     let onChange: () -> Void
 
-    /// One sheet modifier, several destinations — two `.sheet(isPresented:)`
-    /// on one view silently leaves the second one dead.
+    /// One sheet modifier, several destinations. Stacking
+    /// `.sheet(isPresented:)` modifiers on one view risks one that never
+    /// presents, so both destinations run through a single item-driven sheet.
     private enum Sheet: Identifiable {
         case editLine
         case merchant(String)

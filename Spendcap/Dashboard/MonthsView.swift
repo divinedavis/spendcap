@@ -90,12 +90,21 @@ final class MonthsViewModel: ObservableObject {
 }
 
 struct MonthsView: View {
-    /// One sheet, one modifier. Two `.sheet(isPresented:)` on a single view is
-    /// a silent bug — SwiftUI honours only one — so this stays item-driven even
-    /// with a single case.
-    private enum Sheet: Int, Identifiable {
+    /// One item-driven sheet rather than several `.sheet(isPresented:)`
+    /// modifiers on the same view — stacking those is a documented way to end
+    /// up with one that never presents.
+    private enum Sheet: Identifiable {
         case caps
-        var id: Int { rawValue }
+        case budget
+        case editLine(CategorySpendRow)
+
+        var id: String {
+            switch self {
+            case .caps: return "caps"
+            case .budget: return "budget"
+            case .editLine(let row): return "line-\(row.id)"
+            }
+        }
     }
 
     @StateObject private var model = MonthsViewModel()
@@ -124,14 +133,16 @@ struct MonthsView: View {
             }
             .navigationTitle("Months")
             .navigationBarTitleDisplayMode(.inline)
-            // Exactly one toolbar button, deliberately. A second one on this
-            // bar is inert: with two present, the first never registers a tap,
-            // as either a ToolbarItem pair or a ToolbarItemGroup. Proved by
-            // giving both the same action — the second opened its sheet, the
-            // first did nothing. Everything else opens from the cards, where
-            // taps behave.
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button {
+                        sheet = .budget
+                    } label: {
+                        Image(systemName: "list.bullet.rectangle")
+                    }
+                    .accessibilityIdentifier("months.openBudget")
+                    .accessibilityLabel("Open the category budget")
+
                     Button {
                         sheet = .caps
                     } label: {
@@ -148,6 +159,12 @@ struct MonthsView: View {
                 switch which {
                 case .caps:
                     BudgetView(budget: model.stats.budget, focus: .monthly) { _ in
+                        Task { await model.load() }
+                    }
+                case .budget:
+                    NavigationStack { CategoriesView(isModal: true) }
+                case .editLine(let row):
+                    CategoryEditView(row: row) {
                         Task { await model.load() }
                     }
                 }
@@ -530,17 +547,23 @@ struct MonthsView: View {
                 }
 
                 ForEach(Array(month.rows.enumerated()), id: \.element.id) { index, row in
-                    CategoryLineRow(row: row)
+                    // Tapping a line edits what it plans to spend. The
+                    // Uncategorized line has nothing to plan, so it stays inert.
+                    Button {
+                        sheet = .editLine(row)
+                    } label: {
+                        CategoryLineRow(row: row, showsChevron: !row.isUncategorized)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(row.isUncategorized)
+                    .accessibilityIdentifier("months.line")
                     if index < month.rows.count - 1 { Divider() }
                 }
 
-                // Editing the lines lives in Settings > Budget by category.
-                // Buttons this far down the scroll view do not receive taps —
-                // measured, not assumed — so this points there rather than
-                // pretending to be one.
-                Text("Edit these lines in Settings \u{203A} Budget by category")
+                Text("Tap a line to change what it plans to spend. Settings \u{203A} Budget by category has the transactions behind each one.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 2)
                     .accessibilityIdentifier("months.budgetHint")
             }

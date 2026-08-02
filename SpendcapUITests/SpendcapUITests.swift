@@ -213,11 +213,43 @@ final class SpendcapUITests: XCTestCase {
         app.tapTab("Months", in: self)
         XCTAssertTrue(app.staticTexts["months.total"].waitForExistence(timeout: 20))
 
-        // Months carries the breakdown inline, so nothing there needs tapping.
+        // A budget line on Months opens its planned amount for editing. The
+        // widget appears only after the category rollup lands, so wait for a
+        // row to exist *and* settle — tapping while the card is still being
+        // laid out lands the touch wherever the row used to be.
+        app.tapTab("Months", in: self)
+        let line = app.buttons["months.line"].firstMatch
+        if line.waitForExistence(timeout: 20) {
+            var frame = line.frame
+            for _ in 0..<10 {
+                Thread.sleep(forTimeInterval: 0.4)
+                let next = line.frame
+                if next == frame { break }
+                frame = next
+            }
+            line.tap()
+            XCTAssertTrue(
+                app.descendants(matching: .any)
+                    .matching(identifier: "category.planned").firstMatch
+                    .waitForExistence(timeout: 10),
+                "tapping a budget line should open its planned amount"
+            )
+            app.buttons["Cancel"].tap()
+        }
+
+        // Months carries the breakdown inline, so nothing else there needs tapping.
         // Editing lives in Settings: buttons low in the Months scroll view do
         // not receive taps on iOS 26 — measured by giving one a known-good
         // action and watching nothing happen — so the entry point is a List
         // row, which is the pattern that reliably works.
+        // The toolbar entry, re-tested after the layout settles.
+        let toolbarEntry = app.buttons["months.openBudget"]
+        XCTAssertTrue(toolbarEntry.waitForExistence(timeout: 10))
+        toolbarEntry.tap()
+        XCTAssertTrue(app.navigationBars["Budget"].waitForExistence(timeout: 15),
+                      "Budget should open from the Months toolbar")
+        app.buttons["categories.done"].tap()
+
         app.tapTab("Settings", in: self)
         let entry = app.buttons["settings.categories"]
         if !entry.waitForExistence(timeout: 5) {

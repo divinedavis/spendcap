@@ -95,6 +95,14 @@ from Months → Budget by category.
   cannot duplicate the budget.
 - Every rollup here reuses the same outflow filter as `overspend_status()`.
 
+**Tapping a budget line edits its planned amount**, on the Months widget and
+on the Budget screen. If a tap there ever seems to do nothing in a UI test,
+suspect the layout rather than the control: the widget appears only once the
+category rollup lands, and a touch dispatched while the card is still being
+laid out arrives where the row *used* to be. Wait for the row's frame to stop
+moving before tapping. Several entry points were wrongly diagnosed as dead
+buttons before this was understood.
+
 **Reassigning a merchant is in the app** (Budget > a line > tap a transaction).
 It writes a `merchant_contains` rule, upserted on `(user_id, match_type,
 match_value)` so a merchant can only ever have one home. Rules are applied at
