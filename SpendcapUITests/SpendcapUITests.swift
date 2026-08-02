@@ -165,6 +165,23 @@ final class SpendcapUITests: XCTestCase {
         // Today is gone for good — a stale tab left in place would keep
         // showing a partial daily figure this change exists to retire.
         XCTAssertFalse(app.buttons["Today"].exists, "Today tab should no longer exist")
+
+        // The monthly cap is configurable from this screen: without it the
+        // over/under verdict is derived from a daily figure nobody chose.
+        app.buttons["months.setCap"].tap()
+        let monthlyField = app.descendants(matching: .any)
+            .matching(identifier: "budget.monthlyLimit").firstMatch
+        XCTAssertTrue(monthlyField.waitForExistence(timeout: 10),
+                      "cap sheet should offer a monthly limit field")
+
+        let cancel = app.buttons["Cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+        cancel.tap()
+        if !monthlyField.waitForNonExistence(timeout: 5) {
+            cancel.tap()   // the same presentation-animation race the budget test guards
+            XCTAssertTrue(monthlyField.waitForNonExistence(timeout: 10),
+                          "cap sheet should dismiss on Cancel")
+        }
     }
 
     /// Statements is reachable from Settings and renders one of its two valid

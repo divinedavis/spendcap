@@ -35,8 +35,13 @@ final class YearMathTests: XCTestCase {
     }
 
     private func stats(_ rows: [MonthlySpendRow], limit: Int = 5000,
-                       now: String = "2026-08-02") -> YearStats {
-        YearMath.stats(rows: rows, dailyLimitCents: limit, now: date(now), timeZone: utc)
+                       monthly: Int? = nil, now: String = "2026-08-02") -> YearStats {
+        YearMath.stats(
+            rows: rows,
+            budget: Budget(dailyLimitCents: limit, warnPct: 80, monthlyLimitCents: monthly),
+            now: date(now),
+            timeZone: utc
+        )
     }
 
     // MARK: - Series construction
@@ -74,10 +79,63 @@ final class YearMathTests: XCTestCase {
 
     func testFebruaryLeapYearCap() {
         let result = YearMath.stats(
-            rows: [row("2028-02-01", 1000)], dailyLimitCents: 5000,
+            rows: [row("2028-02-01", 1000)],
+            budget: Budget(dailyLimitCents: 5000, warnPct: 80),
             now: date("2028-03-05"), timeZone: utc
         )
         XCTAssertEqual(result.months.first?.capCents, 5000 * 29)
+    }
+
+    // MARK: - Monthly cap
+
+    /// An explicit monthly cap replaces the derived one, and it does not vary
+    /// by month length — a 28-day February gets the same budget as March.
+    func testExplicitMonthlyCapOverridesTheDerivedOne() {
+        let result = stats(mayOnwards(), limit: 5000, monthly: 900_000)
+        XCTAssertEqual(Set(result.months.map(\.capCents)), [900_000])
+    }
+
+    func testMonthlyCapChangesWhichMonthsAreOver() {
+        // $50/day derives roughly $1,550 — every month here is over it.
+        XCTAssertEqual(stats(mayOnwards(), limit: 5000).monthsOverCap, 3)
+        // Against a $9,000 monthly cap only July ($11,000) is.
+        XCTAssertEqual(stats(mayOnwards(), limit: 5000, monthly: 900_000).monthsOverCap, 1)
+    }
+
+    func testBudgetCapFallsBackToDailyTimesDays() {
+        let derived = Budget(dailyLimitCents: 5000, warnPct: 80)
+        XCTAssertEqual(derived.capCents(daysInMonth: 31), 155_000)
+        let explicit = Budget(dailyLimitCents: 5000, warnPct: 80, monthlyLimitCents: 900_000)
+        XCTAssertEqual(explicit.capCents(daysInMonth: 31), 900_000)
+    }
+
+    // MARK: - This month against the cap
+
+    func testCurrentMonthRemainingIsCapMinusSpend() {
+        let result = stats(mayOnwards(), monthly: 900_000)
+        XCTAssertEqual(result.currentMonth?.shortLabel, "Aug")
+        XCTAssertEqual(result.currentRemainingCents, 900_000 - 40_000)
+        XCTAssertEqual(result.currentCapProgress, 40_000.0 / 900_000.0, accuracy: 0.0001)
+    }
+
+    /// Over budget has to be legible as a sign, not just a colour.
+    func testCurrentMonthRemainingGoesNegativeWhenOver() {
+        let result = stats(mayOnwards(), monthly: 30_000)
+        XCTAssertEqual(result.currentRemainingCents, -10_000)
+        XCTAssertEqual(result.currentCapProgress, 1.0)
+    }
+
+    func testNoCurrentMonthOnRecordHasNoRemaining() {
+        let result = stats([row("2026-07-01", 500_000)], monthly: 900_000, now: "2026-08-02")
+        XCTAssertNil(result.currentMonth)
+        XCTAssertNil(result.currentRemainingCents)
+        XCTAssertEqual(result.currentCapProgress, 0)
+    }
+
+    func testZeroMonthlyCapIsTreatedAsNoCapRatherThanDividingByZero() {
+        let result = stats(mayOnwards(), limit: 0)
+        XCTAssertNil(result.currentRemainingCents)
+        XCTAssertEqual(result.currentCapProgress, 0)
     }
 
     // MARK: - Change between months
@@ -151,7 +209,8 @@ final class YearMathTests: XCTestCase {
             row("2026-05-01", 150_000), row("2026-06-01", 150_000),
             row("2026-07-01", 0, 0),
         ]
-        let result = YearMath.stats(rows: rows, dailyLimitCents: 5000,
+        let result = YearMath.stats(rows: rows,
+                                    budget: Budget(dailyLimitCents: 5000, warnPct: 80),
                                     now: date("2026-07-15"), timeZone: utc)
         XCTAssertEqual(result.trendFraction ?? 0, 0.5, accuracy: 0.0001)
     }

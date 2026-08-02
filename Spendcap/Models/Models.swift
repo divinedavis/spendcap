@@ -137,10 +137,28 @@ struct BankStatement: Codable, Identifiable, Equatable {
 struct Budget: Codable, Equatable {
     var dailyLimitCents: Int
     var warnPct: Int
+    /// Whole-month cap. Nil falls back to the daily cap × days in the month —
+    /// which is the wrong yardstick for a month once rent or an annual bill
+    /// lands on a single day, hence the option to set one directly. Unlike the
+    /// daily cap this is not a push threshold; nothing server-side reads it.
+    var monthlyLimitCents: Int?
+
+    init(dailyLimitCents: Int, warnPct: Int, monthlyLimitCents: Int? = nil) {
+        self.dailyLimitCents = dailyLimitCents
+        self.warnPct = warnPct
+        self.monthlyLimitCents = monthlyLimitCents
+    }
 
     enum CodingKeys: String, CodingKey {
         case dailyLimitCents = "daily_limit_cents"
         case warnPct = "warn_pct"
+        case monthlyLimitCents = "monthly_limit_cents"
+    }
+
+    /// This month's allowance: the explicit cap when set, otherwise the daily
+    /// cap stretched over the month's own length.
+    func capCents(daysInMonth: Int) -> Int {
+        monthlyLimitCents ?? dailyLimitCents * daysInMonth
     }
 }
 
@@ -168,8 +186,12 @@ struct MonthStats: Equatable {
     var daysElapsed: Int
     var daysInMonth: Int
     var dailyLimitCents: Int
+    /// Set when the user has chosen a whole-month cap. Trends and Months have
+    /// to resolve the month's allowance the same way or the two screens
+    /// disagree about whether the month is over budget.
+    var monthlyLimitCents: Int?
 
-    var monthCapCents: Int { dailyLimitCents * daysInMonth }
+    var monthCapCents: Int { monthlyLimitCents ?? dailyLimitCents * daysInMonth }
     var remainingCents: Int { monthCapCents - spentCents }
     var averagePerDayCents: Int { daysElapsed > 0 ? spentCents / daysElapsed : 0 }
 
@@ -193,6 +215,7 @@ enum MonthMath {
     static func stats(
         transactions: [BankTransaction],
         dailyLimitCents: Int,
+        monthlyLimitCents: Int? = nil,
         now: Date = Date(),
         timeZone: TimeZone = .current
     ) -> MonthStats {
@@ -206,7 +229,8 @@ enum MonthMath {
 
         guard let interval = calendar.dateInterval(of: .month, for: now) else {
             return MonthStats(series: [], spentCents: 0, daysElapsed: 0,
-                              daysInMonth: 0, dailyLimitCents: dailyLimitCents)
+                              daysInMonth: 0, dailyLimitCents: dailyLimitCents,
+                              monthlyLimitCents: monthlyLimitCents)
         }
         let daysInMonth = calendar.range(of: .day, in: .month, for: now)?.count ?? 30
         let today = calendar.startOfDay(for: now)
@@ -237,7 +261,8 @@ enum MonthMath {
             spentCents: running,
             daysElapsed: series.count,
             daysInMonth: daysInMonth,
-            dailyLimitCents: dailyLimitCents
+            dailyLimitCents: dailyLimitCents,
+            monthlyLimitCents: monthlyLimitCents
         )
     }
 }
@@ -321,7 +346,24 @@ struct MonthlySpend: Identifiable, Equatable {
 /// rows so it can be unit-tested without a network.
 struct YearStats: Equatable {
     var months: [MonthlySpend]
-    var dailyLimitCents: Int
+    var budget: Budget
+
+    /// The month in progress, when it is on record.
+    var currentMonth: MonthlySpend? { months.last(where: { $0.isCurrent && $0.hasData }) }
+
+    /// What's left of the current month's cap. Negative once it is blown
+    /// through — the sign is the answer to "am I over".
+    var currentRemainingCents: Int? {
+        guard let month = currentMonth, month.capCents > 0 else { return nil }
+        return month.capCents - month.spentCents
+    }
+
+    /// How far into the current month's cap the spending has gone, clamped to
+    /// [0, 1] for a progress bar.
+    var currentCapProgress: Double {
+        guard let month = currentMonth, month.capCents > 0 else { return 0 }
+        return min(1.0, max(0.0, Double(month.spentCents) / Double(month.capCents)))
+    }
 
     /// Months carrying real history, oldest first.
     var withData: [MonthlySpend] { months.filter(\.hasData) }
@@ -380,7 +422,7 @@ enum YearMath {
     /// versus simply older than the history the bank shared.
     static func stats(
         rows: [MonthlySpendRow],
-        dailyLimitCents: Int,
+        budget: Budget,
         now: Date = Date(),
         timeZone: TimeZone = .current
     ) -> YearStats {
@@ -431,7 +473,7 @@ enum YearMath {
                 date: entry.date,
                 spentCents: entry.row.spentCents,
                 txnCount: entry.row.txnCount,
-                capCents: dailyLimitCents * days,
+                capCents: budget.capCents(daysInMonth: days),
                 changeFraction: change,
                 hasData: hasData,
                 isCurrent: isCurrent,
@@ -442,7 +484,7 @@ enum YearMath {
             if hasData { previousWithData = entry.row.spentCents }
         }
 
-        return YearStats(months: months, dailyLimitCents: dailyLimitCents)
+        return YearStats(months: months, budget: budget)
     }
 }
 
@@ -469,5 +511,12 @@ enum BudgetMath {
     static func dollars(_ cents: Int) -> String {
         let value = Double(cents) / 100.0
         return value.formatted(.currency(code: "USD"))
+    }
+
+    /// Rounded to the dollar. Month and year totals run to five figures, where
+    /// the cents are noise that costs a line break on a narrow phone.
+    static func wholeDollars(_ cents: Int) -> String {
+        let value = (Double(cents) / 100.0).rounded()
+        return value.formatted(.currency(code: "USD").precision(.fractionLength(0)))
     }
 }

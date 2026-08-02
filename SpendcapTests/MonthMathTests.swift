@@ -91,6 +91,21 @@ final class MonthMathTests: XCTestCase {
         XCTAssertEqual(stats.remainingCents, 150_000 - 10_000)
     }
 
+    /// Trends and Months must resolve a month's allowance identically, or the
+    /// two screens disagree about whether the month is over budget.
+    func testExplicitMonthlyCapReplacesTheDerivedOne() {
+        let stats = MonthMath.stats(
+            transactions: [txn("2026-04-01", 10_000)],
+            dailyLimitCents: 5000,
+            monthlyLimitCents: 900_000,
+            now: date("2026-04-05"), timeZone: utc
+        )
+        XCTAssertEqual(stats.monthCapCents, 900_000)
+        XCTAssertEqual(stats.remainingCents, 890_000)
+        // The daily cap still colours the per-day bars.
+        XCTAssertEqual(stats.dailyLimitCents, 5000)
+    }
+
     func testRemainingGoesNegativeWhenOverMonthlyCap() {
         let stats = MonthMath.stats(
             transactions: [txn("2026-04-01", 200_000)],

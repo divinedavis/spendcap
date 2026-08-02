@@ -87,7 +87,7 @@
 		F33FF325AD3583F8C8C0766D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F3BA7D53E4C8AEC4EC9EDB50 /* BudgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetView.swift; sourceTree = "<group>"; };
 		FC109E672012905CC6B889E6 /* MonthMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthMathTests.swift; sourceTree = "<group>"; };
-		"TEMP_FDF59129-8949-478D-A913-E12E6339DDE2" /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
+		"TEMP_EAAB344A-90C4-4EC6-A5D9-5EA03CB2CBC3" /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -261,10 +261,10 @@
 			path = Notifications;
 			sourceTree = "<group>";
 		};
-		"TEMP_6E8CB13F-33D1-42AC-8E3A-AB9EB1DDB3B5" /* Spendcap */ = {
+		"TEMP_89D8ADC8-E7F1-406A-9798-5CF6E6DD63F3" /* Spendcap */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_FDF59129-8949-478D-A913-E12E6339DDE2" /* Secrets.xcconfig */,
+				"TEMP_EAAB344A-90C4-4EC6-A5D9-5EA03CB2CBC3" /* Secrets.xcconfig */,
 			);
 			path = Spendcap;
 			sourceTree = "<group>";
@@ -465,7 +465,7 @@
 		};
 		568F0089E9BF72A888B8F68D /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_FDF59129-8949-478D-A913-E12E6339DDE2" /* Secrets.xcconfig */;
+			baseConfigurationReference = "TEMP_EAAB344A-90C4-4EC6-A5D9-5EA03CB2CBC3" /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Spendcap/Spendcap.entitlements;
@@ -664,7 +664,7 @@
 		};
 		A2AF47695D6DE2F5696B08C5 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_FDF59129-8949-478D-A913-E12E6339DDE2" /* Secrets.xcconfig */;
+			baseConfigurationReference = "TEMP_EAAB344A-90C4-4EC6-A5D9-5EA03CB2CBC3" /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Spendcap/Spendcap.entitlements;

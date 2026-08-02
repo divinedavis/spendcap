@@ -66,6 +66,20 @@ that disagree with the day totals behind the pushes are worse than no totals.
 `YearMath.stats` adds what only the client knows (per-month cap, change,
 partial current month) and is unit-tested in `YearMathTests`.
 
+**Two caps, two jobs (0006).** `budgets.daily_limit_cents` is the push
+threshold and is the only one `check_overspend` reads.
+`budgets.monthly_limit_cents` is optional, nullable, and read by the app only —
+it is what a whole month is judged against on Months and Trends. Null falls
+back to daily × days in the month, which is the wrong yardstick the moment rent
+or an annual bill lands on one day and turns every month red. Both screens must
+resolve it through `Budget.capCents(daysInMonth:)` / `MonthStats.monthCapCents`
+so they can never disagree. Nothing pushes on the monthly cap yet — that would
+need a server-side counterpart in `check_overspend`.
+
+Anything that opens `BudgetView` must pass the **real** `Budget` row, never one
+rebuilt from stats: saving a reconstructed one resets `warn_pct` and wipes the
+monthly cap, since `updateBudget` upserts every column.
+
 Two rules that shaped that screen and are easy to undo by accident:
 
 - **A month with no rows is not a month with no spending.** Plaid only shares

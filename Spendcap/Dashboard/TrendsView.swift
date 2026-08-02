@@ -30,6 +30,10 @@ enum TrendsMode: String, CaseIterable, Identifiable {
 final class TrendsViewModel: ObservableObject {
     @Published var stats = MonthStats(series: [], spentCents: 0, daysElapsed: 0,
                                       daysInMonth: 0, dailyLimitCents: 5000)
+    /// The real budget row, kept whole so the sheet edits it rather than a
+    /// stand-in rebuilt from the stats — saving a reconstructed one would
+    /// silently reset warn_pct and wipe any monthly cap.
+    @Published var budget = Budget(dailyLimitCents: 5000, warnPct: 80)
     @Published var isLoading = false
     @Published var errorMessage: String?
 
@@ -41,7 +45,15 @@ final class TrendsViewModel: ObservableObject {
             async let txns = SpendService.shared.monthTransactions()
             async let budg = SpendService.shared.budget()
             let (t, b) = try await (txns, budg)
-            stats = MonthMath.stats(transactions: t, dailyLimitCents: b.dailyLimitCents)
+            budget = b
+            // Both caps: the daily one colours the per-day bars, the monthly
+            // one (when set) is what the month is judged against — Months uses
+            // the same resolution, and the two screens must not disagree.
+            stats = MonthMath.stats(
+                transactions: t,
+                dailyLimitCents: b.dailyLimitCents,
+                monthlyLimitCents: b.monthlyLimitCents
+            )
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -86,7 +98,7 @@ struct TrendsView: View {
             .refreshable { await model.load() }
             .task { await model.load() }
             .sheet(isPresented: $showingBudget) {
-                BudgetView(budget: Budget(dailyLimitCents: model.stats.dailyLimitCents, warnPct: 80)) { _ in
+                BudgetView(budget: model.budget) { _ in
                     Task { await model.load() }
                 }
             }
@@ -244,7 +256,9 @@ struct TrendsView: View {
                 icon: "calendar",
                 tint: .blue,
                 title: "Cap for \(monthLabel)",
-                subtitle: "\(BudgetMath.dollars(model.stats.dailyLimitCents)) a day \u{00D7} \(model.stats.daysInMonth) days",
+                subtitle: model.stats.monthlyLimitCents != nil
+                    ? "Your monthly cap"
+                    : "\(BudgetMath.dollars(model.stats.dailyLimitCents)) a day \u{00D7} \(model.stats.daysInMonth) days",
                 value: BudgetMath.dollars(model.stats.monthCapCents)
             )
             Divider()

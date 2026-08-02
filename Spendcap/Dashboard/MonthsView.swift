@@ -12,13 +12,11 @@ import QuickLook
 
 @MainActor
 final class MonthsViewModel: ObservableObject {
-    @Published var stats = YearStats(months: [], dailyLimitCents: 5000)
+    @Published var stats = YearStats(months: [], budget: Budget(dailyLimitCents: 5000, warnPct: 80))
     /// Statements keyed by year * 100 + month, so a row can find its own PDF.
     @Published var statementsByMonth: [Int: BankStatement] = [:]
     @Published var isLoading = false
     @Published var errorMessage: String?
-
-    var hasStatements: Bool { !statementsByMonth.isEmpty }
 
     func load() async {
         isLoading = true
@@ -28,9 +26,12 @@ final class MonthsViewModel: ObservableObject {
             async let rows = SpendService.shared.monthlySpend(monthsBack: 12)
             async let budg = SpendService.shared.budget()
             let (r, b) = try await (rows, budg)
-            stats = YearMath.stats(rows: r, dailyLimitCents: b.dailyLimitCents)
+            stats = YearMath.stats(rows: r, budget: b)
         } catch {
-            errorMessage = error.localizedDescription
+            // A pull-to-refresh that supersedes an in-flight load cancels it,
+            // and "cancelled" printed in red under the chart reads as a real
+            // failure. Nothing went wrong, so say nothing.
+            errorMessage = Self.isCancellation(error) ? nil : error.localizedDescription
         }
 
         // Statements are context, not the point of the screen — reading the
@@ -45,6 +46,17 @@ final class MonthsViewModel: ObservableObject {
         }
     }
 
+    /// Task cancellation surfaces in several shapes depending on how far the
+    /// request got — Swift's own, URLSession's, and a plain "cancelled"
+    /// description from the Supabase layer.
+    static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+        let ns = error as NSError
+        if ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled { return true }
+        return ns.localizedDescription.caseInsensitiveCompare("cancelled") == .orderedSame
+    }
+
     func statement(for month: MonthlySpend) -> BankStatement? {
         let calendar = Calendar(identifier: .gregorian)
         let parts = calendar.dateComponents([.year, .month], from: month.date)
@@ -56,6 +68,7 @@ final class MonthsViewModel: ObservableObject {
 struct MonthsView: View {
     @StateObject private var model = MonthsViewModel()
     @State private var previewURL: URL?
+    @State private var showingBudget = false
 
     var body: some View {
         NavigationStack {
@@ -63,12 +76,14 @@ struct MonthsView: View {
                 DashboardBackground()
                 ScrollView {
                     VStack(spacing: 14) {
+                        capCard
                         summaryCard
+                        // The month list is what the screen is for, so it sits
+                        // above the year-level rollup rather than below it.
+                        monthsCard
                         if !model.stats.withData.isEmpty {
-                            statementsCard
                             breakdownCard
                         }
-                        monthsCard
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 24)
@@ -76,29 +91,133 @@ struct MonthsView: View {
             }
             .navigationTitle("Months")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingBudget = true
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                    }
+                    .accessibilityIdentifier("months.editCap")
+                    .accessibilityLabel("Edit spending caps")
+                }
+            }
             .refreshable { await model.load() }
             .task { await model.load() }
             .quickLookPreview($previewURL)
+            .sheet(isPresented: $showingBudget) {
+                BudgetView(budget: model.stats.budget, focus: .monthly) { _ in
+                    Task { await model.load() }
+                }
+            }
         }
+    }
+
+    // MARK: - This month against the cap
+
+    /// The answer to "am I over budget", above everything else on the screen.
+    private var capCard: some View {
+        let month = model.stats.currentMonth
+        let remaining = model.stats.currentRemainingCents
+        let isOver = (remaining ?? 0) < 0
+
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(month?.label ?? "This month")
+                    .font(.headline)
+                    .foregroundStyle(.white.opacity(0.9))
+                Spacer()
+                Button {
+                    showingBudget = true
+                } label: {
+                    Text(model.stats.budget.monthlyLimitCents == nil ? "Set cap" : "Edit")
+                        .font(.footnote.weight(.bold))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.white.opacity(0.22), in: Capsule())
+                        .foregroundStyle(.white)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("months.setCap")
+            }
+
+            if let month, let remaining {
+                Text(BudgetMath.wholeDollars(abs(remaining)))
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .accessibilityIdentifier("months.remaining")
+
+                Text(isOver
+                     ? "over your \(BudgetMath.wholeDollars(month.capCents)) cap for \(month.shortLabel)"
+                     : "left of your \(BudgetMath.wholeDollars(month.capCents)) cap for \(month.shortLabel)")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                ProgressView(value: model.stats.currentCapProgress)
+                    .tint(.white)
+                    .background(Color.white.opacity(0.25), in: Capsule())
+
+                Text(capSourceLabel)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.8))
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("No spending on record for this month yet.")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.9))
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(capColor, in: RoundedRectangle(cornerRadius: 18))
+        .animation(.easeOut(duration: 0.3), value: model.stats.currentCapProgress)
+    }
+
+    private var capColor: Color {
+        let progress = model.stats.currentCapProgress
+        guard model.stats.currentMonth != nil else {
+            return Color(red: 0.30, green: 0.33, blue: 0.38)
+        }
+        if progress >= 1.0 { return Color(red: 0.89, green: 0.26, blue: 0.20) }
+        if progress >= 0.8 { return Color(red: 0.90, green: 0.55, blue: 0.09) }
+        return Color(red: 0.13, green: 0.63, blue: 0.36)
+    }
+
+    /// Says out loud where the cap came from. A derived cap that nobody chose
+    /// is the reason every month can read as over budget.
+    private var capSourceLabel: String {
+        if let monthly = model.stats.budget.monthlyLimitCents {
+            return "Your monthly cap of \(BudgetMath.wholeDollars(monthly))."
+        }
+        return "No monthly cap set — this is your \(BudgetMath.dollars(model.stats.budget.dailyLimitCents)) daily cap across the month. Tap Set cap to use a real monthly figure."
     }
 
     // MARK: - Summary + chart
 
     private var summaryCard: some View {
         SurfaceCard {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
                     Text("Last 12 months")
                         .font(.title3.weight(.bold))
+                    Spacer(minLength: 12)
+                    // Six figures plus a currency symbol will not share a line
+                    // with the title on a narrow phone, so it scales instead of
+                    // wrapping mid-number.
+                    Text(BudgetMath.wholeDollars(model.stats.totalCents))
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .accessibilityIdentifier("months.total")
+                }
+                HStack(alignment: .firstTextBaseline) {
                     Text(coverageLabel)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(BudgetMath.dollars(model.stats.totalCents))
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
-                        .accessibilityIdentifier("months.total")
+                    Spacer(minLength: 12)
                     Text("Total spent")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -170,7 +289,7 @@ struct MonthsView: View {
                     .foregroundStyle(Color.secondary)
                     .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
                     .annotation(position: .top, alignment: .leading) {
-                        Text("Avg \(BudgetMath.dollars(model.stats.averageCents))")
+                        Text("Avg \(BudgetMath.wholeDollars(model.stats.averageCents))")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -204,8 +323,8 @@ struct MonthsView: View {
                 title: "Average month",
                 subtitle: model.stats.settled.isEmpty
                     ? "This month so far"
-                    : "Across \(model.stats.settled.count) complete month\(model.stats.settled.count == 1 ? "" : "s")",
-                value: BudgetMath.dollars(model.stats.averageCents)
+                    : "\(model.stats.settled.count) complete month\(model.stats.settled.count == 1 ? "" : "s")",
+                value: BudgetMath.wholeDollars(model.stats.averageCents)
             )
             if let highest = model.stats.highest {
                 Divider()
@@ -214,7 +333,7 @@ struct MonthsView: View {
                     tint: .red,
                     title: "Highest month",
                     subtitle: highest.label,
-                    value: BudgetMath.dollars(highest.spentCents)
+                    value: BudgetMath.wholeDollars(highest.spentCents)
                 )
             }
             if let lowest = model.stats.lowest {
@@ -224,7 +343,7 @@ struct MonthsView: View {
                     tint: .green,
                     title: "Lowest month",
                     subtitle: lowest.label,
-                    value: BudgetMath.dollars(lowest.spentCents)
+                    value: BudgetMath.wholeDollars(lowest.spentCents)
                 )
             }
             Divider()
@@ -232,7 +351,9 @@ struct MonthsView: View {
                 icon: "exclamationmark.triangle.fill",
                 tint: .orange,
                 title: "Months over cap",
-                subtitle: "At \(BudgetMath.dollars(model.stats.dailyLimitCents)) a day",
+                subtitle: model.stats.budget.monthlyLimitCents
+                    .map { "Against \(BudgetMath.wholeDollars($0)) a month" }
+                    ?? "Against \(BudgetMath.dollars(model.stats.budget.dailyLimitCents)) a day",
                 value: "\(model.stats.monthsOverCap)",
                 valueColor: model.stats.monthsOverCap > 0 ? .orange : .primary
             )
@@ -294,7 +415,7 @@ struct MonthsView: View {
                 }
                 Spacer(minLength: 8)
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(BudgetMath.dollars(month.spentCents))
+                    Text(BudgetMath.wholeDollars(month.spentCents))
                         .font(.body.weight(.semibold).monospacedDigit())
                         .foregroundStyle(month.isOverCap ? Color.red : Color.primary)
                     if let changeLabel = month.changeLabel {
@@ -324,7 +445,7 @@ struct MonthsView: View {
     private func subtitle(for month: MonthlySpend, statement: BankStatement?) -> String {
         var parts: [String] = ["\(month.txnCount) transaction\(month.txnCount == 1 ? "" : "s")"]
         if month.isOverCap {
-            parts.append("over the \(BudgetMath.dollars(month.capCents)) month cap")
+            parts.append("over the \(BudgetMath.wholeDollars(month.capCents)) month cap")
         }
         if statement?.isAvailable == true {
             parts.append("statement")
@@ -334,38 +455,9 @@ struct MonthsView: View {
 
     // MARK: - Statements
 
-    /// Points at the Statements screen rather than fetching here: Plaid bills
-    /// per statement request, so that call stays behind a deliberate tap.
-    @ViewBuilder
-    private var statementsCard: some View {
-        NavigationLink {
-            StatementsView()
-        } label: {
-            SurfaceCard {
-                HStack(alignment: .top, spacing: 12) {
-                    RowIcon(systemName: "doc.text.fill", tint: .blue)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(model.hasStatements ? "Statements" : "Add your statements")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-                        Text(model.hasStatements
-                             ? "\(model.statementsByMonth.count) on file. Tap any month below to open its PDF."
-                             : "Your bank can share the PDF for each month. It needs its own approval, one time.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .multilineTextAlignment(.leading)
-                    }
-                    Spacer(minLength: 4)
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("months.statements")
-    }
+    // There is no statements card here by design. Months links a month to its
+    // PDF through the row itself; setting statements up lives in Settings →
+    // Statements, which is also the only place that calls Plaid for them.
 
     private func open(_ statement: BankStatement) async {
         do {

@@ -79,7 +79,7 @@ final class SpendService {
     func budget() async throws -> Budget {
         try await client
             .from("budgets")
-            .select("daily_limit_cents, warn_pct")
+            .select("daily_limit_cents, warn_pct, monthly_limit_cents")
             .single()
             .execute()
             .value
@@ -103,6 +103,9 @@ final class SpendService {
                 "user_id": AnyJSON.string(userId.uuidString.lowercased()),
                 "daily_limit_cents": AnyJSON.integer(budget.dailyLimitCents),
                 "warn_pct": AnyJSON.integer(budget.warnPct),
+                // Explicit null clears a monthly cap back to the derived one —
+                // omitting the key would silently keep the old value on upsert.
+                "monthly_limit_cents": budget.monthlyLimitCents.map(AnyJSON.integer) ?? AnyJSON.null,
                 "updated_at": AnyJSON.string(ISO8601DateFormatter().string(from: Date())),
             ])
             .execute()
