@@ -89,7 +89,7 @@ final class SpendService {
 
     /// Every transaction that landed in one category in one month. Pass a nil
     /// id for the Uncategorized line.
-    func categoryTransactions(categoryId: UUID?, period: Date) async throws -> [BankTransaction] {
+    func categoryTransactions(categoryId: UUID?, period: Date) async throws -> [CategoryTransaction] {
         try await client
             .rpc("category_transactions", params: [
                 "category": categoryId.map { AnyJSON.string($0.uuidString.lowercased()) } ?? AnyJSON.null,

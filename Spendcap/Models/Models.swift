@@ -505,6 +505,100 @@ struct BudgetCategory: Codable, Identifiable, Equatable {
     }
 }
 
+/// One transaction as the budget drill-down sees it: enough to explain itself
+/// without a second round trip. The raw `name` is the bank's own description,
+/// which is often the only thing that identifies what a $5.00 charge was.
+struct CategoryTransaction: Codable, Identifiable, Equatable {
+    let id: UUID
+    let date: String
+    let authorizedDate: String?
+    let name: String
+    let merchantName: String?
+    let plaidCategory: String?
+    let amountCents: Int
+    let pending: Bool
+    let isBackfill: Bool
+    let accountName: String?
+    let accountMask: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, date, name, pending
+        case authorizedDate = "authorized_date"
+        case merchantName = "merchant_name"
+        case plaidCategory = "plaid_category"
+        case amountCents = "amount_cents"
+        case isBackfill = "is_backfill"
+        case accountName = "account_name"
+        case accountMask = "account_mask"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        date = try c.decode(String.self, forKey: .date)
+        authorizedDate = try c.decodeIfPresent(String.self, forKey: .authorizedDate)
+        name = try c.decode(String.self, forKey: .name)
+        merchantName = try c.decodeIfPresent(String.self, forKey: .merchantName)
+        plaidCategory = try c.decodeIfPresent(String.self, forKey: .plaidCategory)
+        if let value = try? c.decode(Int.self, forKey: .amountCents) {
+            amountCents = value
+        } else if let text = try? c.decode(String.self, forKey: .amountCents), let value = Int(text) {
+            amountCents = value
+        } else {
+            amountCents = 0
+        }
+        pending = try c.decodeIfPresent(Bool.self, forKey: .pending) ?? false
+        isBackfill = try c.decodeIfPresent(Bool.self, forKey: .isBackfill) ?? false
+        accountName = try c.decodeIfPresent(String.self, forKey: .accountName)
+        accountMask = try c.decodeIfPresent(String.self, forKey: .accountMask)
+    }
+
+    init(id: UUID, date: String, authorizedDate: String? = nil, name: String,
+         merchantName: String? = nil, plaidCategory: String? = nil, amountCents: Int,
+         pending: Bool = false, isBackfill: Bool = false,
+         accountName: String? = nil, accountMask: String? = nil) {
+        self.id = id
+        self.date = date
+        self.authorizedDate = authorizedDate
+        self.name = name
+        self.merchantName = merchantName
+        self.plaidCategory = plaidCategory
+        self.amountCents = amountCents
+        self.pending = pending
+        self.isBackfill = isBackfill
+        self.accountName = accountName
+        self.accountMask = accountMask
+    }
+
+    var displayName: String {
+        let merchant = merchantName?.trimmingCharacters(in: .whitespaces) ?? ""
+        return merchant.isEmpty ? name : merchant
+    }
+
+    /// "General services" — Plaid's SCREAMING_SNAKE made readable.
+    var plaidCategoryLabel: String? {
+        guard let plaidCategory, !plaidCategory.isEmpty else { return nil }
+        return plaidCategory
+            .replacingOccurrences(of: "_", with: " ")
+            .lowercased()
+            .prefix(1).uppercased()
+            + plaidCategory.replacingOccurrences(of: "_", with: " ").lowercased().dropFirst()
+    }
+
+    var accountLabel: String? {
+        guard let accountName, !accountName.isEmpty else { return nil }
+        return accountName
+    }
+
+    /// The date the purchase was authorised, when the bank supplied one and it
+    /// differs from the posting date — the gap is why a charge can land on a
+    /// day you did not spend anything.
+    var authorizedDifferentFromPosted: Bool {
+        guard let authorizedDate else { return false }
+        return authorizedDate != date
+    }
+}
+
 /// A rule routing transactions into a category. Merchant rules beat Plaid
 /// category rules, and a longer merchant string beats a shorter one.
 struct CategoryRule: Codable, Identifiable, Equatable {

@@ -275,13 +275,6 @@ struct CategoryLineRow: View {
 }
 
 /// Rename a line or change what it plans to spend.
-/// A merchant name, boxed so it can drive `.sheet(item:)` — String is not
-/// Identifiable, and extending the stdlib to make it so would leak far past
-/// this screen.
-struct MerchantSelection: Identifiable {
-    let id: String
-}
-
 struct CategoryEditView: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -290,9 +283,8 @@ struct CategoryEditView: View {
 
     @State private var name: String
     @State private var plannedText: String
-    @State private var transactions: [BankTransaction] = []
+    @State private var transactions: [CategoryTransaction] = []
     @State private var isLoadingTransactions = true
-    @State private var reassigning: MerchantSelection?
     @State private var isSaving = false
     @State private var errorMessage: String?
 
@@ -348,26 +340,33 @@ struct CategoryEditView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(transactions) { txn in
-                            Button {
-                                reassigning = MerchantSelection(id: txn.displayName)
+                            NavigationLink {
+                                TransactionDetailView(transaction: txn, lineName: row.categoryName) {
+                                    onSave()
+                                    Task { await loadTransactions() }
+                                }
                             } label: {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(txn.displayName)
                                             .lineLimit(1)
-                                            .foregroundStyle(.primary)
                                         Text(txn.date)
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
                                     Spacer()
-                                    Text(BudgetMath.dollars(txn.amountCents))
-                                        .font(.body.monospacedDigit())
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text(BudgetMath.dollars(txn.amountCents))
+                                            .font(.body.monospacedDigit())
+                                        if txn.pending {
+                                            Text("Pending")
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
                                 }
                             }
+                            .accessibilityIdentifier("category.transaction")
                         }
                     }
                 } header: {
@@ -379,7 +378,7 @@ struct CategoryEditView: View {
                     }
                 } footer: {
                     if !transactions.isEmpty {
-                        Text("Tap a transaction to move that merchant to another line. Every month on record moves with it.")
+                        Text("Tap a transaction for its details, including what the bank actually called it.")
                     }
                 }
 
@@ -399,13 +398,6 @@ struct CategoryEditView: View {
                             .disabled(plannedCents == nil || name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
                             .accessibilityIdentifier("category.save")
                     }
-                }
-            }
-            .sheet(item: $reassigning) { selection in
-                MerchantRuleView(merchant: selection.id) {
-                    reassigning = nil
-                    onSave()
-                    Task { await loadTransactions() }
                 }
             }
             .task { await loadTransactions() }
@@ -556,6 +548,80 @@ struct MerchantRuleView: View {
         } catch {
             errorMessage = error.localizedDescription
             isSaving = false
+        }
+    }
+}
+
+/// One transaction, in full.
+///
+/// The bank's own description is the point of this screen. Plaid's merchant
+/// name is a tidy guess — "Amazon", "Microsoft" — and a tidy guess is exactly
+/// what you cannot budget against when the charge is $5.00 and you have no
+/// memory of it. `name` is what actually appeared on the statement.
+struct TransactionDetailView: View {
+    let transaction: CategoryTransaction
+    let lineName: String
+    let onChange: () -> Void
+
+    @State private var showingMove = false
+
+    var body: some View {
+        List {
+            Section {
+                LabeledContent("Amount") {
+                    Text(BudgetMath.dollars(transaction.amountCents))
+                        .font(.body.weight(.semibold).monospacedDigit())
+                }
+                LabeledContent("Date", value: transaction.date)
+                if transaction.authorizedDifferentFromPosted, let authorized = transaction.authorizedDate {
+                    LabeledContent("Authorised", value: authorized)
+                }
+                LabeledContent("Status", value: transaction.pending ? "Pending" : "Posted")
+            } footer: {
+                if transaction.authorizedDifferentFromPosted {
+                    Text("Authorised on one day, posted on another. Budgets count it on the posted date.")
+                } else if transaction.pending {
+                    Text("Still pending, so the amount can change before it posts.")
+                }
+            }
+
+            Section("On the statement") {
+                Text(transaction.name)
+                    .font(.callout)
+                    .textSelection(.enabled)
+            }
+
+            Section("Filed as") {
+                LabeledContent("Budget line", value: lineName)
+                if let plaid = transaction.plaidCategoryLabel {
+                    LabeledContent("Bank category", value: plaid)
+                }
+                if let merchant = transaction.merchantName, !merchant.isEmpty {
+                    LabeledContent("Merchant", value: merchant)
+                }
+                if let account = transaction.accountLabel {
+                    LabeledContent("Account", value: account)
+                }
+            }
+
+            Section {
+                Button {
+                    showingMove = true
+                } label: {
+                    Label("Move \(transaction.displayName) to another line", systemImage: "arrow.right.arrow.left")
+                }
+                .accessibilityIdentifier("transaction.move")
+            } footer: {
+                Text("Moves every transaction from this merchant, in every month on record.")
+            }
+        }
+        .navigationTitle(transaction.displayName)
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showingMove) {
+            MerchantRuleView(merchant: transaction.displayName) {
+                showingMove = false
+                onChange()
+            }
         }
     }
 }
