@@ -1,16 +1,35 @@
-// Plaid webhook receiver (deployed --no-verify-jwt; Plaid can't send a JWT).
-// Only acts on TRANSACTIONS webhooks for item_ids we actually know, so a
-// spoofed call can at worst trigger a redundant sync of real data.
+// Plaid webhook receiver (deployed --no-verify-jwt; Plaid can't send a Supabase
+// JWT). Authenticity comes instead from Plaid's own ES256 signature in the
+// `Plaid-Verification` header — see ../_shared/plaid_verify.ts.
+//
+// This used to accept any caller on the reasoning that a spoofed call could
+// "at worst trigger a redundant sync". That understated it: each accepted call
+// costs a full syncItem + checkOverspend against the Plaid API, so an anonymous
+// caller who knew an item_id could drive unbounded billable work. Unverified
+// requests are now rejected outright.
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { syncItem, checkOverspend } from "../_shared/sync.ts";
+import { verifyPlaidWebhook } from "../_shared/plaid_verify.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 serve(async (req) => {
   try {
-    const hook = await req.json();
+    // Read the body as text first: the signature covers these exact bytes, so
+    // it has to be hashed before anything re-serialises it.
+    const rawBody = await req.text();
+
+    const verified = await verifyPlaidWebhook(req, rawBody);
+    if (!verified.ok) {
+      // 401, not 200 — an unverified caller is not Plaid, so there is no
+      // webhook to keep healthy by acknowledging.
+      console.warn("rejected unverified plaid webhook:", verified.reason);
+      return new Response(JSON.stringify({ error: "unverified" }), { status: 401 });
+    }
+
+    const hook = JSON.parse(rawBody);
     if (hook.webhook_type !== "TRANSACTIONS") {
       return new Response(JSON.stringify({ ignored: hook.webhook_type }), { status: 200 });
     }
