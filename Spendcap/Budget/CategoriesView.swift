@@ -41,6 +41,19 @@ final class CategoriesViewModel: ObservableObject {
         }
     }
 
+    /// Deleting a line cascades its rules, so the transactions it claimed fall
+    /// back to Uncategorized on the next read. The transactions themselves are
+    /// untouched — this removes a bucket, not history.
+    func delete(_ row: CategorySpendRow) async {
+        guard let id = row.categoryId else { return }
+        do {
+            try await SpendService.shared.deleteCategory(id: id)
+            await load()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func seed() async {
         isSeeding = true
         defer { isSeeding = false }
@@ -59,32 +72,77 @@ struct CategoriesView: View {
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var model = CategoriesViewModel()
-    @State private var editing: CategorySpendRow?
+    @State private var sheet: Sheet?
+    @State private var pendingDelete: CategorySpendRow?
 
+    /// Add and edit share one modifier — several `.sheet(isPresented:)` on a
+    /// view risks one that never presents.
+    enum Sheet: Identifiable {
+        case edit(CategorySpendRow)
+        case add
+
+        var id: String {
+            switch self {
+            case .edit(let row): return "edit-\(row.id)"
+            case .add: return "add"
+            }
+        }
+    }
+
+    // A List, not the card stack the rest of the app uses: swipe-to-delete is
+    // a List affordance, and this is the screen where lines are managed.
     var body: some View {
-        ZStack {
-            DashboardBackground()
-            ScrollView {
-                VStack(spacing: 14) {
-                    if model.months.count > 1 { monthPicker }
+        List {
+            if model.months.count > 1 {
+                Section { monthPicker }
+            }
 
-                    if model.isEmpty {
-                        starterCard
-                    } else if let month = model.selected {
-                        summaryCard(month)
-                        categoriesCard(month)
-                    } else if model.isLoading {
-                        ProgressView().padding(.top, 40)
-                    }
+            if model.isEmpty {
+                Section { starterCard }
+            } else if let month = model.selected {
+                Section { summaryRows(month) } header: { Text(month.label) }
 
-                    if let errorMessage = model.errorMessage {
-                        Text(errorMessage)
-                            .font(.caption)
-                            .foregroundStyle(.red)
+                Section {
+                    ForEach(month.rows) { row in
+                        Button {
+                            sheet = .edit(row)
+                        } label: {
+                            CategoryLineRow(row: row, showsChevron: true)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("categories.row")
+                        .swipeActions(edge: .trailing) {
+                            // Uncategorized is not a line anyone created, so
+                            // there is nothing there to delete.
+                            if !row.isUncategorized {
+                                Button(role: .destructive) {
+                                    pendingDelete = row
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                        }
                     }
+                } header: {
+                    Text("By category")
+                } footer: {
+                    Text("Swipe a line to delete it. Its transactions are re-matched against your other rules, and land in Uncategorized if nothing else claims them. Nothing is removed from your history.")
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 24)
+
+                Section {
+                    Button {
+                        sheet = .add
+                    } label: {
+                        Label("Add a line", systemImage: "plus.circle.fill")
+                    }
+                    .accessibilityIdentifier("categories.add")
+                }
+            } else if model.isLoading {
+                Section { ProgressView() }
+            }
+
+            if let errorMessage = model.errorMessage {
+                Section { Text(errorMessage).foregroundStyle(.red).font(.callout) }
             }
         }
         .navigationTitle("Budget")
@@ -97,13 +155,65 @@ struct CategoriesView: View {
                 }
             }
         }
-        .sheet(item: $editing) { row in
-            CategoryEditView(row: row) {
-                Task { await model.load() }
+        .sheet(item: $sheet) { which in
+            switch which {
+            case .edit(let row):
+                CategoryEditView(row: row) {
+                    Task { await model.load() }
+                }
+            case .add:
+                CategoryCreateView {
+                    Task { await model.load() }
+                }
+            }
+        }
+        .confirmationDialog(
+            pendingDelete.map { "Delete \($0.categoryName)?" } ?? "",
+            isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let row = pendingDelete {
+                    pendingDelete = nil
+                    Task { await model.delete(row) }
+                }
+            }
+            Button("Cancel", role: .cancel) { pendingDelete = nil }
+        } message: {
+            if let row = pendingDelete {
+                // Deliberately not "they move to Uncategorized": deleting the
+                // line drops its rules, and the transactions are then matched
+                // against every remaining rule. A broad merchant rule on
+                // another line will claim them — measured, not theorised.
+                Text("The line and its rules go. Its \(row.txnCount) transaction\(row.txnCount == 1 ? "" : "s") this month are re-matched against your other rules, and land in Uncategorized if nothing else claims them. Nothing is deleted from your history.")
             }
         }
         .refreshable { await model.load() }
         .task { await model.load() }
+    }
+
+    /// The month's totals, as List rows rather than a card.
+    @ViewBuilder
+    private func summaryRows(_ month: CategoryMonth) -> some View {
+        LabeledContent(month.isCurrent ? "Spent so far" : "Spent") {
+            Text(BudgetMath.wholeDollars(month.spentCents))
+                .font(.body.weight(.semibold).monospacedDigit())
+                .accessibilityIdentifier("categories.actual")
+        }
+        LabeledContent("Planned", value: BudgetMath.wholeDollars(month.plannedCents))
+        if month.overCount > 0 {
+            LabeledContent("Lines over") {
+                Text("\(month.overCount)").foregroundStyle(.red)
+            }
+        }
+        if month.uncategorizedCents > 0 {
+            LabeledContent("Unbudgeted") {
+                Text(BudgetMath.wholeDollars(month.uncategorizedCents)).foregroundStyle(.orange)
+            }
+        }
     }
 
     // MARK: - Month picker
@@ -119,82 +229,6 @@ struct CategoriesView: View {
         }
         .pickerStyle(.segmented)
         .accessibilityIdentifier("categories.month")
-    }
-
-    // MARK: - Summary
-
-    private func summaryCard(_ month: CategoryMonth) -> some View {
-        SurfaceCard {
-            HStack(alignment: .firstTextBaseline) {
-                Text(month.label)
-                    .font(.title3.weight(.bold))
-                Spacer(minLength: 12)
-                Text(BudgetMath.wholeDollars(month.spentCents))
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                    .accessibilityIdentifier("categories.actual")
-            }
-
-            HStack(alignment: .firstTextBaseline) {
-                Text(month.isCurrent ? "So far this month" : "Spent")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer(minLength: 12)
-                Text("of \(BudgetMath.wholeDollars(month.plannedCents)) planned")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Divider()
-
-            HStack(spacing: 10) {
-                verdictChip(
-                    count: month.overCount,
-                    label: month.overCount == 1 ? "line over" : "lines over",
-                    tint: month.overCount > 0 ? .red : .green
-                )
-                if month.uncategorizedCents > 0 {
-                    verdictChip(
-                        count: nil,
-                        label: "\(BudgetMath.wholeDollars(month.uncategorizedCents)) unbudgeted",
-                        tint: .orange
-                    )
-                }
-                Spacer()
-            }
-        }
-    }
-
-    private func verdictChip(count: Int?, label: String, tint: Color) -> some View {
-        HStack(spacing: 5) {
-            Circle().fill(tint).frame(width: 8, height: 8)
-            Text(count.map { "\($0) \(label)" } ?? label)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    // MARK: - Category rows
-
-    private func categoriesCard(_ month: CategoryMonth) -> some View {
-        SurfaceCard {
-            SectionHeader(title: "By category", actionSystemImage: nil, action: nil)
-
-            ForEach(Array(month.rows.enumerated()), id: \.element.id) { index, row in
-                Button {
-                    editing = row
-                } label: {
-                    categoryRow(row)
-                }
-                .buttonStyle(.plain)
-                if index < month.rows.count - 1 { Divider() }
-            }
-        }
-    }
-
-    private func categoryRow(_ row: CategorySpendRow) -> some View {
-        CategoryLineRow(row: row, showsChevron: true)
     }
 
     // MARK: - Empty state
@@ -622,6 +656,85 @@ struct TransactionDetailView: View {
                 showingMove = false
                 onChange()
             }
+        }
+    }
+}
+
+/// Add a budget line.
+struct CategoryCreateView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let onSave: () -> Void
+
+    @State private var name = ""
+    @State private var plannedText = ""
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    private var plannedCents: Int? {
+        let cleaned = plannedText
+            .replacingOccurrences(of: "$", with: "")
+            .replacingOccurrences(of: ",", with: "")
+            .trimmingCharacters(in: .whitespaces)
+        // Blank is a valid plan of zero — a line can exist to be watched
+        // before it is budgeted.
+        if cleaned.isEmpty { return 0 }
+        guard let value = Double(cleaned), value >= 0 else { return nil }
+        return Int((value * 100).rounded())
+    }
+
+    private var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Name") {
+                    TextField("Subscriptions", text: $name)
+                        .accessibilityIdentifier("category.newName")
+                }
+                Section {
+                    HStack {
+                        Text("$")
+                        TextField("0", text: $plannedText)
+                            .keyboardType(.decimalPad)
+                            .accessibilityIdentifier("category.newPlanned")
+                    }
+                } header: {
+                    Text("Planned each month")
+                } footer: {
+                    Text("Leave blank to start at zero. Nothing lands in a new line until you move a merchant into it.")
+                }
+
+                if let errorMessage {
+                    Text(errorMessage).foregroundStyle(.red).font(.footnote)
+                }
+            }
+            .navigationTitle("New line")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") { Task { await save() } }
+                        .disabled(trimmedName.isEmpty || plannedCents == nil || isSaving)
+                        .accessibilityIdentifier("category.create")
+                }
+            }
+        }
+    }
+
+    private func save() async {
+        guard let cents = plannedCents, !trimmedName.isEmpty else { return }
+        isSaving = true
+        errorMessage = nil
+        do {
+            try await SpendService.shared.createCategory(name: trimmedName, plannedCents: cents)
+            onSave()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            isSaving = false
         }
     }
 }

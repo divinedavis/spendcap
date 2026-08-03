@@ -155,6 +155,37 @@ final class SpendService {
         return rules.first
     }
 
+    /// Adds a line at the end of the budget. Sort order is max + 1 so a new
+    /// line does not jump into the middle of an order the user arranged.
+    func createCategory(name: String, plannedCents: Int) async throws {
+        guard let userId = client.auth.currentUser?.id else { return }
+        let existing = try await categories()
+        let nextOrder = (existing.map(\.sortOrder).max() ?? 0) + 1
+        try await client
+            .from("budget_categories")
+            .insert([
+                "user_id": AnyJSON.string(userId.uuidString.lowercased()),
+                "name": AnyJSON.string(name),
+                "planned_cents": AnyJSON.integer(plannedCents),
+                "sort_order": AnyJSON.integer(nextOrder),
+            ])
+            .execute()
+    }
+
+    /// Removes a line. Its rules cascade, and the transactions it claimed are
+    /// then matched against every *remaining* rule — so they land in
+    /// Uncategorized only if nothing else claims them. Verified against live
+    /// data: deleting a line whose transactions also matched a broad `Apple`
+    /// merchant rule on another line sent them there, not to Uncategorized.
+    /// Nothing is deleted from the transactions themselves.
+    func deleteCategory(id: UUID) async throws {
+        try await client
+            .from("budget_categories")
+            .delete()
+            .eq("id", value: id.uuidString.lowercased())
+            .execute()
+    }
+
     func updateCategory(id: UUID, name: String, plannedCents: Int) async throws {
         try await client
             .from("budget_categories")
