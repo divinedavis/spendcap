@@ -615,6 +615,81 @@ struct CategoryTransaction: Codable, Identifiable, Equatable {
     }
 }
 
+/// One row of `month_activity()` — a transaction plus the budget line it
+/// resolves to. `categoryName` is nil for money in, which belongs to no line.
+struct ActivityRow: Codable, Identifiable, Equatable {
+    let transaction: CategoryTransaction
+    let categoryName: String?
+
+    var id: UUID { transaction.id }
+
+    /// Money out under the Plaid convention; money in is negative.
+    var isInflow: Bool { transaction.amountCents < 0 }
+
+    enum CodingKeys: String, CodingKey {
+        case categoryName = "category_name"
+    }
+
+    init(from decoder: Decoder) throws {
+        transaction = try CategoryTransaction(from: decoder)
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        categoryName = try c.decodeIfPresent(String.self, forKey: .categoryName)
+    }
+
+    init(transaction: CategoryTransaction, categoryName: String?) {
+        self.transaction = transaction
+        self.categoryName = categoryName
+    }
+
+    func encode(to encoder: Encoder) throws {
+        try transaction.encode(to: encoder)
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(categoryName, forKey: .categoryName)
+    }
+}
+
+/// A day's worth of activity, which is how a month is actually read.
+struct ActivityDay: Identifiable, Equatable {
+    let date: String
+    let label: String
+    let rows: [ActivityRow]
+
+    var id: String { date }
+
+    var outflowCents: Int { rows.filter { !$0.isInflow }.reduce(0) { $0 + $1.transaction.amountCents } }
+}
+
+enum ActivityMath {
+    /// Group rows into days, newest first, preserving the server's ordering
+    /// within each day.
+    static func days(rows: [ActivityRow], timeZone: TimeZone = .current) -> [ActivityDay] {
+        let parser = DateFormatter()
+        parser.dateFormat = "yyyy-MM-dd"
+        parser.timeZone = timeZone
+        parser.locale = Locale(identifier: "en_US_POSIX")
+
+        let label = DateFormatter()
+        label.timeZone = timeZone
+        label.setLocalizedDateFormatFromTemplate("EEEE d MMMM")
+
+        var order: [String] = []
+        var byDay: [String: [ActivityRow]] = [:]
+        for row in rows {
+            let key = row.transaction.date
+            if byDay[key] == nil { order.append(key) }
+            byDay[key, default: []].append(row)
+        }
+
+        return order.map { key in
+            ActivityDay(
+                date: key,
+                label: parser.date(from: key).map { label.string(from: $0) } ?? key,
+                rows: byDay[key] ?? []
+            )
+        }
+    }
+}
+
 /// A rule routing transactions into a category. Merchant rules beat Plaid
 /// category rules, and a longer merchant string beats a shorter one.
 struct CategoryRule: Codable, Identifiable, Equatable {

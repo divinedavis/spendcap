@@ -98,16 +98,19 @@ struct PrivacyRedactionView: View {
 struct MainTabView: View {
     var body: some View {
         TabView {
-            HomeView()
-                .tabItem { Label("Home", systemImage: "house.fill") }
-
+            // Trends takes the landing slot Home held: a month's shape is a
+            // more useful opening question than a day's remainder, which was
+            // always a partial figure anyway.
             TrendsView()
                 .tabItem { Label("Trends", systemImage: "chart.bar.fill") }
+
+            ActivityView()
+                .tabItem { Label("Activity", systemImage: "list.bullet") }
 
             // Months replaced the Today ring: bank data settles over days, so a
             // live "spent today" figure was always a partial one. Month totals
             // are the number that can be trusted. The daily cap still drives
-            // the pushes and the Home hero card.
+            // the pushes.
             MonthsView()
                 .tabItem { Label("Months", systemImage: "calendar") }
 

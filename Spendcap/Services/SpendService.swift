@@ -99,6 +99,18 @@ final class SpendService {
             .value
     }
 
+    /// Every transaction in a month, newest first, with its budget line.
+    /// Includes money in, which the budget rollups exclude.
+    func monthActivity(period: Date = Date()) async throws -> [ActivityRow] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        let start = calendar.dateInterval(of: .month, for: period)?.start ?? period
+        return try await client
+            .rpc("month_activity", params: ["period": Self.localDateString(now: start)])
+            .execute()
+            .value
+    }
+
     /// Creates the starter set of lines. Server-side no-op once any category
     /// exists, so a double tap can't duplicate the budget.
     @discardableResult

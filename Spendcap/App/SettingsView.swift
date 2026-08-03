@@ -4,6 +4,7 @@ struct SettingsView: View {
     @EnvironmentObject var auth: AuthViewModel
     @State private var items: [PlaidItem] = []
     @State private var showingDeleteConfirm = false
+    @State private var showingLink = false
     @State private var errorMessage: String?
 
     var body: some View {
@@ -13,7 +14,7 @@ struct SettingsView: View {
                     LabeledContent("Email", value: auth.userEmail)
                 }
 
-                Section("Connected banks") {
+                Section {
                     if items.isEmpty {
                         Text("No banks connected")
                             .foregroundStyle(.secondary)
@@ -32,6 +33,19 @@ struct SettingsView: View {
                     .onDelete { indexSet in
                         Task { await disconnect(indexSet) }
                     }
+
+                    // The only way into Plaid Link now that Home is gone.
+                    Button {
+                        showingLink = true
+                    } label: {
+                        Label(items.isEmpty ? "Connect a bank" : "Connect another bank",
+                              systemImage: "building.columns")
+                    }
+                    .accessibilityIdentifier("settings.addBank")
+                } header: {
+                    Text("Connected banks")
+                } footer: {
+                    Text("Spendcap reads transactions through Plaid. Your bank credentials are never shared with the app.")
                 }
 
                 Section("Budget") {
@@ -81,6 +95,9 @@ struct SettingsView: View {
                 Button("Delete Everything", role: .destructive) {
                     Task { await auth.deleteAccount() }
                 }
+            }
+            .sheet(isPresented: $showingLink) {
+                PlaidLinkFlow { Task { await load() } }
             }
         }
     }

@@ -28,9 +28,9 @@ final class SpendcapUITests: XCTestCase {
         XCTAssertTrue(app.buttons["auth.submit"].exists)
     }
 
-    /// Full round trip: sign in with the keychain test account, open the budget
-    /// sheet from Home, then sign out. Skipped when creds are absent.
-    func testSignInShowsHomeAndBudgetSheet() throws {
+    /// Full round trip: sign in with the keychain test account, open the cap
+    /// sheet from Months, then sign out. Skipped when creds are absent.
+    func testSignInShowsTrendsAndBudgetSheet() throws {
         guard let email = ProcessInfo.processInfo.environment["SPENDCAP_TEST_EMAIL"],
               let password = ProcessInfo.processInfo.environment["SPENDCAP_TEST_PASSWORD"],
               !email.isEmpty, !password.isEmpty else {
@@ -48,12 +48,13 @@ final class SpendcapUITests: XCTestCase {
         app.buttons["auth.submit"].tap()
         dismissSavePasswordPromptIfPresent()
 
-        // Sign-in lands on Home, which is where the cap is now adjusted — the
-        // Today tab (and its toolbar button) is gone.
-        XCTAssertTrue(app.staticTexts["home.remaining"].waitForExistence(timeout: 20),
-                      "Home hero card should appear after sign-in")
+        // Sign-in lands on Trends now that Home is gone; the cap is edited
+        // from the Months toolbar.
+        XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20),
+                      "Trends should be the landing tab after sign-in")
 
-        app.buttons["home.adjustCap"].tap()
+        app.tapTab("Months", in: self)
+        app.buttons["months.editCap"].tap()
         // Form rows can merge accessibility children, so match any element kind.
         let limitField = app.descendants(matching: .any)
             .matching(identifier: "budget.dailyLimit").firstMatch
@@ -83,9 +84,9 @@ final class SpendcapUITests: XCTestCase {
                       "should return to auth screen after sign-out")
     }
 
-    /// Home and Trends render with live data, and every Trends chart mode is
-    /// reachable. Skipped when creds are absent.
-    func testHomeAndTrendsTabs() throws {
+    /// Trends renders with live data and every chart mode is reachable, and
+    /// Activity lists the month. Skipped when creds are absent.
+    func testTrendsAndActivityTabs() throws {
         guard let email = ProcessInfo.processInfo.environment["SPENDCAP_TEST_EMAIL"],
               let password = ProcessInfo.processInfo.environment["SPENDCAP_TEST_PASSWORD"],
               !email.isEmpty, !password.isEmpty else {
@@ -103,24 +104,28 @@ final class SpendcapUITests: XCTestCase {
         app.buttons["auth.submit"].tap()
         dismissSavePasswordPromptIfPresent()
 
-        // Home: hero card shows what's left today, and both pills are live.
-        XCTAssertTrue(app.staticTexts["home.remaining"].waitForExistence(timeout: 20),
-                      "Home hero card should show the remaining figure")
-        XCTAssertTrue(app.buttons["home.adjustCap"].exists)
-        XCTAssertTrue(app.buttons["home.addBank"].exists)
-
-        // Trends: month total plus all three chart modes.
-        app.tapTab("Trends", in: self)
+        // Trends is the landing tab: month total plus all three chart modes.
         XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20),
                       "Trends should show month-to-date spend")
 
         for label in ["Daily", "Target", "Spending"] {
             let segment = app.buttons[label]
             XCTAssertTrue(segment.waitForExistence(timeout: 5), "\(label) segment should exist")
-            segment.tap()
+            // Always a coordinate tap. Trends is the landing tab now, so its
+            // chart is still laying out as the first tap lands, and isHittable
+            // flips between being read and being acted on — checking it first
+            // does not help.
+            segment.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
             XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 10),
                           "month spend should survive switching to \(label)")
         }
+
+        // Activity replaced the Trends slot: the month, transaction by
+        // transaction. The test account has no bank, so the total tile is the
+        // assertion that holds in both states.
+        app.tapTab("Activity", in: self)
+        XCTAssertTrue(app.staticTexts["activity.total"].waitForExistence(timeout: 20),
+                      "Activity should show the month's total")
 
         // Months took the slot Today used to hold.
         app.tapTab("Months", in: self)
@@ -152,8 +157,8 @@ final class SpendcapUITests: XCTestCase {
         app.buttons["auth.submit"].tap()
         dismissSavePasswordPromptIfPresent()
 
-        XCTAssertTrue(app.staticTexts["home.remaining"].waitForExistence(timeout: 20),
-                      "Home hero card should appear after sign-in")
+        XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20),
+                      "Trends should appear after sign-in")
 
         app.tapTab("Months", in: self)
 
@@ -165,6 +170,7 @@ final class SpendcapUITests: XCTestCase {
         // Today is gone for good — a stale tab left in place would keep
         // showing a partial daily figure this change exists to retire.
         XCTAssertFalse(app.buttons["Today"].exists, "Today tab should no longer exist")
+        XCTAssertFalse(app.buttons["Home"].exists, "Home tab should no longer exist")
 
         // The monthly cap is configurable from this screen: without it the
         // over/under verdict is derived from a daily figure nobody chose.
@@ -207,8 +213,8 @@ final class SpendcapUITests: XCTestCase {
         app.buttons["auth.submit"].tap()
         dismissSavePasswordPromptIfPresent()
 
-        XCTAssertTrue(app.staticTexts["home.remaining"].waitForExistence(timeout: 20),
-                      "Home hero card should appear after sign-in")
+        XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20),
+                      "Trends should appear after sign-in")
 
         app.tapTab("Months", in: self)
         XCTAssertTrue(app.staticTexts["months.total"].waitForExistence(timeout: 20))
@@ -303,8 +309,8 @@ final class SpendcapUITests: XCTestCase {
         app.buttons["auth.submit"].tap()
         dismissSavePasswordPromptIfPresent()
 
-        XCTAssertTrue(app.staticTexts["home.remaining"].waitForExistence(timeout: 20),
-                      "Home hero card should appear after sign-in")
+        XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20),
+                      "Trends should appear after sign-in")
 
         app.tapTab("Settings", in: self)
 

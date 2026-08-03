@@ -45,12 +45,11 @@ final class MarketingScreenshots: XCTestCase {
         app.buttons["auth.submit"].tap()
         dismissSavePasswordPromptIfPresent()
 
-        // Home is the landing tab.
-        XCTAssertTrue(app.staticTexts["home.remaining"].waitForExistence(timeout: 30),
-                      "Home hero card should appear after sign-in")
-        save(app, "02-home")
+        // Trends is the landing tab.
+        XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 30),
+                      "Trends should appear after sign-in")
+        save(app, "02-trends")
 
-        app.tapTab("Trends", in: self)
         if true {
             if app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20) {
                 save(app, "03-trends-spending")
@@ -65,13 +64,17 @@ final class MarketingScreenshots: XCTestCase {
             }
         }
 
+        app.tapTab("Activity", in: self)
+        if app.staticTexts["activity.total"].waitForExistence(timeout: 30) {
+            save(app, "06-activity")
+        }
+
         app.tapTab("Months", in: self)
         XCTAssertTrue(app.staticTexts["months.total"].waitForExistence(timeout: 30),
                       "Months total should appear")
-        save(app, "06-months")
+        save(app, "07-months")
 
-        app.tapTab("Home", in: self)
-        app.buttons["home.adjustCap"].tap()
+        app.buttons["months.editCap"].tap()
         let limitField = app.descendants(matching: .any)
             .matching(identifier: "budget.dailyLimit").firstMatch
         if limitField.waitForExistence(timeout: 10) {

@@ -51,6 +51,20 @@ after every sync → check_overspend:
 
 ### Tabs
 
+**Trends · Activity · Months · Settings.** Home was removed 2026-08-03 — its
+hero card, today's activity list and suggested-actions carousel are gone, and
+Trends took the landing slot. **Connecting a bank moved to Settings** in the
+same change: Home held the only entry into Plaid Link, so deleting it without
+that would have left no way to add an account.
+
+**Activity** is the month, transaction by transaction, from
+`month_activity(period)` (0009). It is the one rollup that does *not* filter to
+outflows — money in is activity, and hiding a refund would make the list
+disagree with the statement it mirrors. Inflows carry a null `category_name`
+rather than "Uncategorized", which on that screen would read as a gap to fix.
+
+Previously:
+
 **Home · Trends · Months · Settings.** The **Today** tab (the daily ring) was
 removed 2026-08-02: bank data settles over hours to days, so "spent today" was
 always a partial figure presented as a live one. The daily cap itself is
