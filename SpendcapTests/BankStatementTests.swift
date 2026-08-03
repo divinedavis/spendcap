@@ -7,15 +7,63 @@ final class BankStatementTests: XCTestCase {
         year: Int = 2026,
         month: Int = 8,
         storagePath: String? = "uid/stmt.pdf",
-        byteSize: Int? = 1024
+        byteSize: Int? = 1024,
+        accounts: BankStatement.Account? = nil
     ) -> BankStatement {
         BankStatement(
             id: UUID(),
             year: year,
             month: month,
             storagePath: storagePath,
-            byteSize: byteSize
+            byteSize: byteSize,
+            accounts: accounts
         )
+    }
+
+    // MARK: - Account label
+
+    /// A bank with a checking and a savings account issues one statement each
+    /// per month. Without the account, the list is two identical "July 2026"
+    /// rows and looks like a duplication bug.
+    func testAccountLabelPrefersTheName() {
+        let named = statement(accounts: .init(name: "EVERYDAY CHECKING ...1395", mask: "1395"))
+        XCTAssertEqual(named.accountLabel, "EVERYDAY CHECKING ...1395")
+    }
+
+    func testAccountLabelFallsBackToTheMask() {
+        let masked = statement(accounts: .init(name: nil, mask: "7230"))
+        XCTAssertEqual(masked.accountLabel, "\u{2022}\u{2022}\u{2022}\u{2022} 7230")
+        let blank = statement(accounts: .init(name: "   ", mask: "7230"))
+        XCTAssertEqual(blank.accountLabel, "\u{2022}\u{2022}\u{2022}\u{2022} 7230")
+    }
+
+    /// Rows written before the account was joined in must not crash or show an
+    /// empty label — the UI simply omits the line.
+    func testAccountLabelIsNilWhenNothingIsKnown() {
+        XCTAssertNil(statement(accounts: nil).accountLabel)
+        XCTAssertNil(statement(accounts: .init(name: nil, mask: nil)).accountLabel)
+    }
+
+    func testDecodesEmbeddedAccount() throws {
+        let json = """
+        {"id":"3f2504e0-4f89-11d3-9a0c-0305e82c3301","year":2026,"month":7,
+         "storage_path":"uid/x.pdf","byte_size":359713,
+         "accounts":{"name":"EVERYDAY CHECKING ...1395","mask":"1395"}}
+        """.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(BankStatement.self, from: json)
+        XCTAssertEqual(decoded.accountLabel, "EVERYDAY CHECKING ...1395")
+        XCTAssertTrue(decoded.isAvailable)
+    }
+
+    /// PostgREST omits the embed entirely when there is no related row.
+    func testDecodesWithoutAnAccount() throws {
+        let json = """
+        {"id":"3f2504e0-4f89-11d3-9a0c-0305e82c3301","year":2026,"month":7,
+         "storage_path":null,"byte_size":null}
+        """.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(BankStatement.self, from: json)
+        XCTAssertNil(decoded.accountLabel)
+        XCTAssertFalse(decoded.isAvailable)
     }
 
     // MARK: - Availability

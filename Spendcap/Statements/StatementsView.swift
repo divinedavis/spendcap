@@ -108,10 +108,18 @@ struct StatementsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(statement.periodLabel)
                         .foregroundStyle(.primary)
-                    if let sizeLabel = statement.sizeLabel, statement.isAvailable {
-                        Text(sizeLabel)
+                    // Two accounts means two statements a month; without the
+                    // account name the list reads as duplicated rows.
+                    if let account = statement.accountLabel, statement.isAvailable {
+                        Text(account)
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    if let sizeLabel = statement.sizeLabel, statement.isAvailable {
+                        Text(sizeLabel)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
                     } else if !statement.isAvailable {
                         Text("Couldn't download — pull to retry")
                             .font(.caption)

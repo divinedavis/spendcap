@@ -13,8 +13,10 @@ import QuickLook
 @MainActor
 final class MonthsViewModel: ObservableObject {
     @Published var stats = YearStats(months: [], budget: Budget(dailyLimitCents: 5000, warnPct: 80))
-    /// Statements keyed by year * 100 + month, so a row can find its own PDF.
-    @Published var statementsByMonth: [Int: BankStatement] = [:]
+    /// Statements keyed by year * 100 + month. A value per month is a *list*:
+    /// a bank with a checking and a savings account issues one statement each,
+    /// and keeping only the first silently hid half of them.
+    @Published var statementsByMonth: [Int: [BankStatement]] = [:]
     /// This month and last, by budget line — the same rollup the Budget screen
     /// uses, shown inline here.
     @Published var categoryMonths: [CategoryMonth] = []
@@ -63,10 +65,7 @@ final class MonthsViewModel: ObservableObject {
         // Nothing on this screen calls Plaid; fetching new statements stays on
         // the Statements screen, where the per-request cost is deliberate.
         if let statements = try? await SpendService.shared.statements() {
-            statementsByMonth = Dictionary(
-                statements.map { ($0.year * 100 + $0.month, $0) },
-                uniquingKeysWith: { first, _ in first }
-            )
+            statementsByMonth = Dictionary(grouping: statements) { $0.year * 100 + $0.month }
         }
     }
 
@@ -81,11 +80,11 @@ final class MonthsViewModel: ObservableObject {
         return ns.localizedDescription.caseInsensitiveCompare("cancelled") == .orderedSame
     }
 
-    func statement(for month: MonthlySpend) -> BankStatement? {
+    func statements(for month: MonthlySpend) -> [BankStatement] {
         let calendar = Calendar(identifier: .gregorian)
         let parts = calendar.dateComponents([.year, .month], from: month.date)
-        guard let year = parts.year, let m = parts.month else { return nil }
-        return statementsByMonth[year * 100 + m]
+        guard let year = parts.year, let m = parts.month else { return [] }
+        return statementsByMonth[year * 100 + m]?.filter(\.isAvailable) ?? []
     }
 }
 
@@ -110,6 +109,7 @@ struct MonthsView: View {
     @StateObject private var model = MonthsViewModel()
     @State private var previewURL: URL?
     @State private var sheet: Sheet?
+    @State private var statementChoice: StatementChoice?
 
     var body: some View {
         NavigationStack {
@@ -155,6 +155,22 @@ struct MonthsView: View {
             .refreshable { await model.load() }
             .task { await model.load() }
             .quickLookPreview($previewURL)
+            .confirmationDialog(
+                statementChoice.map { "Statements for \($0.month)" } ?? "",
+                isPresented: Binding(
+                    get: { statementChoice != nil },
+                    set: { if !$0 { statementChoice = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                ForEach(statementChoice?.statements ?? []) { statement in
+                    Button(statement.accountLabel ?? statement.periodLabel) {
+                        statementChoice = nil
+                        Task { await open(statement) }
+                    }
+                }
+                Button("Cancel", role: .cancel) { statementChoice = nil }
+            }
             .sheet(item: $sheet) { which in
                 switch which {
                 case .caps:
@@ -453,21 +469,27 @@ struct MonthsView: View {
 
     @ViewBuilder
     private func monthRow(_ month: MonthlySpend) -> some View {
-        let statement = model.statement(for: month)
+        let statements = model.statements(for: month)
 
         Button {
-            if let statement { Task { await open(statement) } }
+            // One statement opens straight away; several means several
+            // accounts, and the user has to say which.
+            if statements.count == 1 {
+                Task { await open(statements[0]) }
+            } else if !statements.isEmpty {
+                statementChoice = StatementChoice(month: month.label, statements: statements)
+            }
         } label: {
             HStack(spacing: 12) {
                 RowIcon(
-                    systemName: statement?.isAvailable == true ? "doc.text.fill" : "calendar",
+                    systemName: statements.isEmpty ? "calendar" : "doc.text.fill",
                     tint: month.isOverCap ? .red : .accentColor
                 )
                 VStack(alignment: .leading, spacing: 2) {
                     Text(month.label)
                         .font(.body)
                         .foregroundStyle(.primary)
-                    Text(subtitle(for: month, statement: statement))
+                    Text(subtitle(for: month, statements: statements))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -487,7 +509,7 @@ struct MonthsView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                if statement?.isAvailable == true {
+                if !statements.isEmpty {
                     Image(systemName: "chevron.right")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
@@ -497,17 +519,19 @@ struct MonthsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(statement?.isAvailable != true)
+        .disabled(statements.isEmpty)
         .accessibilityIdentifier("months.row")
     }
 
-    private func subtitle(for month: MonthlySpend, statement: BankStatement?) -> String {
+    private func subtitle(for month: MonthlySpend, statements: [BankStatement]) -> String {
         var parts: [String] = ["\(month.txnCount) transaction\(month.txnCount == 1 ? "" : "s")"]
         if month.isOverCap {
             parts.append("over the \(BudgetMath.wholeDollars(month.capCents)) month cap")
         }
-        if statement?.isAvailable == true {
+        if statements.count == 1 {
             parts.append("statement")
+        } else if statements.count > 1 {
+            parts.append("\(statements.count) statements")
         }
         return parts.joined(separator: " \u{00B7} ")
     }
@@ -603,4 +627,13 @@ struct MonthsView: View {
             model.errorMessage = "Couldn't open that statement: \(error.localizedDescription)"
         }
     }
+}
+
+/// A month whose statements span more than one account, so the tap has to ask
+/// which one rather than guessing.
+struct StatementChoice: Identifiable {
+    let month: String
+    let statements: [BankStatement]
+
+    var id: String { month }
 }

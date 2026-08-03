@@ -103,13 +103,29 @@ struct PlaidItem: Codable, Identifiable, Equatable {
 /// `storagePath` is nil when Plaid listed the statement but the download
 /// failed, which the UI shows as unavailable rather than hiding the month.
 struct BankStatement: Codable, Identifiable, Equatable {
+    /// The account the statement belongs to, embedded by PostgREST.
+    struct Account: Codable, Equatable {
+        let name: String?
+        let mask: String?
+    }
+
     let id: UUID
     let year: Int
     let month: Int
     let storagePath: String?
     let byteSize: Int?
+    let accounts: Account?
 
     var isAvailable: Bool { storagePath != nil }
+
+    /// "Everyday Checking ...1395". Nil only for rows written before the
+    /// account was known, which the UI then simply omits.
+    var accountLabel: String? {
+        let name = accounts?.name?.trimmingCharacters(in: .whitespaces) ?? ""
+        if !name.isEmpty { return name }
+        if let mask = accounts?.mask, !mask.isEmpty { return "\u{2022}\u{2022}\u{2022}\u{2022} \(mask)" }
+        return nil
+    }
 
     /// "August 2026" — built from components so it never depends on a parsed
     /// date the row may not carry.
@@ -128,7 +144,7 @@ struct BankStatement: Codable, Identifiable, Equatable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, year, month
+        case id, year, month, accounts
         case storagePath = "storage_path"
         case byteSize = "byte_size"
     }

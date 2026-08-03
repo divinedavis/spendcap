@@ -239,7 +239,11 @@ final class SpendService {
     func statements() async throws -> [BankStatement] {
         try await client
             .from("statements")
-            .select("id, year, month, storage_path, byte_size")
+            // The account is not decoration: a bank with a checking and a
+            // savings account issues one statement each per month, and two
+            // rows labelled "July 2026" with nothing to tell them apart read
+            // as a duplication bug.
+            .select("id, year, month, storage_path, byte_size, accounts(name, mask)")
             .order("year", ascending: false)
             .order("month", ascending: false)
             .execute()

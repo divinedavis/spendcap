@@ -227,7 +227,14 @@ final class SpendcapUITests: XCTestCase {
                 if next == frame { break }
                 frame = next
             }
-            line.tap()
+            // isHittable is unreliable for scroll-view content under the
+            // floating tab bar — the same lie tapTab(_:in:) works around — so
+            // fall back to the element's own coordinate rather than failing.
+            if line.isHittable {
+                line.tap()
+            } else {
+                line.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }
             XCTAssertTrue(
                 app.descendants(matching: .any)
                     .matching(identifier: "category.planned").firstMatch
