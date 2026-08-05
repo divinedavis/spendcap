@@ -84,8 +84,10 @@ struct TrendsView: View {
                     // bar, whose scroll-edge effect on iOS 26 reaches into the
                     // top of the scroll content and swallows touches there.
                     // Nothing up here was interactive before the period menu,
-                    // so nothing had caught it.
-                    .padding(.top, 12)
+                    // so nothing had caught it. 12pt cleared it only sometimes
+                    // — the menu still went unhittable across runs — so this
+                    // is deliberately more margin than it looks like it needs.
+                    .padding(.top, 24)
                     .padding(.bottom, 24)
                 }
             }

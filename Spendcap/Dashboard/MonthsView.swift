@@ -128,6 +128,13 @@ struct MonthsView: View {
                         }
                     }
                     .padding(.horizontal, 16)
+                    // Same nav-bar scroll-edge dead zone Trends hit: the effect
+                    // reaches past the bar's frame into the top of the scroll
+                    // content and takes the touches. capCard's "Set cap" sat
+                    // right on the boundary, which made it *intermittently*
+                    // untappable — by a finger as much as by a UI test. Keep
+                    // this in step with Trends; 12pt was not enough margin.
+                    .padding(.top, 24)
                     .padding(.bottom, 24)
                 }
             }
@@ -276,8 +283,9 @@ struct MonthsView: View {
         SurfaceCard {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Last 12 months")
+                    Text(model.stats.coverageTitle)
                         .font(.title3.weight(.bold))
+                        .accessibilityIdentifier("months.title")
                     Spacer(minLength: 12)
                     // Six figures plus a currency symbol will not share a line
                     // with the title on a narrow phone, so it scales instead of
@@ -289,7 +297,7 @@ struct MonthsView: View {
                         .accessibilityIdentifier("months.total")
                 }
                 HStack(alignment: .firstTextBaseline) {
-                    Text(coverageLabel)
+                    Text(model.stats.coverageSubtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer(minLength: 12)
@@ -328,14 +336,6 @@ struct MonthsView: View {
         }
     }
 
-    private var coverageLabel: String {
-        let covered = model.stats.monthsCovered
-        guard covered > 0 else { return "Nothing on record yet" }
-        if covered < 12 {
-            return "\(covered) month\(covered == 1 ? "" : "s") of history from your bank"
-        }
-        return "A full year on record"
-    }
 
     private func legendSwatch(color: Color, label: String) -> some View {
         HStack(spacing: 5) {

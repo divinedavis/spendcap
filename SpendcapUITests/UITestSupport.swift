@@ -12,6 +12,25 @@ extension XCTestCase {
     ///
     /// `addUIInterruptionMonitor` does not reliably fire for this sheet, so tap
     /// it directly. No-op when nothing is showing.
+    /// Signs in with the test account and clears the password prompt.
+    ///
+    /// Every signed-in test used to inline this, and every one of them was
+    /// intermittently failing with "Neither element nor any descendant has
+    /// keyboard focus" — the tap on the field lands, focus does not follow,
+    /// and `typeText` throws. Nothing about the app is wrong when that
+    /// happens; the fix is to wait for focus rather than assume the tap gave
+    /// it, which `focusAndType` does.
+    func signIn(_ app: XCUIApplication, email: String, password: String,
+                file: StaticString = #filePath, line: UInt = #line) {
+        let emailField = app.textFields["auth.email"]
+        XCTAssertTrue(emailField.waitForExistence(timeout: 15),
+                      "auth screen should appear", file: file, line: line)
+        emailField.focusAndType(email, file: file, line: line)
+        app.secureTextFields["auth.password"].focusAndType(password, file: file, line: line)
+        app.buttons["auth.submit"].tap()
+        dismissSavePasswordPromptIfPresent()
+    }
+
     @discardableResult
     func dismissSavePasswordPromptIfPresent(timeout: TimeInterval = 0) -> Bool {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
@@ -30,6 +49,30 @@ extension XCTestCase {
             }
         }
         return false
+    }
+}
+
+extension XCUIElement {
+
+    /// Taps a text field and types, but only once the field reports keyboard
+    /// focus — `typeText` throws outright without it, and a tap does not
+    /// reliably confer it on iOS 26. Retries the tap, since the first one is
+    /// the one that usually gets lost.
+    func focusAndType(_ text: String, file: StaticString = #filePath, line: UInt = #line) {
+        for _ in 0..<4 {
+            tap()
+            let deadline = Date().addingTimeInterval(2)
+            while Date() < deadline {
+                // Undocumented, but it is the only way to ask; the alternative
+                // is to type and hope.
+                if (value(forKey: "hasKeyboardFocus") as? Bool) == true {
+                    typeText(text)
+                    return
+                }
+                Thread.sleep(forTimeInterval: 0.2)
+            }
+        }
+        XCTFail("field never took keyboard focus", file: file, line: line)
     }
 }
 

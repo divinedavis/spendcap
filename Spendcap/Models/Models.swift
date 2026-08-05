@@ -500,6 +500,30 @@ struct YearStats: Equatable {
     /// "last 12 months" overstates a bank that only shared three.
     var monthsCovered: Int { withData.count }
 
+    /// Headline for the summary card.
+    ///
+    /// It has to be derived, not written down. A fixed "Last 12 months" sat
+    /// above `totalCents`, which sums only the months actually on record — so
+    /// an account with four months of history reported a four-month total
+    /// under a twelve-month heading, and the subtitle underneath contradicted
+    /// it in the same breath.
+    var coverageTitle: String {
+        switch monthsCovered {
+        case 0: return "Monthly spending"
+        case 1: return "1 month on record"
+        default: return "Last \(monthsCovered) months"
+        }
+    }
+
+    /// Says why the window is short, which the title no longer needs to.
+    var coverageSubtitle: String {
+        switch monthsCovered {
+        case 0: return "Nothing on record yet"
+        case 12...: return "A full year on record"
+        default: return "All your bank shared"
+        }
+    }
+
     var monthsOverCap: Int { settled.filter(\.isOverCap).count }
 
     /// Trend across the settled months: the later half against the earlier

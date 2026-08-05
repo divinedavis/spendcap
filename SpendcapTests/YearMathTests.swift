@@ -237,6 +237,52 @@ final class YearMathTests: XCTestCase {
         XCTAssertFalse(result.months.contains { $0.isOverCap })
     }
 
+    // MARK: - Summary card copy
+
+    /// The bug this fixes: a fixed "Last 12 months" headline sat above a total
+    /// that sums only the months on record, so four months of history reported
+    /// a four-month figure under a twelve-month heading — and the subtitle
+    /// said "4 months of history" directly underneath it.
+    func testHeadlineCountsOnlyTheMonthsTheTotalCovers() {
+        let result = stats(mayOnwards())
+        XCTAssertEqual(result.monthsCovered, 4)
+        XCTAssertEqual(result.coverageTitle, "Last 4 months")
+        XCTAssertEqual(result.totalCents, 2_640_000,
+                       "the total must be the same four months the title claims")
+    }
+
+    func testHeadlineSaysTwelveOnlyWithAFullYear() {
+        let fullYear = (0..<12).map { offset -> MonthlySpendRow in
+            let month = 9 + offset
+            let year = month > 12 ? 2026 : 2025
+            let m = month > 12 ? month - 12 : month
+            return row(String(format: "%04d-%02d-01", year, m), 500_000)
+        }
+        let result = stats(fullYear)
+        XCTAssertEqual(result.monthsCovered, 12)
+        XCTAssertEqual(result.coverageTitle, "Last 12 months")
+        XCTAssertEqual(result.coverageSubtitle, "A full year on record")
+    }
+
+    func testHeadlineIsNotAWindowWhenNothingIsOnRecord() {
+        let result = stats([])
+        XCTAssertEqual(result.coverageTitle, "Monthly spending",
+                       "'Last 0 months' would be nonsense")
+        XCTAssertEqual(result.coverageSubtitle, "Nothing on record yet")
+    }
+
+    /// "Last 1 months" and "Last month" are both wrong — the second means the
+    /// previous month, not this one.
+    func testSingleMonthIsNotPluralisedOrCalledLastMonth() {
+        let result = stats([row("2026-08-01", 40_000, 22)])
+        XCTAssertEqual(result.coverageTitle, "1 month on record")
+    }
+
+    func testShortHistoryExplainsItselfWithoutRepeatingTheCount() {
+        // The count is the title's job now; the subtitle only says why.
+        XCTAssertEqual(stats(mayOnwards()).coverageSubtitle, "All your bank shared")
+    }
+
     // MARK: - Decoding
 
     /// Postgres bigint arrives as a JSON number through PostgREST and as a

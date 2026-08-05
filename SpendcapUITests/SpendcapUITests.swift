@@ -38,15 +38,7 @@ final class SpendcapUITests: XCTestCase {
         }
 
         let app = launch()
-        let emailField = app.textFields["auth.email"]
-        XCTAssertTrue(emailField.waitForExistence(timeout: 15))
-        emailField.tap()
-        emailField.typeText(email)
-        let passwordField = app.secureTextFields["auth.password"]
-        passwordField.tap()
-        passwordField.typeText(password)
-        app.buttons["auth.submit"].tap()
-        dismissSavePasswordPromptIfPresent()
+        signIn(app, email: email, password: password)
 
         // Sign-in lands on Trends now that Home is gone; the cap is edited
         // from the Months toolbar.
@@ -110,15 +102,7 @@ final class SpendcapUITests: XCTestCase {
 
         // First launch: sign in so a session is written to the keychain.
         let app = launch()
-        let emailField = app.textFields["auth.email"]
-        XCTAssertTrue(emailField.waitForExistence(timeout: 15))
-        emailField.tap()
-        emailField.typeText(email)
-        let passwordField = app.secureTextFields["auth.password"]
-        passwordField.tap()
-        passwordField.typeText(password)
-        app.buttons["auth.submit"].tap()
-        dismissSavePasswordPromptIfPresent()
+        signIn(app, email: email, password: password)
         XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20),
                       "sign-in should land on Trends before the relaunch")
 
@@ -173,15 +157,7 @@ final class SpendcapUITests: XCTestCase {
         }
 
         let app = launch()
-        let emailField = app.textFields["auth.email"]
-        XCTAssertTrue(emailField.waitForExistence(timeout: 15))
-        emailField.tap()
-        emailField.typeText(email)
-        let passwordField = app.secureTextFields["auth.password"]
-        passwordField.tap()
-        passwordField.typeText(password)
-        app.buttons["auth.submit"].tap()
-        dismissSavePasswordPromptIfPresent()
+        signIn(app, email: email, password: password)
 
         // Trends is the landing tab: month total plus all three chart modes.
         XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20),
@@ -227,15 +203,7 @@ final class SpendcapUITests: XCTestCase {
         }
 
         let app = launch()
-        let emailField = app.textFields["auth.email"]
-        XCTAssertTrue(emailField.waitForExistence(timeout: 15))
-        emailField.tap()
-        emailField.typeText(email)
-        let passwordField = app.secureTextFields["auth.password"]
-        passwordField.tap()
-        passwordField.typeText(password)
-        app.buttons["auth.submit"].tap()
-        dismissSavePasswordPromptIfPresent()
+        signIn(app, email: email, password: password)
 
         let title = app.staticTexts["trends.periodTitle"]
         XCTAssertTrue(title.waitForExistence(timeout: 20), "Trends should show the period title")
@@ -314,15 +282,7 @@ final class SpendcapUITests: XCTestCase {
         }
 
         let app = launch()
-        let emailField = app.textFields["auth.email"]
-        XCTAssertTrue(emailField.waitForExistence(timeout: 15))
-        emailField.tap()
-        emailField.typeText(email)
-        let passwordField = app.secureTextFields["auth.password"]
-        passwordField.tap()
-        passwordField.typeText(password)
-        app.buttons["auth.submit"].tap()
-        dismissSavePasswordPromptIfPresent()
+        signIn(app, email: email, password: password)
 
         XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20),
                       "Trends should appear after sign-in")
@@ -370,15 +330,7 @@ final class SpendcapUITests: XCTestCase {
         }
 
         let app = launch()
-        let emailField = app.textFields["auth.email"]
-        XCTAssertTrue(emailField.waitForExistence(timeout: 15))
-        emailField.tap()
-        emailField.typeText(email)
-        let passwordField = app.secureTextFields["auth.password"]
-        passwordField.tap()
-        passwordField.typeText(password)
-        app.buttons["auth.submit"].tap()
-        dismissSavePasswordPromptIfPresent()
+        signIn(app, email: email, password: password)
 
         XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20),
                       "Trends should appear after sign-in")
@@ -393,27 +345,34 @@ final class SpendcapUITests: XCTestCase {
         app.tapTab("Months", in: self)
         let line = app.buttons["months.line"].firstMatch
         if line.waitForExistence(timeout: 20) {
+            // Three *consecutive* stable reads, not one matching pair: the
+            // rollup lands asynchronously and an in-flight layout can hold
+            // still across a single 0.4s gap, which is how this passed alone
+            // and failed in the full suite.
             var frame = line.frame
-            for _ in 0..<10 {
+            var stable = 0
+            for _ in 0..<15 {
                 Thread.sleep(forTimeInterval: 0.4)
                 let next = line.frame
-                if next == frame { break }
+                stable = (next == frame) ? stable + 1 : 0
                 frame = next
+                if stable >= 3 { break }
             }
+            let planned = app.descendants(matching: .any)
+                .matching(identifier: "category.planned").firstMatch
             // isHittable is unreliable for scroll-view content under the
             // floating tab bar — the same lie tapTab(_:in:) works around — so
             // fall back to the element's own coordinate rather than failing.
-            if line.isHittable {
-                line.tap()
-            } else {
-                line.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            for _ in 0..<2 {
+                if line.isHittable {
+                    line.tap()
+                } else {
+                    line.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+                }
+                if planned.waitForExistence(timeout: 10) { break }
             }
-            XCTAssertTrue(
-                app.descendants(matching: .any)
-                    .matching(identifier: "category.planned").firstMatch
-                    .waitForExistence(timeout: 10),
-                "tapping a budget line should open its planned amount"
-            )
+            XCTAssertTrue(planned.exists,
+                          "tapping a budget line should open its planned amount")
             app.buttons["Cancel"].tap()
         }
 
@@ -466,15 +425,7 @@ final class SpendcapUITests: XCTestCase {
         }
 
         let app = launch()
-        let emailField = app.textFields["auth.email"]
-        XCTAssertTrue(emailField.waitForExistence(timeout: 15))
-        emailField.tap()
-        emailField.typeText(email)
-        let passwordField = app.secureTextFields["auth.password"]
-        passwordField.tap()
-        passwordField.typeText(password)
-        app.buttons["auth.submit"].tap()
-        dismissSavePasswordPromptIfPresent()
+        signIn(app, email: email, password: password)
 
         XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20),
                       "Trends should appear after sign-in")
