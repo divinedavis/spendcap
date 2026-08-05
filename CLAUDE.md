@@ -57,6 +57,20 @@ Trends took the landing slot. **Connecting a bank moved to Settings** in the
 same change: Home held the only entry into Plaid Link, so deleting it without
 that would have left no way to add an account.
 
+**Trends' period chip filters three months** — this one and the previous two
+(`TrendsPeriod`, 2026-08-05). Three, not twelve, because Months already owns
+the year and the bank rarely shares much more history than this. The whole
+period resolves to one reference date that drives both the fetch and the math,
+so the rows pulled and the days charted cannot describe different months. A
+finished month is read as of its **last day**, not today, or `MonthMath` would
+stop the series mid-month and report a July that ended on the 5th. The month
+walk steps back a day at a time rather than adding `-1 month`, which has to
+clamp on the 31st.
+
+The category-budget prompt card that sat under the chart was removed
+2026-08-03 at the user's request; the cap is still edited from Months, which is
+where the UI tests reach it.
+
 **Activity** is the month, transaction by transaction, from
 `month_activity(period)` (0009). It is the one rollup that does *not* filter to
 outflows — money in is activity, and hiding a refund would make the list
@@ -207,6 +221,36 @@ Two rules that shaped that screen and are easy to undo by accident:
 - iOS may raise a **"Save Password?"** sheet after sign-in that swallows the
   next tap; `dismissSavePasswordPromptIfPresent()` clears it. It is
   intermittent, so it can't be reproduced on demand.
+- **A coordinate tap opens a Button but never a SwiftUI `Menu`.** This inverts
+  the workaround above, so it is easy to "fix" backwards. Measured on the
+  Trends period chip: the coordinate tap lands and nothing opens — no menu
+  anywhere in the app's *or* SpringBoard's hierarchy. Only a real `.tap()`
+  opens one, and `.tap()` checks hittability first, which flickers while the
+  landing tab's chart lays out. Settle the frame, real-tap, retry.
+- **The navigation bar's scroll-edge effect eats touches at the top of a
+  `ScrollView`.** On iOS 26 it reaches past the bar's own frame into the first
+  ~12pt of content. Trends' chips row sat flush against it and its new period
+  menu was untappable — by XCUITest *and* by a finger — until the content got
+  `.padding(.top, 12)`. Nothing up there had been interactive before, so
+  nothing had caught it. Suspect this for any control in that strip.
+
+### Cold start
+
+The app must never show the sign-in screen to someone who is already signed in.
+Two things keep that true and both are load-bearing:
+
+- `AuthViewModel.init` seeds `session` from `client.auth.currentSession`, which
+  is a synchronous read of local storage, so the first frame already knows.
+- The client sets **`emitLocalSessionAsInitialSession: true`**. Without it the
+  SDK refreshes the (hour-long) access token over the network *before* emitting
+  `.initialSession` — so on nearly every cold start the app spent a round trip
+  believing it was signed out. The refresh still happens in the background, and
+  requests await a valid token anyway; a session the server has actually killed
+  still lands on sign-in via the cleanup `.signedOut`.
+
+`AuthPhase` makes the third state explicit: `restoring` is not `signedOut`, and
+it draws `LaunchPlaceholderView`, which is deliberately identical to the launch
+screen so there is nothing to flash.
 
 ## Plaid OAuth (real banks)
 

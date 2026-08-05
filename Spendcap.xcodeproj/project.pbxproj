@@ -11,6 +11,7 @@
 		04891E5B0EE0A19FA47D30C2 /* MonthsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6DC5B278185D52C76D8F32E /* MonthsView.swift */; };
 		12634489AAFE054D8C991EEA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1C7C8FFC9C7F1E90266B651F /* Assets.xcassets */; };
 		25817E7C2A717B4B39E54DF3 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2821BA90CD0918DC2B9B032B /* AuthViewModel.swift */; };
+		2997B86A6153A8AB9680406E /* TrendsPeriodTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8EAFF728874C211BDBECA75 /* TrendsPeriodTests.swift */; };
 		2BDA9AF47386F883F50D1163 /* BankStatementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89AF577961D365388D0E24F1 /* BankStatementTests.swift */; };
 		30B0E5E915EA7D06434A7433 /* CategoryMathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19627D9E00D44D10838E8B89 /* CategoryMathTests.swift */; };
 		3BDD8D3C9E58B31E505C3727 /* PlaidLinkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E279F242C8FA70493EC1A41A /* PlaidLinkStore.swift */; };
@@ -23,6 +24,7 @@
 		664C3BC5D16F43B9FDE42BDB /* BudgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3BA7D53E4C8AEC4EC9EDB50 /* BudgetView.swift */; };
 		68AB7A7928D8CC3685476212 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 6D4157A0EC9B34B104554BB8 /* Supabase */; };
 		78D8B9A074F9FBBF97EE785B /* LinkKit in Frameworks */ = {isa = PBXBuildFile; productRef = 591C3F772E60DFDA47F94614 /* LinkKit */; };
+		7A37C01366570FB21D1FFFCE /* AuthPhaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F38C46304AE77D75066978FE /* AuthPhaseTests.swift */; };
 		7F58296C3E6AD4F0F18F9230 /* CategoriesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C9A6682EB01B3C740B61AA5 /* CategoriesView.swift */; };
 		7F9EC04BC9768D94D33B0685 /* PlaidLinkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DAC4FA3E421D906C40BA624 /* PlaidLinkView.swift */; };
 		7FB057196855F482F175D7B7 /* YearMathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 804E3D79A9CCE91D6F440BF2 /* YearMathTests.swift */; };
@@ -89,9 +91,11 @@
 		E279F242C8FA70493EC1A41A /* PlaidLinkStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaidLinkStore.swift; sourceTree = "<group>"; };
 		F1B2DC984C8DD235B85ADE4C /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		F33FF325AD3583F8C8C0766D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		F38C46304AE77D75066978FE /* AuthPhaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthPhaseTests.swift; sourceTree = "<group>"; };
 		F3BA7D53E4C8AEC4EC9EDB50 /* BudgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetView.swift; sourceTree = "<group>"; };
+		F8EAFF728874C211BDBECA75 /* TrendsPeriodTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendsPeriodTests.swift; sourceTree = "<group>"; };
 		FC109E672012905CC6B889E6 /* MonthMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthMathTests.swift; sourceTree = "<group>"; };
-		"TEMP_5ABE0BD9-2B6C-4EC7-A463-920D3F31A71D" /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
+		"TEMP_FCD5F93B-E746-4D9F-90D7-1CC1361A7784" /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -146,12 +150,14 @@
 		6BADE33808083EDBE2BAF592 /* SpendcapTests */ = {
 			isa = PBXGroup;
 			children = (
+				F38C46304AE77D75066978FE /* AuthPhaseTests.swift */,
 				89AF577961D365388D0E24F1 /* BankStatementTests.swift */,
 				0B70F26F0CECBC013339E8E2 /* BudgetMathTests.swift */,
 				19627D9E00D44D10838E8B89 /* CategoryMathTests.swift */,
 				FC109E672012905CC6B889E6 /* MonthMathTests.swift */,
 				4FFBE392C6B89ACC42DF1937 /* PendingBackfillTests.swift */,
 				B4087935D49D831BDA9CFAE0 /* PlaidLinkStoreTests.swift */,
+				F8EAFF728874C211BDBECA75 /* TrendsPeriodTests.swift */,
 				804E3D79A9CCE91D6F440BF2 /* YearMathTests.swift */,
 			);
 			path = SpendcapTests;
@@ -267,10 +273,10 @@
 			path = Notifications;
 			sourceTree = "<group>";
 		};
-		"TEMP_3EA2D07D-612B-4CD2-9A55-494B1C559DCF" /* Spendcap */ = {
+		"TEMP_1A010126-D6E2-426F-AB64-E17A7B326399" /* Spendcap */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_5ABE0BD9-2B6C-4EC7-A463-920D3F31A71D" /* Secrets.xcconfig */,
+				"TEMP_FCD5F93B-E746-4D9F-90D7-1CC1361A7784" /* Secrets.xcconfig */,
 			);
 			path = Spendcap;
 			sourceTree = "<group>";
@@ -404,12 +410,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7A37C01366570FB21D1FFFCE /* AuthPhaseTests.swift in Sources */,
 				2BDA9AF47386F883F50D1163 /* BankStatementTests.swift in Sources */,
 				E373FF5521F5A6F0D564B865 /* BudgetMathTests.swift in Sources */,
 				30B0E5E915EA7D06434A7433 /* CategoryMathTests.swift in Sources */,
 				50F9FE7FADA4A0F67EEB6A26 /* MonthMathTests.swift in Sources */,
 				826AE9A0ADDD9E290FB80179 /* PendingBackfillTests.swift in Sources */,
 				C00C3E7B2BA9AD1E46CD75F5 /* PlaidLinkStoreTests.swift in Sources */,
+				2997B86A6153A8AB9680406E /* TrendsPeriodTests.swift in Sources */,
 				7FB057196855F482F175D7B7 /* YearMathTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -473,7 +481,7 @@
 		};
 		568F0089E9BF72A888B8F68D /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_5ABE0BD9-2B6C-4EC7-A463-920D3F31A71D" /* Secrets.xcconfig */;
+			baseConfigurationReference = "TEMP_FCD5F93B-E746-4D9F-90D7-1CC1361A7784" /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Spendcap/Spendcap.entitlements;
@@ -672,7 +680,7 @@
 		};
 		A2AF47695D6DE2F5696B08C5 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_5ABE0BD9-2B6C-4EC7-A463-920D3F31A71D" /* Secrets.xcconfig */;
+			baseConfigurationReference = "TEMP_FCD5F93B-E746-4D9F-90D7-1CC1361A7784" /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Spendcap/Spendcap.entitlements;

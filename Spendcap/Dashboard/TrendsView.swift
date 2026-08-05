@@ -30,29 +30,28 @@ enum TrendsMode: String, CaseIterable, Identifiable {
 final class TrendsViewModel: ObservableObject {
     @Published var stats = MonthStats(series: [], spentCents: 0, daysElapsed: 0,
                                       daysInMonth: 0, dailyLimitCents: 5000)
-    /// The real budget row, kept whole so the sheet edits it rather than a
-    /// stand-in rebuilt from the stats — saving a reconstructed one would
-    /// silently reset warn_pct and wipe any monthly cap.
-    @Published var budget = Budget(dailyLimitCents: 5000, warnPct: 80)
     @Published var isLoading = false
     @Published var errorMessage: String?
 
-    func load() async {
+    func load(period: TrendsPeriod = .thisMonth) async {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
         do {
-            async let txns = SpendService.shared.monthTransactions()
+            // One reference date drives the fetch and the math, so the rows
+            // pulled and the days charted can never describe different months.
+            let reference = period.referenceDate()
+            async let txns = SpendService.shared.monthTransactions(now: reference)
             async let budg = SpendService.shared.budget()
             let (t, b) = try await (txns, budg)
-            budget = b
             // Both caps: the daily one colours the per-day bars, the monthly
             // one (when set) is what the month is judged against — Months uses
             // the same resolution, and the two screens must not disagree.
             stats = MonthMath.stats(
                 transactions: t,
                 dailyLimitCents: b.dailyLimitCents,
-                monthlyLimitCents: b.monthlyLimitCents
+                monthlyLimitCents: b.monthlyLimitCents,
+                now: reference
             )
         } catch {
             errorMessage = error.localizedDescription
@@ -63,10 +62,10 @@ final class TrendsViewModel: ObservableObject {
 struct TrendsView: View {
     @StateObject private var model = TrendsViewModel()
     @State private var mode: TrendsMode = .spending
-    @State private var showingBudget = false
+    @State private var period: TrendsPeriod = .thisMonth
 
     private var monthLabel: String {
-        Date().formatted(.dateTime.month(.wide))
+        period.monthName()
     }
 
     var body: some View {
@@ -78,29 +77,24 @@ struct TrendsView: View {
                         chips
                         modePicker
                         chartCard
-                        if model.stats.dailyLimitCents > 0 {
-                            PromptCard(
-                                icon: "target",
-                                tint: .blue,
-                                title: "Want to track spending by category?",
-                                message: "Set a separate cap for eating out, transport, and the rest.",
-                                ctaTitle: "Create category caps"
-                            ) { showingBudget = true }
-                        }
                         breakdownCard
                     }
                     .padding(.horizontal, 16)
+                    // The chips row used to sit flush against the navigation
+                    // bar, whose scroll-edge effect on iOS 26 reaches into the
+                    // top of the scroll content and swallows touches there.
+                    // Nothing up here was interactive before the period menu,
+                    // so nothing had caught it.
+                    .padding(.top, 12)
                     .padding(.bottom, 24)
                 }
             }
             .navigationTitle("Trends")
             .navigationBarTitleDisplayMode(.inline)
-            .refreshable { await model.load() }
-            .task { await model.load() }
-            .sheet(isPresented: $showingBudget) {
-                BudgetView(budget: model.budget) { _ in
-                    Task { await model.load() }
-                }
+            .refreshable { await model.load(period: period) }
+            .task { await model.load(period: period) }
+            .onChange(of: period) { _, newValue in
+                Task { await model.load(period: newValue) }
             }
         }
     }
@@ -117,12 +111,29 @@ struct TrendsView: View {
 
             Spacer()
 
-            Label("This month", systemImage: "line.3.horizontal.decrease")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.blue)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color(.systemBackground), in: Capsule())
+            // Three months, not twelve: Months already owns the year, and the
+            // bank rarely shares much more history than this anyway.
+            Menu {
+                ForEach(TrendsPeriod.allCases) { option in
+                    Button {
+                        period = option
+                    } label: {
+                        if option == period {
+                            Label(option.label(), systemImage: "checkmark")
+                        } else {
+                            Text(option.label())
+                        }
+                    }
+                }
+            } label: {
+                Label(period.label(), systemImage: "line.3.horizontal.decrease")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.blue)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color(.systemBackground), in: Capsule())
+            }
+            .accessibilityIdentifier("trends.period")
         }
     }
 
@@ -141,21 +152,26 @@ struct TrendsView: View {
     private var chartCard: some View {
         SurfaceCard {
             HStack(alignment: .top) {
-                Text("This month")
+                Text(period.label())
                     .font(.title3.weight(.bold))
+                    .accessibilityIdentifier("trends.periodTitle")
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(BudgetMath.dollars(model.stats.spentCents))
                         .font(.system(size: 30, weight: .bold, design: .rounded))
                         .accessibilityIdentifier("trends.monthSpend")
-                    Text("Spent so far")
+                    Text(period.spentCaption)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
             if model.stats.series.isEmpty {
-                Text(model.isLoading ? "Loading\u{2026}" : "No spending recorded this month yet.")
+                Text(model.isLoading
+                     ? "Loading\u{2026}"
+                     : (period.isCurrent
+                        ? "No spending recorded this month yet."
+                        : "No spending recorded in \(monthLabel)."))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 170)
@@ -165,7 +181,10 @@ struct TrendsView: View {
                 HStack {
                     Text(model.stats.series.first?.date.formatted(.dateTime.day().month(.abbreviated)) ?? "")
                     Spacer()
-                    Text("\(monthLabel) \(model.stats.daysInMonth)")
+                    // Month end, formatted like the left edge rather than
+                    // pasted together from a name and a day count — with a
+                    // year in the name that read "November 2025 30".
+                    Text(period.lastDayOfMonth().formatted(.dateTime.day().month(.abbreviated)))
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)

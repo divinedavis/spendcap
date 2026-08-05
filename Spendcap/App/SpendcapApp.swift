@@ -40,13 +40,16 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if auth.isSignedIn {
+            switch auth.phase {
+            case .restoring:
+                LaunchPlaceholderView()
+            case .signedIn:
                 MainTabView()
-            } else {
+            case .signedOut:
                 AuthView()
             }
         }
-        .animation(.default, value: auth.isSignedIn)
+        .animation(.default, value: auth.phase)
         // Plaid OAuth banks redirect back to divinedavis.com/spendcap/oauth/.
         // Universal links arrive as a browsing user activity on a warm launch
         // and via onOpenURL in some cold-launch paths, so handle both. Links
@@ -72,6 +75,21 @@ struct RootView: View {
                 PrivacyRedactionView()
             }
         }
+    }
+}
+
+/// Held on screen for the moment between the app appearing and the auth stream
+/// saying whether a session is stored.
+///
+/// It is deliberately identical to the launch screen — plain system background,
+/// no spinner and no branding — so a signed-in cold start reads as the launch
+/// screen simply staying up a beat longer. Anything drawn here would flash
+/// instead, which is the bug this exists to fix.
+struct LaunchPlaceholderView: View {
+    var body: some View {
+        Color(.systemBackground)
+            .ignoresSafeArea()
+            .accessibilityIdentifier("launchPlaceholder")
     }
 }
 

@@ -223,6 +223,95 @@ struct MonthStats: Equatable {
     }
 }
 
+/// Which month Trends is showing: this one, or one of the previous two.
+///
+/// Three months is what the period chip offers because it is what the data
+/// supports — Plaid shares only what the bank gives, and the whole year already
+/// has a screen of its own in Months. Everything here is pure so the awkward
+/// parts (year boundaries, month lengths, which day a past month should be read
+/// as of) are testable without a network.
+enum TrendsPeriod: Int, CaseIterable, Identifiable {
+    case thisMonth = 0
+    case lastMonth = 1
+    case twoMonthsAgo = 2
+
+    var id: Int { rawValue }
+
+    /// How many whole months back from the current one.
+    var monthsBack: Int { rawValue }
+
+    var isCurrent: Bool { self == .thisMonth }
+
+    private static func calendar(_ timeZone: TimeZone) -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        return calendar
+    }
+
+    /// First day of this period's month.
+    ///
+    /// Walks back a day at a time into the previous month rather than adding
+    /// `-1 month`, which has to clamp on the 31st and makes the answer depend
+    /// on today's day-of-month.
+    func startOfMonth(now: Date = Date(), timeZone: TimeZone = .current) -> Date {
+        let calendar = Self.calendar(timeZone)
+        var start = calendar.dateInterval(of: .month, for: now)?.start ?? now
+        for _ in 0..<monthsBack {
+            guard let dayBefore = calendar.date(byAdding: .day, value: -1, to: start),
+                  let previous = calendar.dateInterval(of: .month, for: dayBefore)?.start
+            else { return start }
+            start = previous
+        }
+        return start
+    }
+
+    /// Last day of this period's month — the right edge of the chart's axis,
+    /// which is month end even for the current month, where the series itself
+    /// stops today.
+    func lastDayOfMonth(now: Date = Date(), timeZone: TimeZone = .current) -> Date {
+        let calendar = Self.calendar(timeZone)
+        let start = startOfMonth(now: now, timeZone: timeZone)
+        guard let end = calendar.dateInterval(of: .month, for: start)?.end,
+              let lastDay = calendar.date(byAdding: .day, value: -1, to: end)
+        else { return start }
+        return calendar.startOfDay(for: lastDay)
+    }
+
+    /// The date this period should be read as of.
+    ///
+    /// For the current month that is now, so the series stops today — an empty
+    /// tail through to month end would read as "spent nothing" rather than
+    /// "hasn't happened yet". A finished month has no such tail, so it is read
+    /// as of its last day and the series covers all of it.
+    func referenceDate(now: Date = Date(), timeZone: TimeZone = .current) -> Date {
+        isCurrent ? now : lastDayOfMonth(now: now, timeZone: timeZone)
+    }
+
+    /// "August", and "November 2025" when the month is in a different year —
+    /// bare month names would be ambiguous the moment the window crosses one.
+    ///
+    /// Built with an explicit-timezone formatter, not `.formatted()`, which
+    /// silently uses the device timezone and can name the wrong month.
+    func monthName(now: Date = Date(), timeZone: TimeZone = .current) -> String {
+        let calendar = Self.calendar(timeZone)
+        let start = startOfMonth(now: now, timeZone: timeZone)
+        let formatter = DateFormatter()
+        formatter.timeZone = timeZone
+        formatter.locale = .autoupdatingCurrent
+        let sameYear = calendar.component(.year, from: start) == calendar.component(.year, from: now)
+        formatter.setLocalizedDateFormatFromTemplate(sameYear ? "MMMM" : "MMMM y")
+        return formatter.string(from: start)
+    }
+
+    /// What the period chip and the chart card call this month.
+    func label(now: Date = Date(), timeZone: TimeZone = .current) -> String {
+        isCurrent ? "This month" : monthName(now: now, timeZone: timeZone)
+    }
+
+    /// A finished month is not still accumulating, so "so far" would be a lie.
+    var spentCaption: String { isCurrent ? "Spent so far" : "Spent" }
+}
+
 enum MonthMath {
     /// Build the day-by-day series for the calendar month containing `now`.
     /// Days with no transactions still get a row (flat cumulative line), and
