@@ -81,7 +81,15 @@ struct SettingsView: View {
                         if let errorMessage {
                             Text(errorMessage).foregroundStyle(.red)
                         }
-                        Text("Build \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?")")
+                        VStack(spacing: 8) {
+                            SpendcapIcon(size: 52)
+                            Text("Spendcap")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.primary)
+                            Text("Build \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?")")
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
                     }
                 }
             }

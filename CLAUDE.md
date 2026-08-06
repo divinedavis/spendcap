@@ -183,6 +183,35 @@ Two rules that shaped that screen and are easy to undo by accident:
    touching them must be service-role only; audit for the updatable-view RLS
    bypass before granting anything.
 
+## Brand mark
+
+Three spending bars rising toward a hard cap rule — green bars (the
+AccentColor), amber rule (the 80% warn colour), near-black field. It replaced
+the needle gauge on 2026-08-06; the gauge depicted the Today ring, which came
+out of the app in build 10.
+
+The mark exists **twice on purpose**: `scripts/make_icon.py` rasterises it to
+the app icon and `marketing/`, and `SpendcapMark` redraws it as SwiftUI vectors
+for the sign-in screen and the Settings footer. `make_icon.py --check` compares
+the two sets of numbers and `run_tests.sh` runs it, so editing one and not the
+other fails the sweep instead of shipping two different logos. Never hand-edit
+`icon-1024.png` — regenerate it.
+
+**The launch screen is deliberately unbranded.** `UILaunchScreen`'s
+`UIImageName` scales its image to fill the screen rather than centring it at a
+natural size, so it cannot be matched to `LaunchPlaceholderView` — and those
+two disagreeing is the exact flash the cold-start work removed.
+
+**The ASC header icon comes from the build attached to the App Store version**,
+not from TestFlight uploads. Twenty-two TestFlight builds all carried an icon
+and appstoreconnect.apple.com still showed the placeholder grid, because
+version 1.0 had no build selected. Uploading is not enough:
+
+```bash
+python3 scripts/attach_build.py            # newest VALID build -> version 1.0
+python3 scripts/attach_build.py --dry-run  # just report what is attached now
+```
+
 ## Keychain entries
 
 - `spendcap-supabase-db-password` — Postgres password
@@ -202,6 +231,7 @@ Two rules that shaped that screen and are easy to undo by accident:
 | Script | What it does |
 |---|---|
 | `generate.sh` | Regenerate `.xcodeproj` from `project.yml` (run after adding files) |
+| `make_icon.py [--check]` | Redraw the logo (app icon + `marketing/`); `--check` gates `run_tests.sh` |
 | `run_tests.sh [unit\|ui\|all] [Class[/test]]` | Full sweep; gates every ship |
 | `smoke_test.sh` | Build → install → cold-launch in a sim; proves the app starts |
 | `capture_screenshots.sh` | Signed-in App Store / portfolio PNGs from XCUITest |

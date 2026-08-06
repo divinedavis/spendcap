@@ -12,9 +12,8 @@ struct AuthView: View {
                 Spacer()
 
                 VStack(spacing: 8) {
-                    Image(systemName: "gauge.with.needle")
-                        .font(.system(size: 56))
-                        .foregroundStyle(.tint)
+                    SpendcapIcon(size: 88)
+                        .padding(.bottom, 4)
                     Text("Spendcap")
                         .font(.largeTitle.bold())
                     Text("Know the moment you're over budget.")

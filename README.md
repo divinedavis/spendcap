@@ -1,7 +1,12 @@
+<img src="marketing/logo-1024.png" alt="Spendcap" width="128" align="left" hspace="16" vspace="4">
+
 # Spendcap
 
 **iOS app that links your bank through Plaid and pushes you a notification the
 moment the day's spending crosses your cap.**
+
+<br clear="left">
+
 
 Most budgeting apps tell you what you overspent on *last month*. Spendcap tells
 you at 3pm today, while you can still do something about it.

@@ -38,6 +38,11 @@ if [[ -z "$SIMULATOR_ID" ]]; then
 fi
 echo "==> simulator $SIMULATOR_ID"
 
+# The logo exists twice — as PNG art and as the Swift vector redraw — so check
+# they still describe the same mark before anything is built from them.
+echo "==> checking icon art"
+python3 scripts/make_icon.py --check
+
 # Pipe XCUITest creds in from the keychain so the UI suite can auto-sign-in.
 if [[ -z "${SPENDCAP_TEST_EMAIL:-}" || -z "${SPENDCAP_TEST_PASSWORD:-}" ]]; then
     if creds=$(security find-generic-password -s spendcap-test-account -w 2>/dev/null); then
