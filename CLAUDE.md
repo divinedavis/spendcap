@@ -220,6 +220,11 @@ Verified live end-to-end before shipping, on seeded data: $780 hotel + $6 coffee
 against a $50 cap → assign the hotel → `overspend_status()` reports $6 and no
 push fires; unassigning and deleting the trip each restore it.
 
+**No edge-function redeploy was needed for the exclusion.** `checkOverspend` in
+`_shared/sync.ts` calls `rpc("overspend_status")`, so replacing the SQL function
+changes the push path immediately — unlike `PLAID_ENV`, which is read at module
+load and does need a redeploy.
+
 **0011 revoked `anon` INSERT/UPDATE/DELETE across `public`.** Supabase's stock
 `alter default privileges` grants `all` to `anon` on every new table, so all
 twelve had them. Nothing was exploitable — RLS is on everywhere and every policy
