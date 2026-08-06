@@ -132,6 +132,12 @@ struct MainTabView: View {
             MonthsView()
                 .tabItem { Label("Months", systemImage: "calendar") }
 
+            // Trips sit outside the daily cap on purpose — a flight and eight
+            // hotel nights are one decision, not a day of overspending, and an
+            // over-cap push on the day of a booking is noise.
+            TripsView()
+                .tabItem { Label("Trips", systemImage: "airplane") }
+
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }

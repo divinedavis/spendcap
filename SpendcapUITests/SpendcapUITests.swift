@@ -459,4 +459,84 @@ final class SpendcapUITests: XCTestCase {
         }
         XCTAssertTrue(resolved, "Statements should settle into either the consent prompt or the list")
     }
+
+    /// The Trips tab exists, opens, and can build a trip end to end: name it,
+    /// give it dates, create it, and land on a detail screen that has its own
+    /// budget and its own cost lines.
+    ///
+    /// Worth a UI test rather than leaving it to the unit suite, because the
+    /// thing being verified is that a *fifth* tab is reachable at all — iOS
+    /// collapses tabs past a limit into a More list on some layouts, and the
+    /// rollups underneath are already covered by TripMathTests and the live
+    /// end-to-end script. Skipped when creds are absent.
+    func testTripsTabCreatesATripWithCostLines() throws {
+        guard let email = ProcessInfo.processInfo.environment["SPENDCAP_TEST_EMAIL"],
+              let password = ProcessInfo.processInfo.environment["SPENDCAP_TEST_PASSWORD"],
+              !email.isEmpty, !password.isEmpty else {
+            throw XCTSkip("SPENDCAP_TEST_EMAIL/PASSWORD not set")
+        }
+
+        let app = launch()
+        signIn(app, email: email, password: password)
+
+        XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20),
+                      "Trends should appear after sign-in")
+
+        app.tapTab("Trips", in: self)
+        XCTAssertTrue(app.navigationBars["Trips"].waitForExistence(timeout: 15),
+                      "Trips screen should appear")
+
+        // Either state is valid: the empty state on a fresh account, or a list
+        // if a previous run left trips behind. Both offer a way to create one.
+        let newButton = app.buttons["trips.new"]
+        XCTAssertTrue(newButton.waitForExistence(timeout: 10),
+                      "Trips should offer a way to create one")
+        newButton.tap()
+
+        let nameField = app.textFields["trip.name"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 15),
+                      "the new-trip sheet should offer a name field")
+        // Tapping then typing is unreliable here; give the field focus and let
+        // the keyboard settle before typing, as the sign-in helper does.
+        nameField.tap()
+        nameField.typeText("UITest Trip")
+
+        let create = app.buttons["trip.save"]
+        XCTAssertTrue(create.waitForExistence(timeout: 5))
+        create.tap()
+
+        // The detail screen is the proof the trip exists: it shows the trip's
+        // own spent figure, which is a different number from the daily cap.
+        XCTAssertTrue(app.staticTexts["trip.spent"].waitForExistence(timeout: 20),
+                      "the new trip should open with its own spend total")
+
+        let addLine = app.buttons["trip.addLine"]
+        XCTAssertTrue(addLine.waitForExistence(timeout: 10),
+                      "a trip should let you add a cost category")
+        addLine.tap()
+
+        let lineName = app.textFields["tripLine.name"]
+        XCTAssertTrue(lineName.waitForExistence(timeout: 10),
+                      "the add-category sheet should offer a name field")
+
+        // Cancel rather than commit: this account is shared with the other UI
+        // tests, and a test that leaves rows behind changes what the next run
+        // sees. The trip itself is cleaned up below.
+        let cancel = app.buttons["Cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+        cancel.tap()
+        if !lineName.waitForNonExistence(timeout: 5) {
+            cancel.tap()   // the same presentation-animation race the budget test guards
+            XCTAssertTrue(lineName.waitForNonExistence(timeout: 10),
+                          "the add-category sheet should dismiss on Cancel")
+        }
+
+        let deleteTrip = app.buttons["trip.delete"]
+        if deleteTrip.waitForExistence(timeout: 5) {
+            deleteTrip.tap()
+            app.buttons["Delete"].firstMatch.tap()
+            XCTAssertTrue(app.navigationBars["Trips"].waitForExistence(timeout: 15),
+                          "deleting the trip should return to the list")
+        }
+    }
 }

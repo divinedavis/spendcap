@@ -51,7 +51,8 @@ after every sync → check_overspend:
 
 ### Tabs
 
-**Trends · Activity · Months · Settings.** Home was removed 2026-08-03 — its
+**Trends · Activity · Months · Trips · Settings.** Trips arrived 2026-08-06
+(see below). Home was removed 2026-08-03 — its
 hero card, today's activity list and suggested-actions carousel are gone, and
 Trends took the landing slot. **Connecting a bank moved to Settings** in the
 same change: Home held the only entry into Plaid Link, so deleting it without
@@ -183,6 +184,48 @@ Two rules that shaped that screen and are easy to undo by accident:
    touching them must be service-role only; audit for the updatable-view RLS
    bypass before granting anything.
 
+## Trips and events (0010, shipped 2026-08-06)
+
+A fifth tab. A trip is a named budget with its own cost lines — flights, hotel,
+food, anything the user adds — that is **planned and actual at once**:
+`trip_lines` holds what you expect to spend, `trip_transactions` records which
+real rows you put on the trip, and the screen shows the drift between them.
+
+**Trip spending leaves the daily cap.** `overspend_status()` skips any
+transaction assigned to a trip. A $780 hotel would blow any daily cap and fire
+an over-cap push the user can do nothing about, and an alert that fires on
+unactionable news stops being read. The trip is judged against its own budget
+instead: an explicit `budget_cents` if set, otherwise the sum of the planned
+lines, and **nil when neither exists** — "no budget" is not "0% of zero".
+
+**Assignment is explicit, per transaction, and that is load-bearing.** A trip's
+dates only *suggest* (`trip_candidates`); they never claim. Excluding a date
+range automatically would silently switch the app's core feature off for the
+length of a holiday — precisely the days most likely to overspend. Every
+excluded row is one the user tapped. `trip_transactions.transaction_id` is the
+primary key, so a row can be on at most one trip and cannot leave the cap twice.
+
+**Months, Trends and Activity are unaffected** and still count trip spending.
+They report what left the account; hiding it there would make the app disagree
+with the bank statement it mirrors. This is the one place the "identical outflow
+filter" rule bends, and only for `overspend_status()` — the filter itself
+(`is_removed = false`, `amount_cents > 0`, `not (pending and is_backfill)`) is
+still shared by every trip rollup.
+
+Deleting a trip, or a line, never deletes money that was spent: the trip's
+charges go back to counting against the daily cap, and a deleted line's charges
+fall into the trip's unfiled row (`line_id` nulls via the FK).
+
+Verified live end-to-end before shipping, on seeded data: $780 hotel + $6 coffee
+against a $50 cap → assign the hotel → `overspend_status()` reports $6 and no
+push fires; unassigning and deleting the trip each restore it.
+
+**0011 revoked `anon` INSERT/UPDATE/DELETE across `public`.** Supabase's stock
+`alter default privileges` grants `all` to `anon` on every new table, so all
+twelve had them. Nothing was exploitable — RLS is on everywhere and every policy
+is `user_id = auth.uid()`, which is NULL for anon — but the grant layer should
+not be the only thing behind RLS. `select` is left alone.
+
 ## Brand mark
 
 Three spending bars rising toward a hard cap rule — green bars (the
@@ -237,6 +280,8 @@ python3 scripts/attach_build.py --dry-run  # just report what is attached now
 | `capture_screenshots.sh` | Signed-in App Store / portfolio PNGs from XCUITest |
 | `ship.sh` | tests → smoke → bump build → archive → TestFlight → verify testers |
 | `register_in_asc.py` / `configure_internal_testers.py` | ASC bootstrap + tester group |
+| `attach_build.py` | Attach the newest build to the App Store version (drives the ASC icon) |
+| `apply_migration.py [--verify]` | Apply a migration via the management API, then reload PostgREST |
 | `set_plaid_keys.sh` | Push keychain Plaid creds to Supabase function secrets |
 
 ### UI-test gotchas (both cost real debugging time — don't rediscover them)

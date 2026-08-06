@@ -348,6 +348,171 @@ final class SpendService {
             .createSignedURL(path: path, expiresIn: expiresIn)
     }
 
+    // MARK: - Trips
+
+    enum TripError: LocalizedError {
+        case notSignedIn
+        case notCreated
+
+        var errorDescription: String? {
+            switch self {
+            case .notSignedIn:
+                return "You need to be signed in to change a trip."
+            case .notCreated:
+                return "The trip couldn't be created. Try again."
+            }
+        }
+    }
+
+    func trips() async throws -> [TripTotals] {
+        try await client.rpc("trip_totals").execute().value
+    }
+
+    func tripLines(tripId: UUID) async throws -> [TripLineSpend] {
+        try await client
+            .rpc("trip_line_spend", params: ["trip": tripId.uuidString.lowercased()])
+            .execute()
+            .value
+    }
+
+    /// Transactions inside a trip's dates that no trip has claimed. Suggestions
+    /// only — nothing is assigned until the user taps.
+    func tripCandidates(tripId: UUID, limit: Int = 200) async throws -> [TripTransaction] {
+        try await client
+            .rpc("trip_candidates", params: [
+                "trip": AnyJSON.string(tripId.uuidString.lowercased()),
+                "max_rows": AnyJSON.integer(limit),
+            ])
+            .execute()
+            .value
+    }
+
+    func tripAssigned(tripId: UUID) async throws -> [TripTransaction] {
+        try await client
+            .rpc("trip_assigned", params: ["trip": tripId.uuidString.lowercased()])
+            .execute()
+            .value
+    }
+
+    @discardableResult
+    func createTrip(name: String, kind: TripKind, startsOn: String?, endsOn: String?,
+                    budgetCents: Int?) async throws -> Trip {
+        guard let userId = client.auth.currentUser?.id else { throw TripError.notSignedIn }
+        var payload: [String: AnyJSON] = [
+            "user_id": .string(userId.uuidString.lowercased()),
+            "name": .string(name),
+            "kind": .string(kind.rawValue),
+        ]
+        payload["starts_on"] = startsOn.map { AnyJSON.string($0) } ?? .null
+        payload["ends_on"] = endsOn.map { AnyJSON.string($0) } ?? .null
+        payload["budget_cents"] = budgetCents.map { AnyJSON.integer($0) } ?? .null
+        let rows: [Trip] = try await client
+            .from("trips")
+            .insert(payload)
+            .select("id, name, kind, starts_on, ends_on, budget_cents")
+            .execute()
+            .value
+        guard let trip = rows.first else { throw TripError.notCreated }
+        return trip
+    }
+
+    func updateTrip(_ trip: Trip) async throws {
+        var payload: [String: AnyJSON] = [
+            "name": .string(trip.name),
+            "kind": .string(trip.kind.rawValue),
+        ]
+        payload["starts_on"] = trip.startsOn.map { AnyJSON.string($0) } ?? .null
+        payload["ends_on"] = trip.endsOn.map { AnyJSON.string($0) } ?? .null
+        payload["budget_cents"] = trip.budgetCents.map { AnyJSON.integer($0) } ?? .null
+        try await client
+            .from("trips")
+            .update(payload)
+            .eq("id", value: trip.id.uuidString.lowercased())
+            .execute()
+    }
+
+    /// Deletes the trip, its lines, and its assignments. The transactions
+    /// themselves are untouched — they go back to counting against the daily
+    /// cap, which is where they were before the trip claimed them.
+    func deleteTrip(id: UUID) async throws {
+        try await client
+            .from("trips")
+            .delete()
+            .eq("id", value: id.uuidString.lowercased())
+            .execute()
+    }
+
+    func addTripLine(tripId: UUID, name: String, symbol: String?,
+                     plannedCents: Int, occursOn: String?) async throws {
+        guard let userId = client.auth.currentUser?.id else { throw TripError.notSignedIn }
+        let existing = try await tripLines(tripId: tripId)
+        let nextOrder = (existing.filter { !$0.isUnfiled }.map(\.sortOrder).max() ?? 0) + 1
+        var payload: [String: AnyJSON] = [
+            "trip_id": .string(tripId.uuidString.lowercased()),
+            "user_id": .string(userId.uuidString.lowercased()),
+            "name": .string(name),
+            "planned_cents": .integer(plannedCents),
+            "sort_order": .integer(nextOrder),
+        ]
+        payload["symbol"] = symbol.map { AnyJSON.string($0) } ?? .null
+        payload["occurs_on"] = occursOn.map { AnyJSON.string($0) } ?? .null
+        try await client.from("trip_lines").insert(payload).execute()
+    }
+
+    func updateTripLine(id: UUID, name: String, symbol: String?,
+                        plannedCents: Int, occursOn: String?) async throws {
+        var payload: [String: AnyJSON] = [
+            "name": .string(name),
+            "planned_cents": .integer(plannedCents),
+        ]
+        payload["symbol"] = symbol.map { AnyJSON.string($0) } ?? .null
+        payload["occurs_on"] = occursOn.map { AnyJSON.string($0) } ?? .null
+        try await client
+            .from("trip_lines")
+            .update(payload)
+            .eq("id", value: id.uuidString.lowercased())
+            .execute()
+    }
+
+    /// Removing a line does not remove its spending from the trip: the
+    /// assignments' `line_id` is nulled by the FK and those transactions land
+    /// in the trip's unfiled row. Deleting a plan should never quietly delete
+    /// the record of money that was actually spent.
+    func deleteTripLine(id: UUID) async throws {
+        try await client
+            .from("trip_lines")
+            .delete()
+            .eq("id", value: id.uuidString.lowercased())
+            .execute()
+    }
+
+    /// Puts a transaction on a trip — which is also what takes it out of the
+    /// daily cap. Upserted on the transaction id, so re-assigning moves it
+    /// rather than failing or double-counting it.
+    func assignTransaction(_ transactionId: UUID, toTrip tripId: UUID, line lineId: UUID?) async throws {
+        guard let userId = client.auth.currentUser?.id else { throw TripError.notSignedIn }
+        var payload: [String: AnyJSON] = [
+            "transaction_id": .string(transactionId.uuidString.lowercased()),
+            "trip_id": .string(tripId.uuidString.lowercased()),
+            "user_id": .string(userId.uuidString.lowercased()),
+        ]
+        payload["line_id"] = lineId.map { AnyJSON.string($0.uuidString.lowercased()) } ?? .null
+        try await client
+            .from("trip_transactions")
+            .upsert(payload, onConflict: "transaction_id")
+            .execute()
+    }
+
+    /// Takes a transaction off its trip. It counts against the daily cap again
+    /// from the next `check_overspend` run.
+    func unassignTransaction(_ transactionId: UUID) async throws {
+        try await client
+            .from("trip_transactions")
+            .delete()
+            .eq("transaction_id", value: transactionId.uuidString.lowercased())
+            .execute()
+    }
+
     // MARK: - Helpers
 
     /// Today's date in the device's local timezone, matching the server-side
