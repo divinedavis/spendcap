@@ -214,4 +214,77 @@ final class TripMathTests: XCTestCase {
         XCTAssertTrue(over.isOver)
         XCTAssertEqual(over.remainingCents, -15_000)
     }
+
+    // MARK: - Ticking a line off as paid
+
+    /// The exact string the live PostgREST returned for a `timestamptz`,
+    /// captured from the API rather than guessed: five fractional digits and a
+    /// "+00:00" offset. ISO8601DateFormatter with .withFractionalSeconds wants
+    /// exactly three and returns nil for this — which would have made every
+    /// ticked line silently read as unticked.
+    func testSettledAtDecodesThePostgrestWireFormat() throws {
+        let json = """
+        {"line_id":"3F2504E0-4F89-11D3-9A0C-0305E82C3301","name":"Flights",
+         "symbol":"airplane","planned_cents":80000,"occurs_on":null,
+         "sort_order":1,"spent_cents":0,"txn_count":0,
+         "settled_at":"2026-08-07T18:50:51.08808+00:00"}
+        """
+        let row = try JSONDecoder().decode(TripLineSpend.self, from: Data(json.utf8))
+        XCTAssertTrue(row.isSettled, "a ticked line must decode as ticked")
+        XCTAssertNotNil(row.settledAt)
+    }
+
+    /// Postgres trims trailing zeroes, so the digit count varies row to row.
+    func testSettledAtDecodesEveryFractionalDigitCount() {
+        let shapes = [
+            "2026-08-07T18:50:51+00:00",
+            "2026-08-07T18:50:51.1+00:00",
+            "2026-08-07T18:50:51.088+00:00",
+            "2026-08-07T18:50:51.08808+00:00",
+            "2026-08-07T18:50:51.088080+00:00",
+            "2026-08-07T18:50:51Z",
+            "2026-08-07T18:50:51.08808Z",
+        ]
+        for shape in shapes {
+            XCTAssertNotNil(TripDecoding.timestamp(shape), "failed to parse \(shape)")
+        }
+        XCTAssertNil(TripDecoding.timestamp("not a date"))
+    }
+
+    func testNullSettledAtIsOutstanding() throws {
+        let json = """
+        {"line_id":"3F2504E0-4F89-11D3-9A0C-0305E82C3301","name":"Hotel","symbol":null,
+         "planned_cents":100000,"occurs_on":null,"sort_order":2,
+         "spent_cents":0,"txn_count":0,"settled_at":null}
+        """
+        let row = try JSONDecoder().decode(TripLineSpend.self, from: Data(json.utf8))
+        XCTAssertFalse(row.isSettled)
+        XCTAssertTrue(row.isSettleable)
+    }
+
+    /// The unfiled rollup row is not something anyone created, so it must never
+    /// offer a checkbox.
+    func testUnfiledRowIsNotSettleable() throws {
+        let json = """
+        {"line_id":null,"name":null,"symbol":null,"planned_cents":0,"occurs_on":null,
+         "sort_order":2147483647,"spent_cents":4200,"txn_count":1,"settled_at":null}
+        """
+        let row = try JSONDecoder().decode(TripLineSpend.self, from: Data(json.utf8))
+        XCTAssertTrue(row.isUnfiled)
+        XCTAssertFalse(row.isSettleable)
+    }
+
+    /// Ticking a line must not move money. The trip's spend means "we watched
+    /// this leave the account"; a checkbox is an assertion about the world.
+    func testTickingALineDoesNotChangeItsSpend() {
+        let outstanding = TripLineSpend(lineId: UUID(), name: "Flights", symbol: nil,
+                                        plannedCents: 80_000, occursOn: nil, sortOrder: 1,
+                                        spentCents: 0, txnCount: 0, settledAt: nil)
+        let ticked = TripLineSpend(lineId: outstanding.lineId, name: "Flights", symbol: nil,
+                                   plannedCents: 80_000, occursOn: nil, sortOrder: 1,
+                                   spentCents: 0, txnCount: 0, settledAt: Date())
+        XCTAssertEqual(outstanding.spentCents, ticked.spentCents)
+        XCTAssertEqual(outstanding.plannedCents, ticked.plannedCents)
+        XCTAssertFalse(ticked.isOver, "a paid line with no charges is not over")
+    }
 }

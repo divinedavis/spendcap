@@ -510,6 +510,22 @@ final class SpendcapUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["trip.spent"].waitForExistence(timeout: 20),
                       "the new trip should open with its own spend total")
 
+        // Tick the first cost line off as paid. The starter lines are created
+        // with the trip, so there is something to tick without adding one.
+        let check = app.buttons.matching(identifier: "trip.lineCheck").firstMatch
+        XCTAssertTrue(check.waitForExistence(timeout: 15),
+                      "each cost line should offer a paid checkbox")
+        check.tap()
+        XCTAssertTrue(app.staticTexts["trip.settledCount"].waitForExistence(timeout: 15),
+                      "ticking a line should show the done counter")
+
+        // And it must survive a round trip, not just flip the local state.
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.navigationBars["Trips"].waitForExistence(timeout: 15))
+        app.buttons["trips.row"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["trip.settledCount"].waitForExistence(timeout: 20),
+                      "the tick should still be there after reopening the trip")
+
         let addLine = app.buttons["trip.addLine"]
         XCTAssertTrue(addLine.waitForExistence(timeout: 10),
                       "a trip should let you add a cost category")

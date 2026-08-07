@@ -110,6 +110,12 @@ final class MarketingScreenshots: XCTestCase {
                     app.buttons["trip.save"].tap()
 
                     if app.staticTexts["trip.spent"].waitForExistence(timeout: 25) {
+                        // Tick one line off so the shot shows both states.
+                        let check = app.buttons.matching(identifier: "trip.lineCheck").firstMatch
+                        if check.waitForExistence(timeout: 10) {
+                            check.tap()
+                            _ = app.staticTexts["trip.settledCount"].waitForExistence(timeout: 10)
+                        }
                         save(app, "10-trip-detail")
                         // Leave nothing behind: the account is shared with the
                         // assertion suite, and a stray trip changes what it sees.

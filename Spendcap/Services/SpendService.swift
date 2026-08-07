@@ -474,6 +474,23 @@ final class SpendService {
             .execute()
     }
 
+    /// Tick a cost line off as paid or done, or untick it.
+    ///
+    /// This records an assertion, not a payment: plenty of a trip gets paid on
+    /// a card the app can't see, months ahead, or by someone else. It never
+    /// touches a spend total — the trip's spend still means "money we watched
+    /// leave the account".
+    func setTripLineSettled(id: UUID, settled: Bool) async throws {
+        let value: AnyJSON = settled
+            ? .string(ISO8601DateFormatter().string(from: Date()))
+            : .null
+        try await client
+            .from("trip_lines")
+            .update(["settled_at": value])
+            .eq("id", value: id.uuidString.lowercased())
+            .execute()
+    }
+
     /// Removing a line does not remove its spending from the trip: the
     /// assignments' `line_id` is nulled by the FK and those transactions land
     /// in the trip's unfiled row. Deleting a plan should never quietly delete

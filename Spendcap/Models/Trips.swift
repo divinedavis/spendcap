@@ -118,9 +118,16 @@ struct TripLineSpend: Codable, Identifiable, Equatable {
     let sortOrder: Int
     let spentCents: Int
     let txnCount: Int
+    /// When the user ticked this line off as paid or done. Nil = outstanding.
+    /// Never feeds a spend total — see migration 0012.
+    let settledAt: Date?
 
     var id: String { lineId?.uuidString ?? "unfiled" }
     var isUnfiled: Bool { lineId == nil }
+    var isSettled: Bool { settledAt != nil }
+    /// The unfiled row is a rollup, not something anyone created, so there is
+    /// nothing there to tick off.
+    var isSettleable: Bool { lineId != nil }
     var displayName: String { name ?? "Not filed yet" }
     var displaySymbol: String { symbol ?? (isUnfiled ? "tray" : "tag") }
 
@@ -142,10 +149,12 @@ struct TripLineSpend: Codable, Identifiable, Equatable {
         case sortOrder = "sort_order"
         case spentCents = "spent_cents"
         case txnCount = "txn_count"
+        case settledAt = "settled_at"
     }
 
     init(lineId: UUID?, name: String?, symbol: String?, plannedCents: Int,
-         occursOn: String?, sortOrder: Int, spentCents: Int, txnCount: Int) {
+         occursOn: String?, sortOrder: Int, spentCents: Int, txnCount: Int,
+         settledAt: Date? = nil) {
         self.lineId = lineId
         self.name = name
         self.symbol = symbol
@@ -154,6 +163,7 @@ struct TripLineSpend: Codable, Identifiable, Equatable {
         self.sortOrder = sortOrder
         self.spentCents = spentCents
         self.txnCount = txnCount
+        self.settledAt = settledAt
     }
 
     init(from decoder: Decoder) throws {
@@ -166,6 +176,9 @@ struct TripLineSpend: Codable, Identifiable, Equatable {
         sortOrder = (try? c.decode(Int.self, forKey: .sortOrder)) ?? 0
         spentCents = TripDecoding.bigint(c, .spentCents) ?? 0
         txnCount = (try? c.decode(Int.self, forKey: .txnCount)) ?? 0
+        settledAt = (try? c.decodeIfPresent(String.self, forKey: .settledAt))
+            .flatMap { $0 }
+            .flatMap(TripDecoding.timestamp)
     }
 }
 
@@ -221,6 +234,32 @@ enum TripDecoding {
     static func bigint<K: CodingKey>(_ container: KeyedDecodingContainer<K>, _ key: K) -> Int? {
         if let value = try? container.decodeIfPresent(Int.self, forKey: key) { return value }
         if let text = try? container.decodeIfPresent(String.self, forKey: key) { return Int(text) }
+        return nil
+    }
+
+    /// Parse a Postgres `timestamptz` as PostgREST actually sends it.
+    ///
+    /// Measured against the live API, not assumed: it returns
+    /// `2026-08-07T18:50:51.08808+00:00` — **five** fractional digits and a
+    /// `+00:00` offset rather than `Z`. `ISO8601DateFormatter` with
+    /// `.withFractionalSeconds` wants exactly three and returns nil for that
+    /// string, and Postgres trims trailing zeroes so the digit count varies
+    /// row to row. Dropping the fraction before parsing sidesteps the whole
+    /// problem — nothing here needs sub-second precision, only "is it set".
+    static func timestamp(_ text: String) -> Date? {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = iso.date(from: text) { return date }
+
+        iso.formatOptions = [.withInternetDateTime]
+        if let date = iso.date(from: text) { return date }
+
+        // Strip ".123456" and retry; handles any number of digits, Z or +00:00.
+        if let dot = text.firstIndex(of: "."),
+           let afterFraction = text[dot...].firstIndex(where: { !$0.isNumber && $0 != "." }) {
+            let trimmed = text[text.startIndex..<dot] + text[afterFraction...]
+            if let date = iso.date(from: String(trimmed)) { return date }
+        }
         return nil
     }
 }

@@ -212,6 +212,26 @@ filter" rule bends, and only for `overspend_status()` — the filter itself
 (`is_removed = false`, `amount_cents > 0`, `not (pending and is_backfill)`) is
 still shared by every trip rollup.
 
+**Ticking a line off as paid (0012).** `trip_lines.settled_at` — a timestamp,
+null = outstanding. A trip line is half budget, half checklist, and plenty of it
+gets paid on a card the app can't see, months ahead, or by someone else, so
+"handled" cannot be inferred from the transactions we mirror; the user asserts
+it. It **never feeds a total**: the trip's spend still means "money we watched
+leave the account", and letting a checkbox inflate it would make the one honest
+figure on the screen a mix of fact and intention. The count is shown separately
+("1 of 5 done"). The unfiled rollup row is not settleable — nobody created it.
+
+Two things this cost, worth not rediscovering:
+- `settled_at` made `trip_line_spend` change its return type, which Postgres
+  refuses to `create or replace` (42P13). Migration 0012 drops it first, in the
+  same batch so PostgREST never sees a gap.
+- PostgREST returns `timestamptz` as `2026-08-07T18:50:51.08808+00:00` —
+  **five** fractional digits and a `+00:00` offset. `ISO8601DateFormatter` with
+  `.withFractionalSeconds` wants exactly three and returns nil, and Postgres
+  trims trailing zeroes so the count varies row to row. `TripDecoding.timestamp`
+  strips the fraction and retries; `TripMathTests` pins the real wire string.
+  Getting this wrong makes every ticked line silently read as unticked.
+
 Deleting a trip, or a line, never deletes money that was spent: the trip's
 charges go back to counting against the daily cap, and a deleted line's charges
 fall into the trip's unfiled row (`line_id` nulls via the FK).
@@ -291,6 +311,12 @@ python3 scripts/attach_build.py --dry-run  # just report what is attached now
 
 ### UI-test gotchas (both cost real debugging time — don't rediscover them)
 
+- **An accessibility identifier on a row overwrites its children's.** SwiftUI
+  pushes a container's identifier down onto every descendant, so
+  `.accessibilityIdentifier("trip.line")` on a `List` row renamed the paid
+  checkbox inside it from `trip.lineCheck` to `trip.line` and made it
+  unfindable — the control was on screen and tappable the whole time. Put
+  identifiers on the controls, not the row.
 - **Tab taps need `app.tapTab(_:in:)`**, not `tabBars.buttons[x].tap()`. On
   iOS 26's floating tab bar a plain `.tap()` reports success but does not
   change the selection. The helper in `UITestSupport.swift` falls back to a

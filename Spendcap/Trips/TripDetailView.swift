@@ -73,6 +73,33 @@ final class TripDetailViewModel: ObservableObject {
         }
     }
 
+    /// Ticked-off lines, for the "2 of 5 done" counter. Only real lines count;
+    /// the unfiled rollup row is not something anyone can tick.
+    var settleableLines: [TripLineSpend] { lines.filter(\.isSettleable) }
+    var settledCount: Int { settleableLines.filter(\.isSettled).count }
+
+    /// Optimistic: the tap should land instantly, and a checkbox that waits for
+    /// a round trip before filling in reads as a tap that missed. The reload
+    /// afterwards is what makes it true.
+    func toggleSettled(_ line: TripLineSpend) async {
+        guard let id = line.lineId else { return }
+        let nowSettled = !line.isSettled
+        if let index = lines.firstIndex(where: { $0.lineId == line.lineId }) {
+            lines[index] = TripLineSpend(
+                lineId: line.lineId, name: line.name, symbol: line.symbol,
+                plannedCents: line.plannedCents, occursOn: line.occursOn,
+                sortOrder: line.sortOrder, spentCents: line.spentCents,
+                txnCount: line.txnCount, settledAt: nowSettled ? Date() : nil)
+        }
+        do {
+            try await SpendService.shared.setTripLineSettled(id: id, settled: nowSettled)
+            await load()
+        } catch {
+            errorMessage = error.localizedDescription
+            await load()   // put the checkbox back where the server says it is
+        }
+    }
+
     func deleteLine(_ line: TripLineSpend) async {
         guard let id = line.lineId else { return }
         do {
@@ -162,13 +189,15 @@ struct TripDetailView: View {
 
             Section {
                 ForEach(model.editableLines) { line in
-                    Button {
+                    TripLineRow(line: line) {
+                        Task { await model.toggleSettled(line); onChange() }
+                    } onOpen: {
                         sheet = .editLine(line)
-                    } label: {
-                        TripLineRow(line: line)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("trip.line")
+                    // No identifier on the row itself: SwiftUI pushes a
+                    // container's accessibility identifier down onto every
+                    // descendant, which renamed the checkbox to "trip.line" and
+                    // made it unfindable. The controls inside carry their own.
                     .swipeActions {
                         Button("Delete", role: .destructive) { pendingDeleteLine = line }
                     }
@@ -186,7 +215,16 @@ struct TripDetailView: View {
                 }
                 .accessibilityIdentifier("trip.addLine")
             } header: {
-                Text("Costs")
+                HStack {
+                    Text("Costs")
+                    Spacer()
+                    if model.settledCount > 0 {
+                        Text("\(model.settledCount) of \(model.settleableLines.count) done")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("trip.settledCount")
+                    }
+                }
             } footer: {
                 if model.editableLines.isEmpty {
                     Text("Add what you expect to spend — flights, hotel, food. Charges you put on this trip stop counting against your daily cap.")
@@ -347,9 +385,13 @@ private struct TripSummaryCard: View {
 
 private struct TripLineRow: View {
     let line: TripLineSpend
+    /// Nil for the unfiled rollup row, which is nothing anyone can tick or edit.
+    var onToggle: (() -> Void)?
+    var onOpen: (() -> Void)?
 
     private var detail: String {
         var parts: [String] = []
+        if line.isSettled { parts.append("Paid") }
         if let occursOn = line.occursOn,
            let label = TripMath.dateRangeLabel(startsOn: occursOn, endsOn: occursOn) {
             parts.append(label)
@@ -363,19 +405,24 @@ private struct TripLineRow: View {
         return parts.joined(separator: " · ")
     }
 
+    private var tint: Color { line.isOver ? .red : .accentColor }
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: line.displaySymbol)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(line.isOver ? Color.red : Color.accentColor)
+                .foregroundStyle(tint)
                 .frame(width: 30, height: 30)
-                .background((line.isOver ? Color.red : Color.accentColor).opacity(0.13),
+                .background(tint.opacity(0.13),
                             in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(line.displayName)
                     .font(.body)
-                    .foregroundStyle(.primary)
+                    // Struck through, not hidden: a paid line is still part of
+                    // the plan and its amount still has to be readable.
+                    .strikethrough(line.isSettled, color: .secondary)
+                    .foregroundStyle(line.isSettled ? .secondary : .primary)
                 if !detail.isEmpty {
                     Text(detail)
                         .font(.caption)
@@ -388,8 +435,27 @@ private struct TripLineRow: View {
             Text(BudgetMath.dollars(line.spentCents))
                 .font(.body.weight(.medium).monospacedDigit())
                 .foregroundStyle(line.isOver ? Color.red : .primary)
+
+            if let onToggle {
+                // Its own button, not the row's tap: the row opens the editor,
+                // and a checkbox that also opened a sheet would be a trap. A
+                // .plain style stops the List handing the whole row to it.
+                Button(action: onToggle) {
+                    Image(systemName: line.isSettled ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 22))
+                        .foregroundStyle(line.isSettled ? Color.accentColor : Color.secondary.opacity(0.5))
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("trip.lineCheck")
+                .accessibilityLabel(line.isSettled
+                                    ? "\(line.displayName), paid. Tap to mark unpaid."
+                                    : "\(line.displayName), not paid. Tap to mark paid.")
+            }
         }
         .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .onTapGesture { onOpen?() }
     }
 }
 
