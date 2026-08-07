@@ -65,6 +65,12 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: CG89RY4W6R
         ENABLE_PREVIEWS: YES
+        # Without this the AccentColor.colorset in Assets.xcassets is dead
+        # weight: Color.accentColor and every .tint fall back to the system
+        # blue, so the app shipped 24 builds looking like a stock template
+        # while its icon was green. The asset has held the brand green since
+        # 0001 — this is what connects it.
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
     dependencies:
       - package: Supabase
         product: Supabase
