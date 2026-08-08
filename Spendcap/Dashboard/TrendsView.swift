@@ -5,15 +5,20 @@ import Charts
 //   account chip + period chip → segmented modes → chart card → prompt → Breakdown
 //
 // Label mapping (first pass — adjust freely):
-//   Monzo "Balance/Spending/Target" -> Spending / Daily / Target
-//   Monzo "Today's Balance"         -> month-to-date spend
-//   Monzo balance line              -> cumulative spend, with the cap pace line
-//   Monzo "Breakdown"               -> month cap, spent, left, average, days over
+//   Monzo "Balance/Spending" -> Spending / Daily
+//   Monzo "Today's Balance"  -> month-to-date spend
+//   Monzo balance line       -> cumulative spend
+//   Monzo "Breakdown"        -> month cap, spent, left, average, days over
+//
+// A third "Target" mode (cumulative spend against a straight cap-pace line) was
+// removed 2026-08-08. It drew the daily cap × day index, which stopped being the
+// yardstick this screen is judged by once the monthly cap arrived in 0006 — the
+// pace line and the Breakdown's "Cap for <month>" could disagree on the same
+// card. Spending already shows the same cumulative curve.
 
 enum TrendsMode: String, CaseIterable, Identifiable {
     case spending = "Spending"
     case daily = "Daily"
-    case target = "Target"
 
     var id: String { rawValue }
 
@@ -21,7 +26,6 @@ enum TrendsMode: String, CaseIterable, Identifiable {
         switch self {
         case .spending: return "chart.line.uptrend.xyaxis"
         case .daily: return "chart.bar.fill"
-        case .target: return "target"
         }
     }
 }
@@ -228,43 +232,7 @@ struct TrendsView: View {
                 .cornerRadius(3)
             }
             .chartYAxis { AxisMarks(position: .trailing) }
-
-        case .target:
-            Chart {
-                ForEach(model.stats.series) { day in
-                    LineMark(
-                        x: .value("Day", day.date),
-                        y: .value("Spent", Double(day.cumulativeCents) / 100.0),
-                        series: .value("Series", "Actual")
-                    )
-                    .foregroundStyle(Color.accentColor)
-                    .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                }
-                // Straight-line pace: what spending exactly at the cap looks like.
-                ForEach(model.stats.series) { day in
-                    LineMark(
-                        x: .value("Day", day.date),
-                        y: .value("Spent", paceCents(through: day) / 100.0),
-                        series: .value("Series", "Cap pace")
-                    )
-                    .foregroundStyle(Color.secondary)
-                    .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
-                }
-            }
-            .chartYAxis { AxisMarks(position: .trailing) }
-            .chartForegroundStyleScale([
-                "Actual": Color.accentColor,
-                "Cap pace": Color.secondary,
-            ])
         }
-    }
-
-    /// Cumulative cap allowance through the given day (day index × daily cap).
-    private func paceCents(through day: DailySpend) -> Double {
-        guard let first = model.stats.series.first else { return 0 }
-        let calendar = Calendar(identifier: .gregorian)
-        let index = calendar.dateComponents([.day], from: first.date, to: day.date).day ?? 0
-        return Double((index + 1) * model.stats.dailyLimitCents)
     }
 
     // MARK: - Breakdown

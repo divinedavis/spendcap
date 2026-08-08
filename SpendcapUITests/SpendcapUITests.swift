@@ -159,11 +159,11 @@ final class SpendcapUITests: XCTestCase {
         let app = launch()
         signIn(app, email: email, password: password)
 
-        // Trends is the landing tab: month total plus all three chart modes.
+        // Trends is the landing tab: month total plus both chart modes.
         XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20),
                       "Trends should show month-to-date spend")
 
-        for label in ["Daily", "Target", "Spending"] {
+        for label in ["Daily", "Spending"] {
             let segment = app.buttons[label]
             XCTAssertTrue(segment.waitForExistence(timeout: 5), "\(label) segment should exist")
             // Always a coordinate tap. Trends is the landing tab now, so its

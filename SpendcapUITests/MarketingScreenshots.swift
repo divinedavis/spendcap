@@ -53,7 +53,7 @@ final class MarketingScreenshots: XCTestCase {
         if true {
             if app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20) {
                 save(app, "03-trends-spending")
-                // Capture the other two chart modes from the segmented control.
+                // Capture the other chart mode from the segmented control.
                 //
                 // Existence is not enough here: the segments exist while the
                 // chart is still laying out, and tapping one then fails as
@@ -61,7 +61,7 @@ final class MarketingScreenshots: XCTestCase {
                 // it reached the later tabs. Wait for hittability, and treat a
                 // segment that never settles as a missing screenshot rather
                 // than a failed run. This is a capture, not an assertion suite.
-                for (index, label) in ["Daily", "Target"].enumerated() {
+                for (index, label) in ["Daily"].enumerated() {
                     let segment = app.buttons[label]
                     guard segment.waitForExistence(timeout: 5) else { continue }
                     let deadline = Date().addingTimeInterval(10)
