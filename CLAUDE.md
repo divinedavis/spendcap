@@ -306,6 +306,7 @@ python3 scripts/attach_build.py --dry-run  # just report what is attached now
 | `capture_screenshots.sh` | Signed-in App Store / portfolio PNGs from XCUITest |
 | `ship.sh` | tests → smoke → bump build → archive → TestFlight → verify testers |
 | `register_in_asc.py` / `configure_internal_testers.py` | ASC bootstrap + tester group |
+| `asc_enable_capability.py <CAP>` | Toggle an App ID capability (`--list` to inspect) |
 | `attach_build.py` | Attach the newest build to the App Store version (drives the ASC icon) |
 | `apply_migration.py [--verify]` | Apply a migration via the management API, then reload PostgREST |
 | `set_plaid_keys.sh` | Push keychain Plaid creds to Supabase function secrets |
@@ -358,6 +359,72 @@ Two things keep that true and both are load-bearing:
 `AuthPhase` makes the third state explicit: `restoring` is not `signedOut`, and
 it draws `LaunchPlaceholderView`, which is deliberately identical to the launch
 screen so there is nothing to flash.
+
+## Sign-in: email, Apple, Google (2026-08-08)
+
+Three ways in. Apple and Google both go through **`signInWithIdToken`** — the
+native sheet hands over an ID token and the app exchanges it directly. No web
+redirect, so neither needs a Services ID, a client secret, or anything in
+`uri_allow_list`. Email/password stays: the real account uses it and the
+XCUITest harness signs in with it.
+
+| Piece | Where |
+|---|---|
+| Rules + nonce (pure, unit-tested) | `Spendcap/Auth/SocialIdentity.swift` |
+| Apple sheet | `Spendcap/Auth/AppleSignInService.swift` |
+| Google sheet | `Spendcap/Auth/GoogleSignInService.swift` |
+| Sign-in / link / unlink | `AuthViewModel` |
+| Link UI | Settings → Account |
+| App ID capability | `scripts/asc_enable_capability.py APPLE_ID_AUTH` |
+
+**Linking is not a nicety, it is what stops a second account existing.**
+Supabase auto-links a provider onto an existing user only when the email
+matches *and* the provider verified it. Apple's **Hide My Email** issues a
+`@privaterelay.appleid.com` address that will never match, so signing in with
+Apple on an account created by email mints a **new, empty user** — while the
+real one keeps the transactions and the Plaid Item that permanently consumed
+one of ten Trial slots. Settings therefore links providers onto the *current*
+user with `linkIdentityWithIdToken`, and that is the route to use on any
+account that already holds data.
+
+**Unlinking the last identity is refused** (`IdentityRules.canUnlink`, and the
+UI doesn't offer it). Supabase will happily do it, and the result is an account
+holding real bank history that nobody can ever sign into again.
+
+**The nonce goes in two forms and swapping them is silent.** Apple signs
+`SHA-256(nonce)` into the token's `nonce` claim; Supabase re-hashes the raw
+value we send and compares. So the *request* gets the hash and the *exchange*
+gets the raw string. Getting it backwards fails with a bare "invalid token"
+that mentions nothing about nonces. `AuthNonce` is pinned to known SHA-256
+vectors so the encoding can't drift.
+
+**Google's ID token carries an `at_hash`**, so the access token must be sent
+alongside it or the exchange is rejected — again with an error that doesn't
+say why.
+
+Three server-side settings, all applied, none discoverable from the app:
+
+- `APPLE_ID_AUTH` on App ID `G267D9N944`. It **409s unless the POST carries
+  `APPLE_ID_AUTH_APP_CONSENT: PRIMARY_APP_CONSENT`** — the only capability here
+  that needs a `settings` block.
+- `external_apple_enabled` + `external_apple_client_id` = the **bundle id**
+  (native flows use the bundle id as the audience, not a Services ID).
+- **`security_manual_linking_enabled`** — off by default, and `linkIdentity`
+  fails without it.
+
+**Google is code-complete but inert until an iOS OAuth client exists.**
+`GOOGLE_CLIENT_ID` comes from `Secrets.xcconfig`; when unset, the button hides
+rather than offering a tap that can only fail. `GOOGLE_REVERSED_CLIENT_ID`
+must never be empty — it becomes a `CFBundleURLSchemes` entry and an empty
+scheme **fails App Store validation at upload**, so it defaults to the bundle
+id. To finish: Google Cloud console → APIs & Services → Credentials → Create
+credentials → OAuth client ID → **iOS**, bundle `com.divinedavis.spendcap`;
+paste the client id and the console's "iOS URL scheme" into `Secrets.xcconfig`,
+then set `external_google_enabled` + `external_google_client_id` on Supabase.
+
+The sheets leave the app's process, so **XCUITest cannot drive either flow**.
+What is tested instead: the auth screen still exposes a hittable email submit
+under the new buttons, and Settings' identity list actually loads.
 
 ## Plaid OAuth (real banks)
 
