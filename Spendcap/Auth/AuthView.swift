@@ -1,7 +1,9 @@
+import AuthenticationServices
 import SwiftUI
 
 struct AuthView: View {
     @EnvironmentObject var auth: AuthViewModel
+    @Environment(\.colorScheme) private var colorScheme
     @State private var email = ""
     @State private var password = ""
     @State private var isSigningUp = false
@@ -20,6 +22,46 @@ struct AuthView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
+
+                // Third-party sign-in sits above the form: it is the faster
+                // path and the one most people will take, and burying it
+                // under a keyboard-first form makes it look like a fallback.
+                VStack(spacing: 12) {
+                    SignInWithAppleButton(.signIn) { request in
+                        auth.prepareAppleRequest(request)
+                    } onCompletion: { result in
+                        Task { await auth.completeAppleSignIn(result) }
+                    }
+                    .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+                    .frame(height: 48)
+                    .accessibilityIdentifier("auth.apple")
+
+                    // Hidden rather than disabled when the build has no Google
+                    // client id — a button that can only ever fail is worse
+                    // than no button.
+                    if GoogleSignInService.isConfigured {
+                        Button {
+                            Task { await auth.signInWithGoogle() }
+                        } label: {
+                            Label("Continue with Google", systemImage: "g.circle.fill")
+                                .font(.body.weight(.medium))
+                                .frame(maxWidth: .infinity, minHeight: 48)
+                        }
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("auth.google")
+                    }
+                }
+                .padding(.horizontal)
+                .disabled(auth.isLoading)
+
+                HStack {
+                    VStack { Divider() }
+                    Text("or")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    VStack { Divider() }
+                }
+                .padding(.horizontal)
 
                 VStack(spacing: 12) {
                     TextField("Email", text: $email)

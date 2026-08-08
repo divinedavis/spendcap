@@ -25,6 +25,9 @@ packages:
   LinkKit:
     url: https://github.com/plaid/plaid-link-ios
     from: "6.0.0"
+  GoogleSignIn:
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: "8.0.0"
 
 targets:
   Spendcap:
@@ -56,6 +59,18 @@ targets:
           - remote-notification
         SUPABASE_HOST: $(SUPABASE_HOST)
         SUPABASE_ANON_KEY: $(SUPABASE_ANON_KEY)
+        # iOS OAuth client id, read by GoogleSignInService. Empty in a build
+        # whose Secrets.xcconfig doesn't set it — the Google button then hides
+        # itself rather than offering a tap that can only fail.
+        GOOGLE_CLIENT_ID: $(GOOGLE_CLIENT_ID)
+        # Google hands the OAuth result back through a custom scheme, which is
+        # the client id with its dot-components reversed. Registering it is
+        # what lets the account sheet return to the app at all.
+        CFBundleURLTypes:
+          - CFBundleTypeRole: Editor
+            CFBundleURLName: com.divinedavis.spendcap.google
+            CFBundleURLSchemes:
+              - $(GOOGLE_REVERSED_CLIENT_ID)
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.divinedavis.spendcap
@@ -76,10 +91,18 @@ targets:
         product: Supabase
       - package: LinkKit
         product: LinkKit
+      - package: GoogleSignIn
+        product: GoogleSignIn
     entitlements:
       path: Spendcap/Spendcap.entitlements
       properties:
         aps-environment: production
+        # Sign in with Apple. The matching APPLE_ID_AUTH capability is on the
+        # App ID (scripts/asc_enable_capability.py APPLE_ID_AUTH); if the two
+        # ever disagree, automatic signing fails with a provisioning error
+        # that names neither of them.
+        com.apple.developer.applesignin:
+          - Default
         # Required for Plaid OAuth banks (Chase, BofA, Wells Fargo, Capital
         # One, US Bank, Schwab, PNC): the bank redirects back to
         # https://divinedavis.com/spendcap/oauth/, which must open the app as a

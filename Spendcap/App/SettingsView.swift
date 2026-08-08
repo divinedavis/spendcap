@@ -10,8 +10,52 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Account") {
+                Section {
                     LabeledContent("Email", value: auth.userEmail)
+
+                    ForEach(auth.identities, id: \.provider) { identity in
+                        HStack {
+                            Text(identity.socialProvider?.displayName
+                                 ?? identity.provider.capitalized)
+                            Spacer()
+                            if let email = identity.email, email != auth.userEmail {
+                                Text(email)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        }
+                        .accessibilityIdentifier("settings.identity.\(identity.provider)")
+                        .swipeActions {
+                            if let provider = identity.socialProvider,
+                               IdentityRules.canUnlink(provider, from: auth.identities) {
+                                Button("Unlink", role: .destructive) {
+                                    Task { await auth.unlink(provider) }
+                                }
+                            }
+                        }
+                    }
+
+                    ForEach(IdentityRules.linkable(from: auth.identities)) { provider in
+                        if provider != .google || GoogleSignInService.isConfigured {
+                            Button {
+                                Task { await auth.link(provider) }
+                            } label: {
+                                Label("Link \(provider.displayName)",
+                                      systemImage: "link")
+                            }
+                            .accessibilityIdentifier("settings.link.\(provider.key)")
+                        }
+                    }
+                } header: {
+                    Text("Account")
+                } footer: {
+                    // The reason this screen exists rather than leaving people
+                    // to sign in with whichever provider they like.
+                    Text("Linking adds another way to sign in to this same account. Signing in with a provider you haven't linked — especially Apple with Hide My Email — creates a separate, empty account.")
                 }
 
                 Section {
@@ -112,6 +156,7 @@ struct SettingsView: View {
 
     private func load() async {
         items = (try? await SpendService.shared.plaidItems()) ?? []
+        await auth.loadIdentities()
     }
 
     private func disconnect(_ indexSet: IndexSet) async {

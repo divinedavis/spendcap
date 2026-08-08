@@ -1,3 +1,4 @@
+import AuthenticationServices
 import Foundation
 import Supabase
 
@@ -29,6 +30,9 @@ final class AuthViewModel: ObservableObject {
     @Published var noticeMessage: String?
     /// False until the auth stream has told us whether a stored session exists.
     @Published private(set) var didResolveInitialSession = false
+    /// Every way into this account — email, Apple, Google. Loaded on demand by
+    /// Settings; empty until then, so never read it as "nothing is linked".
+    @Published private(set) var identities: [LinkedIdentity] = []
 
     private let client = SupabaseManager.shared.client
 
@@ -103,10 +107,138 @@ final class AuthViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Third-party sign-in
+
+    /// Nonce for an in-flight `SignInWithAppleButton` request. Held between
+    /// `onRequest` and `onCompletion`, which are two separate callbacks.
+    private var pendingAppleNonce: String?
+
+    /// `SignInWithAppleButton`'s `onRequest`. The sign-in screen uses Apple's
+    /// own button rather than `signInWithApple()` below, because App Review
+    /// expects that button's exact appearance and behaviour.
+    func prepareAppleRequest(_ request: ASAuthorizationAppleIDRequest) {
+        let nonce = AuthNonce.random()
+        pendingAppleNonce = nonce
+        AppleSignInService.configure(request, rawNonce: nonce)
+    }
+
+    /// `SignInWithAppleButton`'s `onCompletion`.
+    func completeAppleSignIn(_ result: Result<ASAuthorization, Error>) async {
+        let nonce = pendingAppleNonce
+        pendingAppleNonce = nil
+        await runIgnoringCancellation {
+            guard let nonce else { throw AppleSignInService.Failure.missingIdentityToken }
+            let authorization: ASAuthorization
+            do {
+                authorization = try result.get()
+            } catch {
+                // Turns a user backing out into .cancelled, which
+                // runIgnoringCancellation then swallows.
+                throw AppleSignInService.normalize(error)
+            }
+            let credential = try AppleSignInService.credential(
+                from: authorization, rawNonce: nonce
+            )
+            try await self.client.auth.signInWithIdToken(
+                credentials: .init(
+                    provider: .apple,
+                    idToken: credential.idToken,
+                    nonce: credential.nonce
+                )
+            )
+        }
+    }
+
+    /// Sign in (or sign up — Supabase creates the user on first sight of a
+    /// provider identity) with Apple, presenting the sheet ourselves.
+    func signInWithApple() async {
+        await runIgnoringCancellation {
+            let credential = try await AppleSignInService.authorize()
+            try await self.client.auth.signInWithIdToken(
+                credentials: .init(
+                    provider: .apple,
+                    idToken: credential.idToken,
+                    nonce: credential.nonce
+                )
+            )
+        }
+    }
+
+    func signInWithGoogle() async {
+        await runIgnoringCancellation {
+            let credential = try await GoogleSignInService.authorize()
+            try await self.client.auth.signInWithIdToken(
+                credentials: .init(
+                    provider: .google,
+                    idToken: credential.idToken,
+                    accessToken: credential.accessToken
+                )
+            )
+        }
+    }
+
+    // MARK: - Linking providers to the account you are already in
+
+    /// Reads `auth.identities` for the signed-in user.
+    func loadIdentities() async {
+        guard isSignedIn else { return }
+        let rows = (try? await client.auth.userIdentities()) ?? []
+        identities = rows.map {
+            LinkedIdentity(provider: $0.provider, email: $0.identityData?["email"]?.stringValue)
+        }
+    }
+
+    /// Attaches another provider to the *current* user rather than creating a
+    /// second one. This is the only safe route for an account that already
+    /// holds data: Apple's Hide My Email issues a relay address that will
+    /// never match the account's email, so signing in with Apple cold would
+    /// mint a fresh empty user instead.
+    func link(_ provider: SocialProvider) async {
+        await runIgnoringCancellation {
+            switch provider {
+            case .apple:
+                let credential = try await AppleSignInService.authorize()
+                try await self.client.auth.linkIdentityWithIdToken(
+                    credentials: .init(
+                        provider: .apple,
+                        idToken: credential.idToken,
+                        nonce: credential.nonce
+                    )
+                )
+            case .google:
+                let credential = try await GoogleSignInService.authorize()
+                try await self.client.auth.linkIdentityWithIdToken(
+                    credentials: .init(
+                        provider: .google,
+                        idToken: credential.idToken,
+                        accessToken: credential.accessToken
+                    )
+                )
+            }
+            await self.loadIdentities()
+        }
+    }
+
+    /// Detaches a provider. Refuses to remove the last one — that would leave
+    /// an account with real bank history that nobody can ever sign into.
+    func unlink(_ provider: SocialProvider) async {
+        guard IdentityRules.canUnlink(provider, from: identities) else {
+            errorMessage = "That's the only way into this account, so it can't be removed."
+            return
+        }
+        await run {
+            let rows = try await self.client.auth.userIdentities()
+            guard let match = rows.first(where: { $0.provider == provider.key }) else { return }
+            try await self.client.auth.unlinkIdentity(match)
+            await self.loadIdentities()
+        }
+    }
+
     func signOut() async {
         await PushNotificationManager.shared.unregisterCurrentToken()
         try? await client.auth.signOut()
         session = nil
+        identities = []
     }
 
     /// App Store 5.1.1(v): full server-side deletion via the delete_account RPC
@@ -117,6 +249,19 @@ final class AuthViewModel: ObservableObject {
             try await self.client.rpc("delete_account").execute()
             try? await self.client.auth.signOut()
             self.session = nil
+        }
+    }
+
+    /// `run`, but a user backing out of a system sheet is not an error.
+    ///
+    /// Both providers report a cancel as a thrown error. Surfacing it paints
+    /// the sign-in screen red for someone who simply changed their mind, and
+    /// the message then sticks around behind the next attempt.
+    private func runIgnoringCancellation(_ block: @escaping () async throws -> Void) async {
+        await run(block)
+        if errorMessage == AppleSignInService.Failure.cancelled.errorDescription
+            || errorMessage == GoogleSignInService.Failure.cancelled.errorDescription {
+            errorMessage = nil
         }
     }
 

@@ -26,6 +26,15 @@ final class SpendcapUITests: XCTestCase {
                       "auth email field should appear on a signed-out launch")
         XCTAssertTrue(app.secureTextFields["auth.password"].exists)
         XCTAssertTrue(app.buttons["auth.submit"].exists)
+
+        // Sign in with Apple sits above the form. Asserting it here is what
+        // catches the regression the third-party buttons could cause: they
+        // push the email form down, and if the submit button ever lands off
+        // screen every signed-in test fails somewhere far less obvious.
+        XCTAssertTrue(app.buttons["auth.apple"].exists,
+                      "Sign in with Apple should be offered on the auth screen")
+        XCTAssertTrue(app.buttons["auth.submit"].isHittable,
+                      "the email form must stay reachable under the provider buttons")
     }
 
     /// Full round trip: sign in with the keychain test account, open the cap
@@ -458,6 +467,49 @@ final class SpendcapUITests: XCTestCase {
             Thread.sleep(forTimeInterval: 0.25)
         }
         XCTAssertTrue(resolved, "Statements should settle into either the consent prompt or the list")
+    }
+
+    /// Settings lists the ways into this account and offers to add another.
+    ///
+    /// The linking flows themselves can't be driven from XCUITest — both end
+    /// in a system sheet outside the app's process — so what is verified is
+    /// the part that can silently break: the identity list actually loads
+    /// (it is a separate network read from the rest of Settings, and an empty
+    /// result renders as a blank section rather than an error), and a
+    /// provider that is *not* linked is offered. The test account signs in
+    /// with a password, so it must show an email identity and an Apple link
+    /// row. Skipped when creds are absent.
+    func testSettingsShowsLinkedAccountsAndOffersApple() throws {
+        guard let email = ProcessInfo.processInfo.environment["SPENDCAP_TEST_EMAIL"],
+              let password = ProcessInfo.processInfo.environment["SPENDCAP_TEST_PASSWORD"],
+              !email.isEmpty, !password.isEmpty else {
+            throw XCTSkip("SPENDCAP_TEST_EMAIL/PASSWORD not set")
+        }
+
+        let app = launch()
+        signIn(app, email: email, password: password)
+
+        XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20),
+                      "Trends should appear after sign-in")
+
+        app.tapTab("Settings", in: self)
+
+        let linkApple = app.buttons["settings.link.apple"]
+        if !linkApple.waitForExistence(timeout: 8) {
+            app.tapTab("Settings", in: self)   // same dismissal race the sign-out test guards
+            XCTAssertTrue(linkApple.waitForExistence(timeout: 10),
+                          "Settings should offer to link Apple when it isn't linked")
+        }
+
+        // The identity row is a plain HStack, which Form may merge into a
+        // single element of an unpredictable type — query any kind.
+        let emailIdentity = app.descendants(matching: .any)
+            .matching(identifier: "settings.identity.email").firstMatch
+        XCTAssertTrue(emailIdentity.waitForExistence(timeout: 10),
+                      "the password account should list an email identity")
+
+        // Already linked, so it must not also be offered as a link.
+        XCTAssertFalse(app.buttons["settings.link.email"].exists)
     }
 
     /// The Trips tab exists, opens, and can build a trip end to end: name it,
