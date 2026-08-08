@@ -100,6 +100,64 @@ final class SocialIdentityTests: XCTestCase {
         )
     }
 
+    // MARK: - ID token claims
+    //
+    // Sign in with Apple failed on build 28 with GoTrue's
+    // "Passed nonce and nonce in id_token should either both exist or not."
+    // We had asked Apple for a nonce and sent the raw value, but the returned
+    // token carried no nonce claim. What we send now depends on reading that
+    // claim correctly, so the decoding is pinned here.
+
+    /// Builds an unsigned JWT with the given payload, base64url, unpadded —
+    /// the encoding Apple actually uses.
+    private func makeToken(_ payload: [String: Any]) -> String {
+        let data = try! JSONSerialization.data(withJSONObject: payload)
+        let body = data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return "header.\(body).signature"
+    }
+
+    func testReadsNonceClaimWhenPresent() {
+        let token = makeToken(["nonce": "abc123", "sub": "u1"])
+        XCTAssertEqual(IDToken.stringClaim("nonce", from: token), "abc123")
+        XCTAssertEqual(IDToken.stringClaim("sub", from: token), "u1")
+    }
+
+    /// The case that broke sign-in: nonce absent, so none may be sent.
+    func testMissingNonceClaimReadsAsNil() {
+        let token = makeToken(["sub": "u1", "email": "a@b.com"])
+        XCTAssertNil(IDToken.stringClaim("nonce", from: token))
+    }
+
+    /// An empty claim is as good as absent — sending a nonce against it would
+    /// hit the same GoTrue rejection.
+    func testEmptyClaimReadsAsNil() {
+        XCTAssertNil(IDToken.stringClaim("nonce", from: makeToken(["nonce": ""])))
+    }
+
+    func testNonStringClaimReadsAsNil() {
+        XCTAssertNil(IDToken.stringClaim("nonce", from: makeToken(["nonce": 42])))
+    }
+
+    /// base64url drops padding, and payload lengths vary — every remainder
+    /// mod 4 has to decode or the claim reads as absent at random.
+    func testDecodesPayloadsOfEveryPaddingLength() {
+        for extra in 0..<4 {
+            let token = makeToken(["nonce": "n", "pad": String(repeating: "x", count: extra)])
+            XCTAssertEqual(IDToken.stringClaim("nonce", from: token), "n",
+                           "padding remainder \(extra) failed to decode")
+        }
+    }
+
+    func testMalformedTokensDoNotCrash() {
+        XCTAssertNil(IDToken.stringClaim("nonce", from: ""))
+        XCTAssertNil(IDToken.stringClaim("nonce", from: "onlyonepart"))
+        XCTAssertNil(IDToken.stringClaim("nonce", from: "a.!!!notbase64!!!.c"))
+        XCTAssertNil(IDToken.stringClaim("nonce", from: "a.\("notjson".data(using: .utf8)!.base64EncodedString()).c"))
+    }
+
     func testSha256IsHexAndFixedWidth() {
         let digest = AuthNonce.sha256(AuthNonce.random())
         XCTAssertEqual(digest.count, 64)

@@ -2,6 +2,28 @@ import XCTest
 
 extension XCTestCase {
 
+    /// Scrolls Settings until a row exists, and returns it.
+    ///
+    /// A SwiftUI `Form` is a lazy `List`: rows below the fold are not merely
+    /// off screen, they are absent from the accessibility hierarchy, so
+    /// `waitForExistence` on one of them waits out its whole timeout and then
+    /// fails. Sign Out and Delete Account live at the very bottom, and the
+    /// Account section added with Apple/Google sign-in pushed them past the
+    /// fold on a 6.1" simulator — which broke two passing tests without
+    /// anything being wrong with the app.
+    @discardableResult
+    func scrollToSettingsRow(_ app: XCUIApplication, _ identifier: String,
+                             file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
+        let row = app.buttons[identifier]
+        for _ in 0..<8 where !row.exists {
+            app.swipeUp()
+        }
+        XCTAssertTrue(row.waitForExistence(timeout: 5),
+                      "\(identifier) never appeared in Settings, even after scrolling",
+                      file: file, line: line)
+        return row
+    }
+
     /// Dismisses the "Save Password?" sheet iOS raises after a credential submit.
     ///
     /// It renders above the app, so any tap aimed at the app — a tab, a button —

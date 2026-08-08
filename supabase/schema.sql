@@ -286,7 +286,8 @@ create policy statements_objects_delete_self on storage.objects
 -- ── account deletion must take the PDFs with it ─────────────────────────────
 -- public.statements cascades from auth.users, but storage.objects does not —
 -- deleting the account would otherwise orphan the PDFs in the bucket forever,
--- which is exactly the data we least want to keep. Clean them up first.
+-- which is exactly the data we least want to keep. That cleanup happens in the
+-- CLIENT, immediately before this runs; it cannot happen here (0014).
 create or replace function public.delete_account()
 returns void
 language plpgsql
@@ -298,9 +299,10 @@ begin
   if uid is null then
     raise exception 'not authenticated';
   end if;
-  delete from storage.objects
-   where bucket_id = 'statements'
-     and (storage.foldername(name))[1] = uid::text;
+  -- No storage.objects delete here: Supabase's protect_delete trigger raises
+  -- 42501 on any direct delete, which aborted this whole function and rolled
+  -- the account deletion back (0014). The PDFs are removed client-side via the
+  -- Storage API *before* this is called — SpendService.deleteStoredStatements.
   delete from auth.users where id = uid;
 end;
 $$;

@@ -53,6 +53,23 @@ fi
 
 # Xcode only forwards host env vars prefixed with TEST_RUNNER_ into the
 # XCUITest *runner* process (the prefix is stripped).
+# Opt-in only. The account-deletion test signs up a throwaway user and deletes
+# it for real, so it is off unless asked for — a destructive test that runs by
+# default is one bad selector away from deleting the wrong thing, and this
+# suite signs into an account holding real budget data.
+#   SPENDCAP_TEST_DESTRUCTIVE=1 ./scripts/run_tests.sh ui SpendcapUITests/testDeleteAccountRemovesTheAccount
+if [[ -n "${SPENDCAP_TEST_DESTRUCTIVE:-}" ]]; then
+    export TEST_RUNNER_SPENDCAP_TEST_DESTRUCTIVE="$SPENDCAP_TEST_DESTRUCTIVE"
+    # That test makes its own throwaway account through the public signup
+    # endpoint rather than through the sign-up form. Not laziness: in sign-up
+    # mode the password field is .newPassword, so iOS offers a strong password
+    # and swallows typeText, and the test would be exercising AutoFill instead
+    # of the thing it exists to check. Host + anon key only — the anon key is a
+    # public client credential already shipped in the app bundle.
+    export TEST_RUNNER_SPENDCAP_SUPABASE_HOST="$(grep '^SUPABASE_HOST' Secrets.xcconfig | cut -d= -f2 | tr -d ' ')"
+    export TEST_RUNNER_SPENDCAP_SUPABASE_ANON="$(security find-generic-password -s spendcap-supabase-anon -w 2>/dev/null || true)"
+fi
+
 if [[ -n "${SPENDCAP_TEST_EMAIL:-}" ]]; then
     export TEST_RUNNER_SPENDCAP_TEST_EMAIL="$SPENDCAP_TEST_EMAIL"
     export TEST_RUNNER_SPENDCAP_TEST_PASSWORD="$SPENDCAP_TEST_PASSWORD"

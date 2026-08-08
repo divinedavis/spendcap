@@ -67,6 +67,30 @@ enum IdentityRules {
     }
 }
 
+/// Reads claims out of an ID token *without* verifying it.
+///
+/// Verification is the server's job and we must not pretend otherwise — this
+/// exists only to answer "what did the provider actually put in here?", which
+/// decides what we are allowed to send alongside the token.
+enum IDToken {
+    static func stringClaim(_ name: String, from token: String) -> String? {
+        let parts = token.split(separator: ".")
+        guard parts.count >= 2 else { return nil }
+        var encoded = String(parts[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        // base64url drops the padding that Data(base64Encoded:) requires.
+        while encoded.count % 4 != 0 { encoded += "=" }
+        guard
+            let data = Data(base64Encoded: encoded),
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let value = json[name] as? String,
+            !value.isEmpty
+        else { return nil }
+        return value
+    }
+}
+
 /// Nonce plumbing for Sign in with Apple.
 ///
 /// Apple signs the SHA-256 of the nonce into the ID token's `nonce` claim, and

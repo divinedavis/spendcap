@@ -360,6 +360,54 @@ Two things keep that true and both are load-bearing:
 it draws `LaunchPlaceholderView`, which is deliberately identical to the launch
 screen so there is nothing to flash.
 
+## Account deletion — was broken from 0003 until 0014 (2026-08-08)
+
+**"Delete Account" deleted nothing for every build in between.** 0003 put a
+Storage cleanup inside the RPC:
+
+```sql
+delete from storage.objects where bucket_id = 'statements' and ...;
+delete from auth.users where id = uid;
+```
+
+Supabase guards `storage.objects` with a BEFORE DELETE trigger
+(`protect_objects_delete` → `storage.protect_delete`) that raises **42501** on
+any direct delete. The function aborted, the transaction rolled back, and the
+user survived. The button showed an error and changed nothing — an App Store
+**5.1.1(v)** feature that silently did not work. It surfaced only when a
+reported account deletion turned out to have left all 594 transactions, the
+Plaid item and the PDFs intact.
+
+The reasoning in 0003 was right and only the mechanism was wrong: storage
+genuinely does not cascade from `auth.users`. So the cleanup moved to the
+client, where the Storage API is the only supported route:
+
+1. `SpendService.deleteStoredStatements()` — lists `<uid>/` in the `statements`
+   bucket and removes it, under the `statements_objects_delete_self` policy
+   that has existed since 0003.
+2. `delete_account()` — now a single `delete from auth.users`, which cascades
+   every public table.
+
+**That order is load-bearing.** Deleting the user first revokes the JWT that
+authorises the storage delete and strands the PDFs — full account numbers —
+in the bucket forever, which is exactly what 0003 set out to prevent.
+
+Verified two ways before shipping: a scratch user created and deleted through
+the REST API (204, user gone, rows cascaded), and
+`testDeleteAccountRemovesTheAccount` driving the real button. That test is
+**opt-in** (`SPENDCAP_TEST_DESTRUCTIVE=1`) because it deletes for real, and it
+makes its own throwaway account rather than using the shared test account. It
+signs that account up through the **API, not the form** — in sign-up mode the
+password field is `.newPassword`, so iOS offers a strong password and swallows
+`typeText`, and the form path would be testing AutoFill.
+
+Note it left two strays behind while it was being written: the account is
+created before the UI half runs, so a failure mid-test leaks one. Sweep for
+`spendcap-deletetest-` addresses if a run fails.
+
+**WorkComp+ has the identical bug** in `supabase/migrations/0004_delete_account.sql`
+and is not fixed.
+
 ## Sign-in: email, Apple, Google (2026-08-08)
 
 Three ways in. Apple and Google both go through **`signInWithIdToken`** — the
@@ -397,6 +445,20 @@ value we send and compares. So the *request* gets the hash and the *exchange*
 gets the raw string. Getting it backwards fails with a bare "invalid token"
 that mentions nothing about nonces. `AuthNonce` is pinned to known SHA-256
 vectors so the encoding can't drift.
+
+**But the token does not always carry the claim.** Build 28 failed on device
+with GoTrue's:
+
+> Passed nonce and nonce in id_token should either both exist or not.
+
+We asked Apple for a nonce and sent the raw value, and the returned token had
+no `nonce` claim at all. GoTrue rejects that pairing outright. So
+`AuthViewModel.appleCredentials` reads the claim out of the token
+(`IDToken.stringClaim`) and sends the nonce **only when the claim is there** —
+when it is, the nonce is still sent and still verified, which is the case that
+carries the replay protection. Do not "simplify" this back to always sending
+it; that is the bug. The decoding is unit-tested against base64url payloads of
+every padding length, since a claim that fails to decode reads as absent.
 
 **Google's ID token carries an `at_hash`**, so the access token must be sent
 alongside it or the exchange is rejected — again with an error that doesn't

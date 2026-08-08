@@ -75,11 +75,7 @@ final class SpendcapUITests: XCTestCase {
 
         app.tapTab("Settings", in: self)
 
-        let signOut = app.buttons["settings.signOut"]
-        if !signOut.waitForExistence(timeout: 5) {
-            app.tapTab("Settings", in: self)   // retry once — dismissal races are flaky in CI sims
-            XCTAssertTrue(signOut.waitForExistence(timeout: 10))
-        }
+        let signOut = scrollToSettingsRow(app, "settings.signOut")
         signOut.tap()
         XCTAssertTrue(app.textFields["auth.email"].waitForExistence(timeout: 15),
                       "should return to auth screen after sign-out")
@@ -146,12 +142,7 @@ final class SpendcapUITests: XCTestCase {
         // Leave the simulator signed out — every other test forces it anyway,
         // but a stray session makes failures here harder to read.
         signedIn.tapTab("Settings", in: self)
-        let signOut = signedIn.buttons["settings.signOut"]
-        if !signOut.waitForExistence(timeout: 5) {
-            signedIn.tapTab("Settings", in: self)
-            XCTAssertTrue(signOut.waitForExistence(timeout: 10))
-        }
-        signOut.tap()
+        scrollToSettingsRow(signedIn, "settings.signOut").tap()
         XCTAssertTrue(signedIn.textFields["auth.email"].waitForExistence(timeout: 15),
                       "should return to auth screen after sign-out")
     }
@@ -510,6 +501,111 @@ final class SpendcapUITests: XCTestCase {
 
         // Already linked, so it must not also be offered as a link.
         XCTAssertFalse(app.buttons["settings.link.email"].exists)
+    }
+
+    /// Delete Account actually deletes the account.
+    ///
+    /// This is the one behaviour that shipped broken for every build between
+    /// migrations 0003 and 0014: the RPC deleted from `storage.objects` first,
+    /// Supabase's protect_delete trigger raised 42501, the transaction rolled
+    /// back, and the button did nothing while looking like it had worked. A
+    /// green suite never caught it, because nothing exercised the button.
+    ///
+    /// **Destructive, so it is opt-in.** It creates its own throwaway account
+    /// and only ever deletes that one — it never touches the shared test
+    /// account, which holds real budget data.
+    ///
+    ///   SPENDCAP_TEST_DESTRUCTIVE=1 ./scripts/run_tests.sh ui \
+    ///       SpendcapUITests/testDeleteAccountRemovesTheAccount
+    ///
+    /// The account is made through the public signup endpoint rather than the
+    /// sign-up form, because in sign-up mode the password field is
+    /// `.newPassword`: iOS offers a strong password and swallows `typeText`,
+    /// so the form path tests AutoFill rather than deletion.
+    func testDeleteAccountRemovesTheAccount() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["SPENDCAP_TEST_DESTRUCTIVE"] == "1" else {
+            throw XCTSkip("destructive; set SPENDCAP_TEST_DESTRUCTIVE=1 to run")
+        }
+        guard let host = env["SPENDCAP_SUPABASE_HOST"], !host.isEmpty,
+              let anon = env["SPENDCAP_SUPABASE_ANON"], !anon.isEmpty else {
+            throw XCTSkip("SPENDCAP_SUPABASE_HOST/ANON not set")
+        }
+
+        // A fresh address every run, so a stray left by a failed run can never
+        // be picked up and signed into by the next one.
+        let unique = UUID().uuidString.prefix(12).lowercased()
+        let email = "spendcap-deletetest-\(unique)@example.com"
+        let password = "Throwaway-\(unique)-Aa1!"
+
+        XCTAssertTrue(signUpViaAPI(host: host, anon: anon, email: email, password: password),
+                      "could not create the throwaway account")
+
+        let app = launch()
+        signIn(app, email: email, password: password)
+
+        // A brand-new account has no bank and no transactions, so Trends shows
+        // its empty state — wait for the tab bar, which is what "we are inside
+        // the app" actually means here.
+        XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 25),
+                      "signing into the throwaway account should reach the app")
+
+        // A brand-new account is exactly when iOS offers to save the password,
+        // and that sheet swallows the next tap.
+        dismissSavePasswordPromptIfPresent(timeout: 5)
+
+        app.tapTab("Settings", in: self)
+
+        let deleteRow = scrollToSettingsRow(app, "settings.deleteAccount")
+        deleteRow.tap()
+        app.buttons["Delete Everything"].tap()
+
+        // Deletion signs out, so the auth screen returning IS the assertion —
+        // and it is exactly what did not happen while the RPC rolled back.
+        XCTAssertTrue(app.textFields["auth.email"].waitForExistence(timeout: 25),
+                      "deleting the account should return to the sign-in screen")
+
+        // And the account must be gone, not merely signed out: the same
+        // credentials must no longer authenticate.
+        XCTAssertFalse(passwordGrantSucceeds(host: host, anon: anon, email: email, password: password),
+                       "a deleted account must not be able to sign in again")
+    }
+
+    // MARK: - Throwaway-account helpers (destructive test only)
+
+    private func signUpViaAPI(host: String, anon: String, email: String, password: String) -> Bool {
+        var request = URLRequest(url: URL(string: "https://\(host)/auth/v1/signup")!)
+        request.httpMethod = "POST"
+        request.setValue(anon, forHTTPHeaderField: "apikey")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(
+            withJSONObject: ["email": email, "password": password])
+        return send(request) { json in json["id"] != nil || json["access_token"] != nil }
+    }
+
+    private func passwordGrantSucceeds(host: String, anon: String, email: String, password: String) -> Bool {
+        var request = URLRequest(url: URL(string: "https://\(host)/auth/v1/token?grant_type=password")!)
+        request.httpMethod = "POST"
+        request.setValue(anon, forHTTPHeaderField: "apikey")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(
+            withJSONObject: ["email": email, "password": password])
+        return send(request) { json in json["access_token"] != nil }
+    }
+
+    private func send(_ request: URLRequest, _ accept: @escaping ([String: Any]) -> Bool) -> Bool {
+        let done = expectation(description: "http")
+        var result = false
+        URLSession.shared.dataTask(with: request) { data, _, _ in
+            defer { done.fulfill() }
+            guard
+                let data,
+                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else { return }
+            result = accept(json)
+        }.resume()
+        wait(for: [done], timeout: 30)
+        return result
     }
 
     /// The Trips tab exists, opens, and can build a trip end to end: name it,

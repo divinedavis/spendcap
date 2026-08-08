@@ -336,6 +336,35 @@ final class SpendService {
         }
     }
 
+    /// Removes every statement PDF this user owns, and reports how many went.
+    ///
+    /// Account deletion has to do this from the client. `storage.objects` does
+    /// not cascade from `auth.users`, and it cannot be cleaned up in SQL
+    /// either: Supabase guards the table with a BEFORE DELETE trigger that
+    /// raises 42501 on any direct delete, which is what silently broke
+    /// `delete_account()` for every build between 0003 and 0014 — the RPC threw
+    /// and rolled back, so no account was ever deleted. The Storage API is the
+    /// only supported route.
+    ///
+    /// Listing the bucket rather than reading `statements.storage_path` is
+    /// deliberate: a failed download leaves a row with a null path, and a row
+    /// could be missing for a file that exists. The bucket is the thing we are
+    /// promising to empty, so the bucket is what gets enumerated.
+    @discardableResult
+    func deleteStoredStatements() async throws -> Int {
+        guard let uid = client.auth.currentSession?.user.id.uuidString.lowercased() else {
+            throw TripError.notSignedIn
+        }
+        // Objects live at "<uid>/<plaid_statement_id>.pdf"; the RLS policy
+        // matches on that first path segment, so list and remove both scope
+        // themselves to this user without us filtering.
+        let files = try await client.storage.from("statements").list(path: uid)
+        let paths = files.map { "\(uid)/\($0.name)" }
+        guard !paths.isEmpty else { return 0 }
+        _ = try await client.storage.from("statements").remove(paths: paths)
+        return paths.count
+    }
+
     /// Short-lived signed URL for one statement PDF. The bucket is private, so
     /// this is the only way to read a file — and the link expires, so it can't
     /// be forwarded around.

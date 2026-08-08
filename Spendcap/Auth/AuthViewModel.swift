@@ -113,6 +113,31 @@ final class AuthViewModel: ObservableObject {
     /// `onRequest` and `onCompletion`, which are two separate callbacks.
     private var pendingAppleNonce: String?
 
+    /// Builds the exchange payload, sending the nonce **only when Apple
+    /// actually put one in the token**.
+    ///
+    /// We always ask for a nonce, but the returned token does not always carry
+    /// the claim, and GoTrue rejects the mismatch outright:
+    ///
+    ///   "Passed nonce and nonce in id_token should either both exist or not."
+    ///
+    /// which is what Sign in with Apple failed with on build 28. Sending the
+    /// raw nonce unconditionally makes the request malformed rather than
+    /// insecure — but it is a hard failure either way, and the message points
+    /// at the nonce rather than at the token that lacks it. So: read the claim
+    /// and match it. When the claim *is* there the nonce is still sent and
+    /// still verified, which is the case that carries the replay protection.
+    private func appleCredentials(
+        _ credential: AppleSignInService.Credential
+    ) -> OpenIDConnectCredentials {
+        let claim = IDToken.stringClaim("nonce", from: credential.idToken)
+        return .init(
+            provider: .apple,
+            idToken: credential.idToken,
+            nonce: claim == nil ? nil : credential.nonce
+        )
+    }
+
     /// `SignInWithAppleButton`'s `onRequest`. The sign-in screen uses Apple's
     /// own button rather than `signInWithApple()` below, because App Review
     /// expects that button's exact appearance and behaviour.
@@ -140,11 +165,7 @@ final class AuthViewModel: ObservableObject {
                 from: authorization, rawNonce: nonce
             )
             try await self.client.auth.signInWithIdToken(
-                credentials: .init(
-                    provider: .apple,
-                    idToken: credential.idToken,
-                    nonce: credential.nonce
-                )
+                credentials: self.appleCredentials(credential)
             )
         }
     }
@@ -155,11 +176,7 @@ final class AuthViewModel: ObservableObject {
         await runIgnoringCancellation {
             let credential = try await AppleSignInService.authorize()
             try await self.client.auth.signInWithIdToken(
-                credentials: .init(
-                    provider: .apple,
-                    idToken: credential.idToken,
-                    nonce: credential.nonce
-                )
+                credentials: self.appleCredentials(credential)
             )
         }
     }
@@ -199,11 +216,7 @@ final class AuthViewModel: ObservableObject {
             case .apple:
                 let credential = try await AppleSignInService.authorize()
                 try await self.client.auth.linkIdentityWithIdToken(
-                    credentials: .init(
-                        provider: .apple,
-                        idToken: credential.idToken,
-                        nonce: credential.nonce
-                    )
+                    credentials: self.appleCredentials(credential)
                 )
             case .google:
                 let credential = try await GoogleSignInService.authorize()
@@ -241,14 +254,28 @@ final class AuthViewModel: ObservableObject {
         identities = []
     }
 
-    /// App Store 5.1.1(v): full server-side deletion via the delete_account RPC
-    /// (cascades every public table), then local sign-out.
+    /// App Store 5.1.1(v): remove the statement PDFs, then delete the account
+    /// server-side via the delete_account RPC (which cascades every public
+    /// table), then sign out locally.
+    ///
+    /// **The order is the fix.** `storage.objects` neither cascades from
+    /// `auth.users` nor can be deleted from SQL — Supabase's protect_delete
+    /// trigger raises 42501 — so the PDFs have to go first, from here, while
+    /// the session that authorises it still exists. Deleting the user first
+    /// would revoke that JWT and strand the most sensitive bytes the app
+    /// stores (statements carry full account numbers) in the bucket forever.
+    ///
+    /// Doing it inside the RPC instead is what made this button do nothing at
+    /// all from 0003 until 0014: the whole transaction rolled back, so every
+    /// "deleted" account was still there afterwards.
     func deleteAccount() async {
         await run {
             await PushNotificationManager.shared.unregisterCurrentToken()
+            try await SpendService.shared.deleteStoredStatements()
             try await self.client.rpc("delete_account").execute()
             try? await self.client.auth.signOut()
             self.session = nil
+            self.identities = []
         }
     }
 
