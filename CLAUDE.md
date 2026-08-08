@@ -412,15 +412,25 @@ Three server-side settings, all applied, none discoverable from the app:
 - **`security_manual_linking_enabled`** — off by default, and `linkIdentity`
   fails without it.
 
-**Google is code-complete but inert until an iOS OAuth client exists.**
-`GOOGLE_CLIENT_ID` comes from `Secrets.xcconfig`; when unset, the button hides
-rather than offering a tap that can only fail. `GOOGLE_REVERSED_CLIENT_ID`
-must never be empty — it becomes a `CFBundleURLSchemes` entry and an empty
-scheme **fails App Store validation at upload**, so it defaults to the bundle
-id. To finish: Google Cloud console → APIs & Services → Credentials → Create
-credentials → OAuth client ID → **iOS**, bundle `com.divinedavis.spendcap`;
-paste the client id and the console's "iOS URL scheme" into `Secrets.xcconfig`,
-then set `external_google_enabled` + `external_google_client_id` on Supabase.
+**Google went live 2026-08-08** with iOS OAuth client
+`755017954208-ue9ff7ocfktp7d699m0gbuj722t6kfi1`. `GOOGLE_CLIENT_ID` and
+`GOOGLE_REVERSED_CLIENT_ID` come from `Secrets.xcconfig` (gitignored, so a
+fresh clone builds with the button hidden rather than broken — that fallback is
+deliberate, don't "fix" it by hardcoding the id). The reversed value is just
+the client id's dot-components reversed, which is what the console labels "iOS
+URL scheme". It must never be **empty**: it becomes a `CFBundleURLSchemes`
+entry and an empty scheme **fails App Store validation at upload**, so it falls
+back to the bundle id.
+
+`external_google_enabled` + `external_google_client_id` are set on Supabase
+with **no secret** — an iOS OAuth client doesn't have one, and the id-token
+grant doesn't want one.
+
+To check a Google client id without a browser, hit the authorize endpoint twice
+and compare: the reversed-scheme redirect lands on Google's real sign-in page,
+while an `https://` redirect comes back `redirect_uri_mismatch`. Only
+iOS/Android clients accept a custom scheme, so that pair distinguishes an iOS
+client from a Web one — which otherwise compiles fine and fails at runtime.
 
 The sheets leave the app's process, so **XCUITest cannot drive either flow**.
 What is tested instead: the auth screen still exposes a hittable email submit
