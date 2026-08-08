@@ -12,7 +12,7 @@ crosses 80% ("getting close") and 100% ("over cap") of the cap.
 - **Backend:** Supabase — ref `gmzzbslcsswqjjswoaen` (auth + Postgres + edge functions, all RLS-enforced)
 - **Bank data:** Plaid `transactions` product. **`PLAID_ENV=production` since
   2026-08-01** — real banks, real money, Trial plan (10 Production Items).
-- **Local path:** `~/Desktop/Spendcap`
+- **Local path:** `~/Desktop/projects/Spendcap`
 - **Bundle ID:** `com.divinedavis.spendcap`, team `CG89RY4W6R`
 - **APNs:** reusable team key `NVH34S83TM` (`~/.appstoreconnect/private_keys/AuthKey_NVH34S83TM.p8`)
 
@@ -32,6 +32,7 @@ Plaid Link (iOS, LinkKit)
 Plaid webhook (SYNC_UPDATES_AVAILABLE)
   → plaid_webhook edge fn (secret-gated) → sync_transactions logic
 pg_cron hourly → sync_transactions edge fn (x-cron-secret) — fallback sync
+pg_cron daily  → statements_cron edge fn (x-cron-secret) — new statement PDFs
 after every sync → check_overspend:
   today's outflow total (user's timezone, positive amounts, pending included)
   vs budgets.daily_limit_cents → 80% warn push / 100% over push,
@@ -459,10 +460,31 @@ drops it deliberately and calls `syncStatements()` instead.
 | Piece | Where |
 |---|---|
 | Consent token | `plaid_create_update_link_token` |
-| List + download + store | `plaid_statements_sync` |
+| List + download + store | `_shared/statements.ts` |
+| On tap, one user | `plaid_statements_sync` (JWT-gated) |
+| Daily, every user | `statements_cron` (`x-cron-secret`, `--no-verify-jwt`) |
 | Raw PDF fetch | `_shared/plaid.ts` → `plaidDownload` (the JSON `plaid()` helper throws on PDF bytes) |
-| Schema + bucket | `0003_statements.sql` |
+| Schema + bucket | `0003_statements.sql`; cron in `0013_cron_statements.sql` |
 | UI | `Spendcap/Statements/StatementsView.swift`, reached from Settings |
+
+**Ingestion is automatic since 2026-08-08 (`spendcap-daily-statements`, 16:45
+UTC).** Until then nothing fetched statements on its own: `plaid_statements_sync`
+is JWT-gated and only fired when someone opened the Statements screen, so a new
+statement sat unfetched until the next visit — the July cycle was pulled by hand
+on 2026-08-03 and nothing had run since.
+
+**Daily, not monthly**, because a statement cycle belongs to the bank, not the
+calendar. Wells Fargo posts around the 8th; a second bank would post on its own
+day, and either can move. A monthly job would have to guess the date and would
+silently skip a cycle whenever the guess was wrong. Daily costs only the
+`/statements/list` call — downloads are what Plaid bills per request, and
+already-fetched statements are skipped, so the steady state is one download per
+account per cycle.
+
+**Plaid's list lags the bank.** The statement Wells Fargo emailed on 2026-08-08
+was not yet in `/statements/list` that afternoon (24 listed, 24 already stored).
+That lag is the reason the sweep repeats daily rather than firing once on the
+day the email lands.
 
 **Security posture — these are the most sensitive bytes the app stores** (full
 account numbers, not the 4-digit `accounts.mask`):
@@ -474,12 +496,25 @@ account numbers, not the 4-digit `accounts.mask`):
 - `delete_account()` clears the bucket first; `storage.objects` does not
   cascade from `auth.users`, so deletion would otherwise orphan the PDFs
 
-**Cost guard:** `MAX_DOWNLOADS_PER_RUN = 30`. Plaid bills statements per
-request, and accounts × 24 months could fan out into hundreds of paid calls
-from a single tap. Runs are idempotent — already-fetched statements are
-skipped, so a second pull picks up the remainder. A failed download still
-writes a row with a null `storage_path` so the month shows as unavailable
-rather than silently vanishing.
+**Cost guard: two caps, and the difference is the point.** The tap allows 30
+downloads a run — accounts × 24 months could otherwise fan out into hundreds of
+paid calls from a single pull. The cron allows **6**: an unattended job should
+pick up the cycle that just posted (two accounts = 2) with headroom to catch up
+after an outage, and never backfill a year nobody asked for. Backfill stays
+behind the pull-to-refresh, where the billing is a decision someone made.
+Refs are sorted newest-first, which is what makes the small cap safe — the
+month that just posted is the first thing a run reaches.
+
+Runs are idempotent — already-fetched statements are skipped, so a second pull
+picks up the remainder. A failed download still writes a row with a null
+`storage_path` so the month shows as unavailable rather than silently vanishing.
+
+**One item's failure must not end the sweep.** `syncAllStatements` catches per
+item: a revoked bank would otherwise stop statements arriving for every other
+user. `ADDITIONAL_CONSENT_REQUIRED` is counted as `awaitingConsent`, not an
+error — an item linked for transactions only is a normal steady state, and
+consent can only be granted from the app, so there is nothing for the cron to
+alert about.
 
 Still worth doing before this is a public feature: a retention policy and a
 privacy-policy line covering stored statement PDFs.

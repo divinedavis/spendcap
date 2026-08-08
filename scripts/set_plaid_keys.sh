@@ -104,6 +104,12 @@ resp = urllib.request.urlopen(req)
 names = ", ".join(s["name"] for s in secrets)
 print(f"Plaid secrets set: {resp.status} (env={env}) — {names}")
 print("Redeploy the edge functions so they pick up the new values:")
-print("  supabase functions deploy plaid_create_link_token plaid_exchange_public_token "
-      "plaid_webhook sync_transactions check_overspend --project-ref gmzzbslcsswqjjswoaen")
+print("  supabase functions deploy plaid_create_link_token plaid_create_update_link_token "
+      "plaid_exchange_public_token plaid_statements_sync plaid_webhook "
+      "--project-ref gmzzbslcsswqjjswoaen")
+# The secret-gated ones must keep --no-verify-jwt, so they cannot share the
+# line above: a redeploy without it would start rejecting pg_cron, which sends
+# a cron secret and no JWT.
+print("  supabase functions deploy sync_transactions check_overspend statements_cron "
+      "--project-ref gmzzbslcsswqjjswoaen --no-verify-jwt")
 EOF
