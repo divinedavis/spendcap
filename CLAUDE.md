@@ -486,6 +486,16 @@ was not yet in `/statements/list` that afternoon (24 listed, 24 already stored).
 That lag is the reason the sweep repeats daily rather than firing once on the
 day the email lands.
 
+**Narrowing it to the first half of the month was considered and rejected**
+(2026-08-08). Depository cycles do close near the month boundary — both current
+accounts are Wells Fargo checking/savings — but **credit-card closing dates are
+assigned at account opening and spread deliberately across the whole month**, so
+a `1-15` window would go quietly wrong the day a card is linked, fetching that
+statement on the 1st instead. It also saves almost nothing: the back half of the
+month is `/statements/list` calls, and **list is not what Plaid bills —
+downloads are**. Do not re-narrow this without a reason that survives both
+points.
+
 **Security posture — these are the most sensitive bytes the app stores** (full
 account numbers, not the 4-digit `accounts.mask`):
 - Bucket `statements` is private; objects are `<uid>/<plaid_statement_id>.pdf`
