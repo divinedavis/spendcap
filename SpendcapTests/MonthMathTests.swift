@@ -115,47 +115,49 @@ final class MonthMathTests: XCTestCase {
         XCTAssertLessThan(stats.remainingCents, 0)
     }
 
-    /// April 2026 starts on a Wednesday, so the first week exercises every
-    /// bucket: Wed/Thu/Mon/Tue are Mon–Thu days, Sat/Sun are the weekend, and
-    /// Friday belongs to neither.
-    func testWeekendTotalAndMonToThuAverage() {
+    /// April 2026 starts on a Wednesday, so the first week has every kind of
+    /// day: Wed/Thu/Mon/Tue count toward the Mon–Thu average, Fri/Sat/Sun do
+    /// not — though everything still lands in the month total.
+    func testMonToThuAverageExcludesFridayAndTheWeekend() {
         let stats = MonthMath.stats(
             transactions: [
-                txn("2026-04-01", 1000),   // Wednesday — Mon–Thu
-                txn("2026-04-03", 2000),   // Friday — neither bucket
-                txn("2026-04-04", 3000),   // Saturday — weekend
-                txn("2026-04-05", 4000),   // Sunday — weekend
-                txn("2026-04-06", 500),    // Monday — Mon–Thu
+                txn("2026-04-01", 1000),   // Wednesday — counts
+                txn("2026-04-03", 2000),   // Friday — excluded
+                txn("2026-04-04", 3000),   // Saturday — excluded
+                txn("2026-04-05", 4000),   // Sunday — excluded
+                txn("2026-04-06", 500),    // Monday — counts
             ],
             dailyLimitCents: 5000,
             now: date("2026-04-07"), timeZone: utc
         )
-        XCTAssertEqual(stats.weekendSpentCents, 7000)
-        XCTAssertEqual(stats.weekendDaysElapsed, 2)
         // Mon–Thu days elapsed by Tue the 7th: Wed 1, Thu 2, Mon 6, Tue 7.
         XCTAssertEqual(stats.monToThuDaysElapsed, 4)
         XCTAssertEqual(stats.monToThuAverageCents, 1500 / 4)
-        // Friday's $20 is in the month total but neither breakdown bucket.
+        // Fri/Sat/Sun spending is in the month total, just not the average.
         XCTAssertEqual(stats.spentCents, 10_500)
     }
 
-    /// The weekday is resolved in the series' own timezone. Auckland is a day
-    /// ahead of UTC for most of its day — a UTC-derived weekday would put this
-    /// Saturday spend on Friday.
-    func testWeekendResolvesInTheSeriesTimezone() {
+    /// The weekday is resolved in the series' own timezone. Midnight Monday in
+    /// Auckland is still Sunday in UTC — a UTC-derived weekday would drop this
+    /// Monday spend out of the Mon–Thu average entirely.
+    func testWeekdayResolvesInTheSeriesTimezone() {
         let auckland = TimeZone(identifier: "Pacific/Auckland")!
+        let aucklandDate = { (iso: String) -> Date in
+            let f = DateFormatter()
+            f.dateFormat = "yyyy-MM-dd"
+            f.timeZone = auckland
+            f.locale = Locale(identifier: "en_US_POSIX")
+            return f.date(from: iso)!
+        }
         let stats = MonthMath.stats(
-            transactions: [txn("2026-04-04", 1000)],   // Saturday everywhere
+            transactions: [txn("2026-04-06", 1000)],   // Monday
             dailyLimitCents: 5000,
-            now: {
-                let f = DateFormatter()
-                f.dateFormat = "yyyy-MM-dd"
-                f.timeZone = auckland
-                return f.date(from: "2026-04-05")!
-            }(),
+            now: aucklandDate("2026-04-07"),
             timeZone: auckland
         )
-        XCTAssertEqual(stats.weekendSpentCents, 1000)
+        // Wed 1, Thu 2, Mon 6, Tue 7 have elapsed; only Monday has spend.
+        XCTAssertEqual(stats.monToThuDaysElapsed, 4)
+        XCTAssertEqual(stats.monToThuAverageCents, 250)
     }
 
     func testDaysOverCapCountsStrictlyGreater() {
@@ -180,7 +182,6 @@ final class MonthMathTests: XCTestCase {
         )
         XCTAssertEqual(stats.spentCents, 0)
         XCTAssertEqual(stats.monToThuAverageCents, 0)
-        XCTAssertEqual(stats.weekendSpentCents, 0)
         XCTAssertEqual(stats.daysOverCap, 0)
         XCTAssertEqual(stats.capProgress, 0)
     }

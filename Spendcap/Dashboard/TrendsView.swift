@@ -278,14 +278,6 @@ struct TrendsView: View {
             )
             Divider()
             DashboardRow(
-                icon: "sun.max.fill",
-                tint: .teal,
-                title: "Weekend spend",
-                subtitle: "Sat + Sun, \(model.stats.weekendDaysElapsed) day\(model.stats.weekendDaysElapsed == 1 ? "" : "s") so far",
-                value: BudgetMath.dollars(model.stats.weekendSpentCents)
-            )
-            Divider()
-            DashboardRow(
                 icon: "exclamationmark.triangle.fill",
                 tint: .orange,
                 title: "Days over cap",

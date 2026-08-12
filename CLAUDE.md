@@ -158,10 +158,16 @@ since capture. `/transactions/sync`'s own `accounts` array cannot be the anchor
 sync (verified live). Months before the first transaction on record are omitted
 entirely; their balances would be invented, not derived.
 
-**Trends breakdown buckets Fridays into neither row (2026-08-12).** The
-breakdown shows a Mon–Thu average and a Sat+Sun weekend total (replacing the
-old average-per-day/projection row). Friday is deliberately in neither bucket.
-Weekdays are resolved in `MonthMath` where the timezone is known
+**Trends breakdown shows a Mon–Thu average, and deliberately no weekend row
+(2026-08-12).** The Mon–Thu average replaced the old average-per-day/projection
+row. A "Weekend spend" (Sat+Sun) row shipped in build 31 and was removed the
+same day: **Wells Fargo dates every weekend purchase to Monday** — zero Sat/Sun
+rows across 530 transactions, Monday carrying ~3× any other day — and
+`authorized_date` is no escape hatch: it mirrors the post date on 525 of 530
+rows, and the 5 that differ shift weekday→weekday, never onto a weekend. So a
+literal weekend bucket always reads $0 and Monday quietly includes the weekend.
+Don't reintroduce a weekend split without a bank whose data can actually
+express one. Weekdays are resolved in `MonthMath` where the timezone is known
 (`DailySpend.weekday`) — a display-time `Calendar.current` lookup can shift a
 midnight bucket onto the wrong day of the week.
 

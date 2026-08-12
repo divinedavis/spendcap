@@ -198,9 +198,10 @@ struct DailySpend: Identifiable, Equatable {
 
     var id: Date { date }
 
-    var isWeekend: Bool { weekday == 1 || weekday == 7 }
-    /// Monday through Thursday — the days the breakdown averages, with Friday
-    /// deliberately in neither bucket.
+    /// Monday through Thursday — the days the breakdown averages. There is no
+    /// weekend counterpart on purpose: Wells Fargo dates weekend purchases to
+    /// Monday (zero Sat/Sun rows across the whole history, and authorized_date
+    /// mirrors the post date), so a Sat+Sun bucket would always read $0.
     var isMonToThu: Bool { (2...5).contains(weekday) }
 }
 
@@ -220,15 +221,7 @@ struct MonthStats: Equatable {
     var monthCapCents: Int { monthlyLimitCents ?? dailyLimitCents * daysInMonth }
     var remainingCents: Int { monthCapCents - spentCents }
 
-    /// Everything spent on Saturdays and Sundays in the series so far.
-    var weekendSpentCents: Int {
-        series.filter(\.isWeekend).reduce(0) { $0 + $1.spentCents }
-    }
-
-    var weekendDaysElapsed: Int { series.filter(\.isWeekend).count }
-
-    /// Mean spend across the Monday–Thursday days elapsed. Fridays belong to
-    /// neither this nor the weekend total on purpose: they spend like neither.
+    /// Mean spend across the Monday–Thursday days elapsed.
     var monToThuAverageCents: Int {
         let days = series.filter(\.isMonToThu)
         guard !days.isEmpty else { return 0 }
