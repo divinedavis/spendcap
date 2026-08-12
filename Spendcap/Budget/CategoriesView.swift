@@ -265,6 +265,14 @@ struct CategoryLineRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
+                // The tag's icon, so rent or food is spottable at a glance
+                // without reading every name.
+                if let kind = row.kind {
+                    Image(systemName: kind.systemImage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel(kind.label)
+                }
                 Text(row.categoryName)
                     .font(.body.weight(.medium))
                     .foregroundStyle(row.isUncategorized ? .secondary : .primary)
@@ -317,6 +325,7 @@ struct CategoryEditView: View {
 
     @State private var name: String
     @State private var plannedText: String
+    @State private var kind: CategoryKind?
     @State private var transactions: [CategoryTransaction] = []
     @State private var isLoadingTransactions = true
     @State private var isSaving = false
@@ -327,6 +336,7 @@ struct CategoryEditView: View {
         self.onSave = onSave
         _name = State(initialValue: row.categoryName)
         _plannedText = State(initialValue: String(format: "%.0f", Double(row.plannedCents) / 100))
+        _kind = State(initialValue: row.kind)
     }
 
     /// The Uncategorized line has no name or plan to edit — but its
@@ -349,6 +359,21 @@ struct CategoryEditView: View {
                     Section("Name") {
                         TextField("Food", text: $name)
                             .accessibilityIdentifier("category.name")
+                    }
+                    // The name is whatever the user calls the line; the type
+                    // says what it *is*, so rent or food is findable as a
+                    // field rather than guessed from the wording.
+                    Section {
+                        Picker("Type", selection: $kind) {
+                            Text("None").tag(CategoryKind?.none)
+                            ForEach(CategoryKind.allCases) { option in
+                                Label(option.label, systemImage: option.systemImage)
+                                    .tag(CategoryKind?.some(option))
+                            }
+                        }
+                        .accessibilityIdentifier("category.kind")
+                    } footer: {
+                        Text("Tags this line as rent, food, transportation and so on — in addition to its name.")
                     }
                     Section {
                         HStack {
@@ -463,7 +488,8 @@ struct CategoryEditView: View {
             try await SpendService.shared.updateCategory(
                 id: id,
                 name: name.trimmingCharacters(in: .whitespaces),
-                plannedCents: cents
+                plannedCents: cents,
+                kind: kind
             )
             onSave()
             dismiss()

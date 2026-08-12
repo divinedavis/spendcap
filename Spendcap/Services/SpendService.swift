@@ -131,7 +131,7 @@ final class SpendService {
     func categories() async throws -> [BudgetCategory] {
         try await client
             .from("budget_categories")
-            .select("id, name, planned_cents, sort_order")
+            .select("id, name, planned_cents, sort_order, kind")
             .order("sort_order", ascending: true)
             .execute()
             .value
@@ -208,12 +208,15 @@ final class SpendService {
             .execute()
     }
 
-    func updateCategory(id: UUID, name: String, plannedCents: Int) async throws {
+    func updateCategory(id: UUID, name: String, plannedCents: Int, kind: CategoryKind?) async throws {
         try await client
             .from("budget_categories")
             .update([
                 "name": AnyJSON.string(name),
                 "planned_cents": AnyJSON.integer(plannedCents),
+                // Explicit null clears the tag — "no kind" is a choice the
+                // sheet can save, not just an absence.
+                "kind": kind.map { AnyJSON.string($0.rawValue) } ?? AnyJSON.null,
                 "updated_at": AnyJSON.string(ISO8601DateFormatter().string(from: Date())),
             ])
             .eq("id", value: id.uuidString.lowercased())

@@ -132,4 +132,19 @@ final class CategoryMathTests: XCTestCase {
         XCTAssertEqual(rows[1].spentCents, 100_878)
         XCTAssertNotNil(rows[1].categoryId)
     }
+
+    /// The kind tag decodes when known and reads as untagged when the server
+    /// grows a value this build has never heard of — a whole screen of budget
+    /// lines must not fail to decode over one new tag.
+    func testKindDecodesAndToleratesUnknownValues() throws {
+        let json = #"""
+        [{"period":"2026-08-01","category_id":"11111111-1111-1111-1111-111111111111","category_name":"Rent / Wifi / Utilities","planned_cents":200000,"spent_cents":0,"txn_count":0,"sort_order":1,"kind":"rent"},
+         {"period":"2026-08-01","category_id":"22222222-2222-2222-2222-222222222222","category_name":"Mystery","planned_cents":0,"spent_cents":0,"txn_count":0,"sort_order":2,"kind":"cryptozoology"},
+         {"period":"2026-08-01","category_id":null,"category_name":"Uncategorized","planned_cents":0,"spent_cents":100,"txn_count":1,"sort_order":2147483647,"kind":null}]
+        """#
+        let rows = try JSONDecoder().decode([CategorySpendRow].self, from: Data(json.utf8))
+        XCTAssertEqual(rows[0].kind, .rent)
+        XCTAssertNil(rows[1].kind, "an unknown kind reads as untagged, not a decode failure")
+        XCTAssertNil(rows[2].kind)
+    }
 }

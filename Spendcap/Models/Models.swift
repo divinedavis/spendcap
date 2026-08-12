@@ -755,6 +755,53 @@ enum BalanceMath {
 
 // MARK: - Category budgets
 
+/// A budget line's fixed type: what the line *is*, independent of whatever
+/// the user named it. "Which line is rent?" has to be a field, not a guess
+/// parsed out of "Rent / Wifi / Utilities". The raw values are the closed set
+/// the `budget_categories_kind_check` constraint accepts (0016).
+enum CategoryKind: String, CaseIterable, Codable, Identifiable {
+    case rent
+    case food
+    case transportation
+    case utilities
+    case subscriptions
+    case entertainment
+    case health
+    case savings
+    case other
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .rent: return "Rent"
+        case .food: return "Food"
+        case .transportation: return "Transportation"
+        case .utilities: return "Utilities"
+        case .subscriptions: return "Subscriptions"
+        case .entertainment: return "Entertainment"
+        case .health: return "Health"
+        case .savings: return "Savings"
+        case .other: return "Other"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .rent: return "house.fill"
+        case .food: return "fork.knife"
+        case .transportation: return "car.fill"
+        case .utilities: return "bolt.fill"
+        case .subscriptions: return "arrow.triangle.2.circlepath"
+        case .entertainment: return "ticket.fill"
+        case .health: return "heart.fill"
+        case .savings: return "banknote.fill"
+        case .other: return "tag.fill"
+        }
+    }
+
+}
+
 /// One budget line. `id` nil is impossible here; the *rollup* row below uses a
 /// nil category id for the synthetic Uncategorized line.
 struct BudgetCategory: Codable, Identifiable, Equatable {
@@ -762,11 +809,33 @@ struct BudgetCategory: Codable, Identifiable, Equatable {
     var name: String
     var plannedCents: Int
     var sortOrder: Int
+    /// Nil is untagged, a valid state — never defaulted to a guess.
+    var kind: CategoryKind?
 
     enum CodingKeys: String, CodingKey {
-        case id, name
+        case id, name, kind
         case plannedCents = "planned_cents"
         case sortOrder = "sort_order"
+    }
+
+    init(id: UUID, name: String, plannedCents: Int, sortOrder: Int, kind: CategoryKind? = nil) {
+        self.id = id
+        self.name = name
+        self.plannedCents = plannedCents
+        self.sortOrder = sortOrder
+        self.kind = kind
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        plannedCents = try c.decode(Int.self, forKey: .plannedCents)
+        sortOrder = try c.decode(Int.self, forKey: .sortOrder)
+        // A kind this build doesn't know reads as untagged, not as a decode
+        // failure for every category on the screen.
+        kind = (try? c.decodeIfPresent(String.self, forKey: .kind))
+            .flatMap { $0 }.flatMap(CategoryKind.init(rawValue:))
     }
 }
 
@@ -965,6 +1034,9 @@ struct CategorySpendRow: Codable, Identifiable, Equatable {
     let spentCents: Int
     let txnCount: Int
     let sortOrder: Int
+    /// The line's fixed type tag; nil for untagged lines and always nil for
+    /// Uncategorized.
+    let kind: CategoryKind?
 
     var id: String { "\(period)-\(categoryId?.uuidString ?? "uncategorized")" }
     var isUncategorized: Bool { categoryId == nil }
@@ -989,7 +1061,7 @@ struct CategorySpendRow: Codable, Identifiable, Equatable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case period
+        case period, kind
         case categoryId = "category_id"
         case categoryName = "category_name"
         case plannedCents = "planned_cents"
@@ -999,7 +1071,8 @@ struct CategorySpendRow: Codable, Identifiable, Equatable {
     }
 
     init(period: String, categoryId: UUID?, categoryName: String,
-         plannedCents: Int, spentCents: Int, txnCount: Int, sortOrder: Int) {
+         plannedCents: Int, spentCents: Int, txnCount: Int, sortOrder: Int,
+         kind: CategoryKind? = nil) {
         self.period = period
         self.categoryId = categoryId
         self.categoryName = categoryName
@@ -1007,6 +1080,7 @@ struct CategorySpendRow: Codable, Identifiable, Equatable {
         self.spentCents = spentCents
         self.txnCount = txnCount
         self.sortOrder = sortOrder
+        self.kind = kind
     }
 
     init(from decoder: Decoder) throws {
@@ -1026,6 +1100,10 @@ struct CategorySpendRow: Codable, Identifiable, Equatable {
         }
         txnCount = try c.decode(Int.self, forKey: .txnCount)
         sortOrder = try c.decode(Int.self, forKey: .sortOrder)
+        // A kind this build doesn't know reads as untagged, not as a decode
+        // failure that blanks every budget line on the screen.
+        kind = (try? c.decodeIfPresent(String.self, forKey: .kind))
+            .flatMap { $0 }.flatMap(CategoryKind.init(rawValue:))
     }
 }
 

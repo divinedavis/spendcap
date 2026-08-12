@@ -138,6 +138,13 @@ from the Months toolbar and Settings.
 - `seed_starter_budget()` is a no-op once any category exists, so a double tap
   cannot duplicate the budget.
 - Every rollup here reuses the same outflow filter as `overspend_status()`.
+- **Each line can carry a `kind` tag (0016)** — rent, food, transportation, …
+  — picked in the edit-line sheet next to the free-text name. The name is what
+  the user calls the line; the kind is what it *is*, so "which line is rent"
+  is a field, not a guess parsed from "Rent / Wifi / Utilities". The value set
+  is closed (`budget_categories_kind_check` + `CategoryKind`); an unknown kind
+  decodes as untagged rather than failing the rollup. Untagged (null) is a
+  valid state, never defaulted.
 
 **Tapping a budget line edits its planned amount**, on the Trends widget and
 on the Budget screen. If a tap there ever seems to do nothing in a UI test,
