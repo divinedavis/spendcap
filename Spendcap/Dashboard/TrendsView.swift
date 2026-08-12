@@ -34,8 +34,22 @@ enum TrendsMode: String, CaseIterable, Identifiable {
 final class TrendsViewModel: ObservableObject {
     @Published var stats = MonthStats(series: [], spentCents: 0, daysElapsed: 0,
                                       daysInMonth: 0, dailyLimitCents: 5000)
+    /// This month and last, by budget line — the same rollup the Budget screen
+    /// uses, shown under the chart. Moved here from Months 2026-08-12.
+    @Published var categoryMonths: [CategoryMonth] = []
+    @Published var selectedCategoryPeriod: Date?
     @Published var isLoading = false
     @Published var errorMessage: String?
+
+    var selectedCategoryMonth: CategoryMonth? {
+        categoryMonths.first { $0.period == selectedCategoryPeriod } ?? categoryMonths.first
+    }
+
+    /// True once loaded and anything beyond the Uncategorized line came back,
+    /// i.e. a budget has actually been set up.
+    var hasCategoryBudget: Bool {
+        categoryMonths.contains { month in month.rows.contains { !$0.isUncategorized } }
+    }
 
     func load(period: TrendsPeriod = .thisMonth) async {
         isLoading = true
@@ -60,6 +74,17 @@ final class TrendsViewModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+
+        // Budget lines are a second read of the same months; a failure here
+        // must not blank the chart above them. Always this month and last —
+        // the card has its own picker and does not follow the period chip.
+        if let rows = try? await SpendService.shared.categorySpend(monthsBack: 2) {
+            categoryMonths = CategoryMath.months(rows: rows)
+            if selectedCategoryPeriod == nil
+                || !categoryMonths.contains(where: { $0.period == selectedCategoryPeriod }) {
+                selectedCategoryPeriod = categoryMonths.first?.period
+            }
+        }
     }
 }
 
@@ -67,6 +92,7 @@ struct TrendsView: View {
     @StateObject private var model = TrendsViewModel()
     @State private var mode: TrendsMode = .spending
     @State private var period: TrendsPeriod = .thisMonth
+    @State private var editingLine: CategorySpendRow?
 
     private var monthLabel: String {
         period.monthName()
@@ -81,7 +107,7 @@ struct TrendsView: View {
                         chips
                         modePicker
                         chartCard
-                        breakdownCard
+                        categoryBudgetCard
                     }
                     .padding(.horizontal, 16)
                     // The chips row used to sit flush against the navigation
@@ -101,6 +127,11 @@ struct TrendsView: View {
             .task { await model.load(period: period) }
             .onChange(of: period) { _, newValue in
                 Task { await model.load(period: newValue) }
+            }
+            .sheet(item: $editingLine) { row in
+                CategoryEditView(row: row) {
+                    Task { await model.load(period: period) }
+                }
             }
         }
     }
@@ -235,56 +266,83 @@ struct TrendsView: View {
         }
     }
 
-    // MARK: - Breakdown
+    // MARK: - Category budget
 
-    private var breakdownCard: some View {
-        SurfaceCard {
-            SectionHeader(title: "Breakdown", actionSystemImage: nil, action: nil)
+    // The month's Breakdown card lived here until 2026-08-12; it moved to the
+    // bottom of Months (user request), and the category budget moved up here
+    // from Months in the same change.
 
-            DashboardRow(
-                icon: "calendar",
-                tint: .blue,
-                title: "Cap for \(monthLabel)",
-                subtitle: model.stats.monthlyLimitCents != nil
-                    ? "Your monthly cap"
-                    : "\(BudgetMath.dollars(model.stats.dailyLimitCents)) a day \u{00D7} \(model.stats.daysInMonth) days",
-                value: BudgetMath.dollars(model.stats.monthCapCents)
-            )
-            Divider()
-            DashboardRow(
-                icon: "arrow.up.right",
-                tint: .red,
-                title: "Spent so far",
-                subtitle: "Across \(model.stats.daysElapsed) day\(model.stats.daysElapsed == 1 ? "" : "s")",
-                value: "\u{2212}" + BudgetMath.dollars(model.stats.spentCents),
-                valueColor: .red
-            )
-            Divider()
-            DashboardRow(
-                icon: "checkmark.circle",
-                tint: model.stats.remainingCents >= 0 ? .green : .red,
-                title: "Left this month",
-                subtitle: model.stats.remainingCents >= 0 ? "At your current cap" : "Over the monthly cap",
-                value: BudgetMath.dollars(abs(model.stats.remainingCents)),
-                valueColor: model.stats.remainingCents >= 0 ? .green : .red
-            )
-            Divider()
-            DashboardRow(
-                icon: "chart.bar.fill",
-                tint: .purple,
-                title: "Average Mon\u{2013}Thu",
-                subtitle: "Across \(model.stats.monToThuDaysElapsed) weekday\(model.stats.monToThuDaysElapsed == 1 ? "" : "s") so far",
-                value: BudgetMath.dollars(model.stats.monToThuAverageCents)
-            )
-            Divider()
-            DashboardRow(
-                icon: "exclamationmark.triangle.fill",
-                tint: .orange,
-                title: "Days over cap",
-                subtitle: "Out of \(model.stats.daysElapsed) so far",
-                value: "\(model.stats.daysOverCap)",
-                valueColor: model.stats.daysOverCap > 0 ? .orange : .primary
-            )
+    /// The chart says how much; the budget lines say where — directly under
+    /// the chart they explain, not one tab away from it.
+    @ViewBuilder
+    private var categoryBudgetCard: some View {
+        if model.hasCategoryBudget, let month = model.selectedCategoryMonth {
+            SurfaceCard {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("By category")
+                        .font(.title3.weight(.bold))
+                    Spacer(minLength: 8)
+                    if month.overCount > 0 {
+                        Text("\(month.overCount) over")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.red)
+                    }
+                }
+
+                // Two months is the comparison that matters: is this month
+                // tracking better or worse than the one that just closed.
+                if model.categoryMonths.count > 1 {
+                    Picker("Month", selection: Binding(
+                        get: { model.selectedCategoryPeriod ?? month.period },
+                        set: { model.selectedCategoryPeriod = $0 }
+                    )) {
+                        ForEach(model.categoryMonths) { m in
+                            Text(m.shortLabel).tag(m.period)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("trends.categoryMonth")
+                }
+
+                ForEach(Array(month.rows.enumerated()), id: \.element.id) { index, row in
+                    // Tapping a line opens what it plans to spend and the
+                    // transactions behind it. Uncategorized opens too — it has
+                    // nothing to plan, but routing those out of it is the whole
+                    // point of being able to see them.
+                    Button {
+                        editingLine = row
+                    } label: {
+                        CategoryLineRow(row: row, showsChevron: true)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("trends.line")
+                    if index < month.rows.count - 1 { Divider() }
+                }
+
+                Text("Tap a line to change what it plans to spend. Settings \u{203A} Budget by category has the transactions behind each one.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+                    .accessibilityIdentifier("trends.budgetHint")
+            }
+        } else {
+            // Nothing to break down yet.
+            SurfaceCard {
+                HStack(alignment: .top, spacing: 12) {
+                    RowIcon(systemName: "list.bullet.rectangle", tint: .purple)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Budget by category")
+                            .font(.headline)
+                        Text("Set a planned amount per line in Settings \u{203A} Budget by category, and this month and last will be measured against it here.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .multilineTextAlignment(.leading)
+                    }
+                }
+            }
+            .accessibilityIdentifier("trends.categories")
         }
     }
 }

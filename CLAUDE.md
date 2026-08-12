@@ -69,9 +69,13 @@ stop the series mid-month and report a July that ended on the 5th. The month
 walk steps back a day at a time rather than adding `-1 month`, which has to
 clamp on the 31st.
 
-The category-budget prompt card that sat under the chart was removed
-2026-08-03 at the user's request; the cap is still edited from Months, which is
-where the UI tests reach it.
+**Widget swap, 2026-08-12 (user request):** the **"By category" card lives on
+Trends**, directly under the chart card, and the month **Breakdown card moved
+to the bottom of Months**, always showing the current month (Months' own
+`monthStats`, built from the same `MonthMath` the Trends chart uses). The
+category card had been on Months since 2026-08-03, when an earlier prompt-card
+version was removed from Trends; it is back on Trends now as the full widget.
+The cap is still edited from Months, which is where the UI tests reach it.
 
 **Activity** is the month, transaction by transaction, from
 `month_activity(period)` (0009). It is the one rollup that does *not* filter to
@@ -108,8 +112,9 @@ need a server-side counterpart in `check_overspend`.
 
 **Category budgets (0007).** `budget_categories` (a planned amount per line) +
 `category_rules` (what routes into it) + `category_spend(months_back)` /
-`category_transactions(category, period)` / `seed_starter_budget()`. Reached
-from Months → Budget by category.
+`category_transactions(category, period)` / `seed_starter_budget()`. The
+inline widget is on Trends (since 2026-08-12); the full Budget screen opens
+from the Months toolbar and Settings.
 
 - **Rules live in the database, not in Swift.** The mapping is personal and
   wrong out of the box: this account has a steakhouse under `GENERAL_SERVICES`
@@ -125,7 +130,7 @@ from Months → Budget by category.
   cannot duplicate the budget.
 - Every rollup here reuses the same outflow filter as `overspend_status()`.
 
-**Tapping a budget line edits its planned amount**, on the Months widget and
+**Tapping a budget line edits its planned amount**, on the Trends widget and
 on the Budget screen. If a tap there ever seems to do nothing in a UI test,
 suspect the layout rather than the control: the widget appears only once the
 category rollup lands, and a touch dispatched while the card is still being

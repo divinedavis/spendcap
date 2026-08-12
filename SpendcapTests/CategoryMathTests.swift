@@ -38,8 +38,10 @@ final class CategoryMathTests: XCTestCase {
             row("2026-08-01", "Food", planned: 60_000, spent: 16_069),
         ])
         XCTAssertEqual(result.count, 2)
-        XCTAssertEqual(result.first?.shortLabel, "August")
-        XCTAssertEqual(result.last?.shortLabel, "July")
+        // Abbreviated so the segment can never carry the same label as the
+        // period menu's month items on Trends.
+        XCTAssertEqual(result.first?.shortLabel, "Aug")
+        XCTAssertEqual(result.last?.shortLabel, "Jul")
     }
 
     func testLinesKeepTheUsersOrderWithUncategorizedLast() {

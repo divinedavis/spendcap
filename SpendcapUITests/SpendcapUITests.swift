@@ -240,13 +240,25 @@ final class SpendcapUITests: XCTestCase {
             frame = next
         }
         let option = app.buttons[lastMonth]
-        for attempt in 0..<3 {
-            if attempt == 0, chip.isHittable {
+        // The only reliable shape found for opening this menu: alternate real
+        // taps (when hittability isn't lying) with coordinate taps, and nudge
+        // the layout with a rubber-band scroll between failed attempts —
+        // waiting for isHittable alone deadlocks, because on iOS 26 it can
+        // stay false indefinitely for scroll-view content that is plainly on
+        // screen. Matching "July" to the wrong control is no longer possible:
+        // the category card's segments were abbreviated to "Jul" exactly so
+        // the menu item is the only "July" on this screen.
+        for attempt in 0..<8 {
+            if chip.isHittable {
                 chip.tap()
             } else {
                 chip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
             }
-            if option.waitForExistence(timeout: 5) { break }
+            if option.waitForExistence(timeout: 3) { break }
+            if attempt % 2 == 1 {
+                app.scrollViews.firstMatch.swipeDown()
+                Thread.sleep(forTimeInterval: 0.5)
+            }
         }
         XCTAssertTrue(option.exists, "the menu should offer \(lastMonth)")
         if option.isHittable {
@@ -317,12 +329,13 @@ final class SpendcapUITests: XCTestCase {
         }
     }
 
-    /// The category budget is reachable from Months and settles into one of its
-    /// two valid states: the starter-budget prompt when no lines exist, or the
-    /// planned-vs-actual list when they do. Asserting on one would make the
-    /// test depend on whether the shared test account has been seeded.
+    /// The category budget is reachable from Trends (its card moved there from
+    /// Months 2026-08-12) and settles into one of its two valid states: the
+    /// starter-budget prompt when no lines exist, or the planned-vs-actual
+    /// list when they do. Asserting on one would make the test depend on
+    /// whether the shared test account has been seeded.
     /// Skipped when creds are absent.
-    func testCategoryBudgetIsReachableFromMonths() throws {
+    func testCategoryBudgetIsReachableFromTrends() throws {
         guard let email = ProcessInfo.processInfo.environment["SPENDCAP_TEST_EMAIL"],
               let password = ProcessInfo.processInfo.environment["SPENDCAP_TEST_PASSWORD"],
               !email.isEmpty, !password.isEmpty else {
@@ -335,15 +348,11 @@ final class SpendcapUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20),
                       "Trends should appear after sign-in")
 
-        app.tapTab("Months", in: self)
-        XCTAssertTrue(app.staticTexts["months.total"].waitForExistence(timeout: 20))
-
-        // A budget line on Months opens its planned amount for editing. The
+        // A budget line on Trends opens its planned amount for editing. The
         // widget appears only after the category rollup lands, so wait for a
         // row to exist *and* settle — tapping while the card is still being
         // laid out lands the touch wherever the row used to be.
-        app.tapTab("Months", in: self)
-        let line = app.buttons["months.line"].firstMatch
+        let line = app.buttons["trends.line"].firstMatch
         if line.waitForExistence(timeout: 20) {
             // Three *consecutive* stable reads, not one matching pair: the
             // rollup lands asynchronously and an in-flight layout can hold
@@ -376,12 +385,13 @@ final class SpendcapUITests: XCTestCase {
             app.buttons["Cancel"].tap()
         }
 
-        // Months carries the breakdown inline, so nothing else there needs tapping.
+        // Months keeps its toolbar entry into the full Budget screen.
         // Editing lives in Settings: buttons low in the Months scroll view do
         // not receive taps on iOS 26 — measured by giving one a known-good
         // action and watching nothing happen — so the entry point is a List
         // row, which is the pattern that reliably works.
-        // The toolbar entry, re-tested after the layout settles.
+        app.tapTab("Months", in: self)
+        XCTAssertTrue(app.staticTexts["months.total"].waitForExistence(timeout: 20))
         let toolbarEntry = app.buttons["months.openBudget"]
         XCTAssertTrue(toolbarEntry.waitForExistence(timeout: 10))
         toolbarEntry.tap()

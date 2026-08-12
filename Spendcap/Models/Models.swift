@@ -1054,7 +1054,11 @@ enum CategoryMath {
         longLabel.setLocalizedDateFormatFromTemplate("MMMM y")
         let shortLabel = DateFormatter()
         shortLabel.timeZone = timeZone
-        shortLabel.setLocalizedDateFormatFromTemplate("MMMM")
+        // Abbreviated on purpose, now that this card shares Trends with the
+        // period menu: two controls both labeled "July" on one screen sent a
+        // UI-test tap (and would send VoiceOver) to the wrong one. "Jul" the
+        // segment and "July" the menu item can no longer be confused.
+        shortLabel.setLocalizedDateFormatFromTemplate("MMM")
 
         let currentMonth = calendar.dateInterval(of: .month, for: now)?.start
 

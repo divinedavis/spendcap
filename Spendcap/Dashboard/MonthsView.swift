@@ -19,23 +19,16 @@ final class MonthsViewModel: ObservableObject {
     @Published var statementsByMonth: [Int: [BankStatement]] = [:]
     /// This month and last, by budget line — the same rollup the Budget screen
     /// uses, shown inline here.
-    @Published var categoryMonths: [CategoryMonth] = []
     /// Checking balance in and out of each month, oldest first. Empty means
     /// no checking account on record, and the card hides itself.
     @Published var balances: [MonthBalance] = []
-    @Published var selectedCategoryPeriod: Date?
+    /// The current month day by day — what the bottom Breakdown card reads.
+    /// Trends builds the same stats for whichever month its chip selects; this
+    /// one is always the month in progress.
+    @Published var monthStats = MonthStats(series: [], spentCents: 0, daysElapsed: 0,
+                                           daysInMonth: 0, dailyLimitCents: 5000)
     @Published var isLoading = false
     @Published var errorMessage: String?
-
-    var selectedCategoryMonth: CategoryMonth? {
-        categoryMonths.first { $0.period == selectedCategoryPeriod } ?? categoryMonths.first
-    }
-
-    /// True once loaded and nothing but the Uncategorized line came back, i.e.
-    /// no budget has been set up yet.
-    var hasCategoryBudget: Bool {
-        categoryMonths.contains { month in month.rows.contains { !$0.isUncategorized } }
-    }
 
     func load() async {
         isLoading = true
@@ -44,23 +37,24 @@ final class MonthsViewModel: ObservableObject {
         do {
             async let rows = SpendService.shared.monthlySpend(monthsBack: 12)
             async let budg = SpendService.shared.budget()
+            async let txns = SpendService.shared.monthTransactions()
             let (r, b) = try await (rows, budg)
             stats = YearMath.stats(rows: r, budget: b)
+            // The bottom Breakdown card: this month against its cap, from the
+            // same transaction series Trends charts, resolved with the same
+            // Budget row so the two screens cannot disagree about the month.
+            if let t = try? await txns {
+                monthStats = MonthMath.stats(
+                    transactions: t,
+                    dailyLimitCents: b.dailyLimitCents,
+                    monthlyLimitCents: b.monthlyLimitCents
+                )
+            }
         } catch {
             // A pull-to-refresh that supersedes an in-flight load cancels it,
             // and "cancelled" printed in red under the chart reads as a real
             // failure. Nothing went wrong, so say nothing.
             errorMessage = Self.isCancellation(error) ? nil : error.localizedDescription
-        }
-
-        // Budget lines are a second read of the same months; a failure here
-        // must not blank the totals above them.
-        if let rows = try? await SpendService.shared.categorySpend(monthsBack: 2) {
-            categoryMonths = CategoryMath.months(rows: rows)
-            if selectedCategoryPeriod == nil
-                || !categoryMonths.contains(where: { $0.period == selectedCategoryPeriod }) {
-                selectedCategoryPeriod = categoryMonths.first?.period
-            }
         }
 
         // Balance history is derived from the same rows the totals are, but a
@@ -104,13 +98,11 @@ struct MonthsView: View {
     private enum Sheet: Identifiable {
         case caps
         case budget
-        case editLine(CategorySpendRow)
 
         var id: String {
             switch self {
             case .caps: return "caps"
             case .budget: return "budget"
-            case .editLine(let row): return "line-\(row.id)"
             }
         }
     }
@@ -128,7 +120,6 @@ struct MonthsView: View {
                     VStack(spacing: 14) {
                         capCard
                         summaryCard
-                        categoryBudgetCard
                         // The month list is what the screen is for, so it sits
                         // above the year-level rollup rather than below it.
                         monthsCard
@@ -137,6 +128,9 @@ struct MonthsView: View {
                         }
                         if !model.stats.withData.isEmpty {
                             breakdownCard
+                        }
+                        if !model.monthStats.series.isEmpty {
+                            monthBreakdownCard
                         }
                     }
                     .padding(.horizontal, 16)
@@ -198,10 +192,6 @@ struct MonthsView: View {
                     }
                 case .budget:
                     NavigationStack { CategoriesView(isModal: true) }
-                case .editLine(let row):
-                    CategoryEditView(row: row) {
-                        Task { await model.load() }
-                    }
                 }
             }
         }
@@ -605,79 +595,59 @@ struct MonthsView: View {
         .accessibilityIdentifier("months.balanceRow")
     }
 
-    // MARK: - Category budget
+    // MARK: - This month's breakdown
 
-    /// A month total says the month went wrong; the budget lines say where —
-    /// so they belong on this screen, not one tap away behind it.
-    @ViewBuilder
-    private var categoryBudgetCard: some View {
-        if model.hasCategoryBudget, let month = model.selectedCategoryMonth {
-            SurfaceCard {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("By category")
-                        .font(.title3.weight(.bold))
-                    Spacer(minLength: 8)
-                    if month.overCount > 0 {
-                        Text("\(month.overCount) over")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.red)
-                    }
-                }
+    /// The month in progress against its cap, row by row — moved here from
+    /// Trends (2026-08-12, user request). Always the current month: the year
+    /// view above is where past months live.
+    private var monthBreakdownCard: some View {
+        SurfaceCard {
+            SectionHeader(title: "Breakdown", actionSystemImage: nil, action: nil)
 
-                // Two months is the comparison that matters: is this month
-                // tracking better or worse than the one that just closed.
-                if model.categoryMonths.count > 1 {
-                    Picker("Month", selection: Binding(
-                        get: { model.selectedCategoryPeriod ?? month.period },
-                        set: { model.selectedCategoryPeriod = $0 }
-                    )) {
-                        ForEach(model.categoryMonths) { m in
-                            Text(m.shortLabel).tag(m.period)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .accessibilityIdentifier("months.categoryMonth")
-                }
-
-                ForEach(Array(month.rows.enumerated()), id: \.element.id) { index, row in
-                    // Tapping a line opens what it plans to spend and the
-                    // transactions behind it. Uncategorized opens too — it has
-                    // nothing to plan, but routing those out of it is the whole
-                    // point of being able to see them.
-                    Button {
-                        sheet = .editLine(row)
-                    } label: {
-                        CategoryLineRow(row: row, showsChevron: true)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("months.line")
-                    if index < month.rows.count - 1 { Divider() }
-                }
-
-                Text("Tap a line to change what it plans to spend. Settings \u{203A} Budget by category has the transactions behind each one.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 2)
-                    .accessibilityIdentifier("months.budgetHint")
-            }
-        } else {
-            // Nothing to break down yet.
-            SurfaceCard {
-                HStack(alignment: .top, spacing: 12) {
-                    RowIcon(systemName: "list.bullet.rectangle", tint: .purple)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Budget by category")
-                            .font(.headline)
-                        Text("Set a planned amount per line in Settings \u{203A} Budget by category, and this month and last will be measured against it here.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .multilineTextAlignment(.leading)
-                    }
-                }
-            }
-            .accessibilityIdentifier("months.categories")
+            DashboardRow(
+                icon: "calendar",
+                tint: .blue,
+                title: "Cap for \(TrendsPeriod.thisMonth.monthName())",
+                subtitle: model.monthStats.monthlyLimitCents != nil
+                    ? "Your monthly cap"
+                    : "\(BudgetMath.dollars(model.monthStats.dailyLimitCents)) a day \u{00D7} \(model.monthStats.daysInMonth) days",
+                value: BudgetMath.dollars(model.monthStats.monthCapCents)
+            )
+            Divider()
+            DashboardRow(
+                icon: "arrow.up.right",
+                tint: .red,
+                title: "Spent so far",
+                subtitle: "Across \(model.monthStats.daysElapsed) day\(model.monthStats.daysElapsed == 1 ? "" : "s")",
+                value: "\u{2212}" + BudgetMath.dollars(model.monthStats.spentCents),
+                valueColor: .red
+            )
+            Divider()
+            DashboardRow(
+                icon: "checkmark.circle",
+                tint: model.monthStats.remainingCents >= 0 ? .green : .red,
+                title: "Left this month",
+                subtitle: model.monthStats.remainingCents >= 0 ? "At your current cap" : "Over the monthly cap",
+                value: BudgetMath.dollars(abs(model.monthStats.remainingCents)),
+                valueColor: model.monthStats.remainingCents >= 0 ? .green : .red
+            )
+            Divider()
+            DashboardRow(
+                icon: "chart.bar.fill",
+                tint: .purple,
+                title: "Average Mon\u{2013}Thu",
+                subtitle: "Across \(model.monthStats.monToThuDaysElapsed) weekday\(model.monthStats.monToThuDaysElapsed == 1 ? "" : "s") so far",
+                value: BudgetMath.dollars(model.monthStats.monToThuAverageCents)
+            )
+            Divider()
+            DashboardRow(
+                icon: "exclamationmark.triangle.fill",
+                tint: .orange,
+                title: "Days over cap",
+                subtitle: "Out of \(model.monthStats.daysElapsed) so far",
+                value: "\(model.monthStats.daysOverCap)",
+                valueColor: model.monthStats.daysOverCap > 0 ? .orange : .primary
+            )
         }
     }
 
