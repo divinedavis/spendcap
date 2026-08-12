@@ -272,9 +272,17 @@ struct TrendsView: View {
             DashboardRow(
                 icon: "chart.bar.fill",
                 tint: .purple,
-                title: "Average per day",
-                subtitle: "Projects to \(BudgetMath.dollars(model.stats.projectedCents)) by month end",
-                value: BudgetMath.dollars(model.stats.averagePerDayCents)
+                title: "Average Mon\u{2013}Thu",
+                subtitle: "Across \(model.stats.monToThuDaysElapsed) weekday\(model.stats.monToThuDaysElapsed == 1 ? "" : "s") so far",
+                value: BudgetMath.dollars(model.stats.monToThuAverageCents)
+            )
+            Divider()
+            DashboardRow(
+                icon: "sun.max.fill",
+                tint: .teal,
+                title: "Weekend spend",
+                subtitle: "Sat + Sun, \(model.stats.weekendDaysElapsed) day\(model.stats.weekendDaysElapsed == 1 ? "" : "s") so far",
+                value: BudgetMath.dollars(model.stats.weekendSpentCents)
             )
             Divider()
             DashboardRow(

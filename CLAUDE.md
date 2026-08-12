@@ -145,6 +145,26 @@ Anything that opens `BudgetView` must pass the **real** `Budget` row, never one
 rebuilt from stats: saving a reconstructed one resets `warn_pct` and wipes the
 monthly cap, since `updateBudget` upserts every column.
 
+**Checking balance card (0015, 2026-08-12).** Months also shows what each month
+did to the checking balance: start of the 1st → end of the last day, and the
+difference. `monthly_balances()` derives every boundary backwards from the
+*current* balance using posted transactions only — which only works because
+`sync.ts` refreshes `accounts.current_balance_cents` on every sync run via a
+cached `/accounts/get` (one call per item per run, not the billed real-time
+Balance product). Do not remove that refresh: the link-time balance was 11 days
+stale when this shipped, and every derived boundary drifts by exactly the spend
+since capture. `/transactions/sync`'s own `accounts` array cannot be the anchor
+— it only carries accounts with updates in that page and is empty on an idle
+sync (verified live). Months before the first transaction on record are omitted
+entirely; their balances would be invented, not derived.
+
+**Trends breakdown buckets Fridays into neither row (2026-08-12).** The
+breakdown shows a Mon–Thu average and a Sat+Sun weekend total (replacing the
+old average-per-day/projection row). Friday is deliberately in neither bucket.
+Weekdays are resolved in `MonthMath` where the timezone is known
+(`DailySpend.weekday`) — a display-time `Calendar.current` lookup can shift a
+midnight bucket onto the wrong day of the week.
+
 Two rules that shaped that screen and are easy to undo by accident:
 
 - **A month with no rows is not a month with no spending.** Plaid only shares

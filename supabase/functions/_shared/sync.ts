@@ -80,6 +80,23 @@ export async function syncItem(supabase: SupabaseClient, item: ItemRow): Promise
       .update({ sync_cursor: cursor, last_synced_at: new Date().toISOString() })
       .eq("id", item.id);
   }
+
+  // Refresh balances once per run. Without this, current_balance_cents stays
+  // whatever it was at link time, and the Months balance widget — which
+  // derives every month's start/end balance backwards from the current
+  // balance — drifts by every dollar spent since linking. /transactions/sync
+  // does carry an `accounts` array, but only for accounts with updates in
+  // that page (empty on an idle sync — verified live), so it cannot be the
+  // anchor. /accounts/get returns the bank's cached balances: not the billed
+  // real-time Balance product, and one call per item per run.
+  const accts = await plaid("/accounts/get", { access_token: secret.access_token });
+  for (const a of accts.accounts ?? []) {
+    const accountId = accountIds.get(a.account_id);
+    if (!accountId || a.balances?.current == null) continue;
+    await supabase.from("accounts")
+      .update({ current_balance_cents: toCents(a.balances.current) })
+      .eq("id", accountId);
+  }
 }
 
 export async function syncAllItems(supabase: SupabaseClient): Promise<{ synced: number; errors: string[] }> {

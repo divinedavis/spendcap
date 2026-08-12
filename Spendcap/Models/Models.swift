@@ -190,8 +190,18 @@ struct DailySpend: Identifiable, Equatable {
     let date: Date
     let spentCents: Int
     let cumulativeCents: Int
+    /// Calendar weekday, 1 = Sunday … 7 = Saturday — resolved when the series
+    /// is built, where the timezone is known. Deriving it from `date` at
+    /// display time would use the device timezone and can shift a midnight
+    /// bucket onto the wrong day of the week.
+    let weekday: Int
 
     var id: Date { date }
+
+    var isWeekend: Bool { weekday == 1 || weekday == 7 }
+    /// Monday through Thursday — the days the breakdown averages, with Friday
+    /// deliberately in neither bucket.
+    var isMonToThu: Bool { (2...5).contains(weekday) }
 }
 
 /// Month-to-date rollup driving the Trends screen. All pure math on top of a
@@ -209,10 +219,23 @@ struct MonthStats: Equatable {
 
     var monthCapCents: Int { monthlyLimitCents ?? dailyLimitCents * daysInMonth }
     var remainingCents: Int { monthCapCents - spentCents }
-    var averagePerDayCents: Int { daysElapsed > 0 ? spentCents / daysElapsed : 0 }
 
-    /// Straight-line projection to month end at the current daily average.
-    var projectedCents: Int { averagePerDayCents * daysInMonth }
+    /// Everything spent on Saturdays and Sundays in the series so far.
+    var weekendSpentCents: Int {
+        series.filter(\.isWeekend).reduce(0) { $0 + $1.spentCents }
+    }
+
+    var weekendDaysElapsed: Int { series.filter(\.isWeekend).count }
+
+    /// Mean spend across the Monday–Thursday days elapsed. Fridays belong to
+    /// neither this nor the weekend total on purpose: they spend like neither.
+    var monToThuAverageCents: Int {
+        let days = series.filter(\.isMonToThu)
+        guard !days.isEmpty else { return 0 }
+        return days.reduce(0) { $0 + $1.spentCents } / days.count
+    }
+
+    var monToThuDaysElapsed: Int { series.filter(\.isMonToThu).count }
 
     var daysOverCap: Int { series.filter { $0.spentCents > dailyLimitCents }.count }
 
@@ -356,7 +379,12 @@ enum MonthMath {
         while cursor <= today, cursor < interval.end {
             let spent = byDay[cursor] ?? 0
             running += spent
-            series.append(DailySpend(date: cursor, spentCents: spent, cumulativeCents: running))
+            series.append(DailySpend(
+                date: cursor,
+                spentCents: spent,
+                cumulativeCents: running,
+                weekday: calendar.component(.weekday, from: cursor)
+            ))
             guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
             cursor = next
         }
@@ -614,6 +642,106 @@ enum YearMath {
         }
 
         return YearStats(months: months, budget: budget)
+    }
+}
+
+// MARK: - Monthly balances
+
+/// One row of `monthly_balances()` — the checking balance going into and out of
+/// a calendar month, derived server-side from the current balance and the
+/// posted transactions after each boundary.
+struct MonthlyBalanceRow: Codable, Equatable {
+    let period: String          // "yyyy-MM-dd", first day of the month
+    let startCents: Int
+    let endCents: Int
+
+    enum CodingKeys: String, CodingKey {
+        case period
+        case startCents = "start_cents"
+        case endCents = "end_cents"
+    }
+
+    init(period: String, startCents: Int, endCents: Int) {
+        self.period = period
+        self.startCents = startCents
+        self.endCents = endCents
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        period = try c.decode(String.self, forKey: .period)
+        // Postgres bigint reaches us as a JSON number through PostgREST but as
+        // a quoted string through some other serialisers — same tolerance as
+        // MonthlySpendRow, and balances can legitimately be negative.
+        startCents = try Self.flexibleInt(c, .startCents)
+        endCents = try Self.flexibleInt(c, .endCents)
+    }
+
+    private static func flexibleInt(
+        _ c: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys
+    ) throws -> Int {
+        if let value = try? c.decode(Int.self, forKey: key) { return value }
+        if let text = try? c.decode(String.self, forKey: key), let value = Int(text) { return value }
+        if let value = try? c.decode(Double.self, forKey: key) { return Int(value) }
+        return 0
+    }
+}
+
+/// One month on the Months tab's checking-balance card.
+struct MonthBalance: Identifiable, Equatable {
+    /// First day of the month, in the user's timezone.
+    let date: Date
+    let startCents: Int
+    let endCents: Int
+    /// The month in progress — its "end" balance is the balance right now,
+    /// not a closed figure.
+    let isCurrent: Bool
+    /// Rendered in the timezone the month was bucketed in, like MonthlySpend.
+    let label: String
+
+    var id: Date { date }
+
+    /// What the month did to the balance: positive means the account grew.
+    var diffCents: Int { endCents - startCents }
+}
+
+enum BalanceMath {
+    /// Turn `monthly_balances()` rows into the card's series, oldest first.
+    /// The function only emits months it can actually derive, so there is no
+    /// has-data flag here — absence is the "no data" state.
+    static func months(
+        rows: [MonthlyBalanceRow],
+        now: Date = Date(),
+        timeZone: TimeZone = .current
+    ) -> [MonthBalance] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+
+        let parser = DateFormatter()
+        parser.dateFormat = "yyyy-MM-dd"
+        parser.timeZone = timeZone
+        parser.locale = Locale(identifier: "en_US_POSIX")
+
+        let longLabel = DateFormatter()
+        longLabel.timeZone = timeZone
+        longLabel.setLocalizedDateFormatFromTemplate("MMMM y")
+
+        let currentMonth = calendar.dateInterval(of: .month, for: now)?.start
+
+        return rows.compactMap { row in
+            guard let date = parser.date(from: row.period) else { return nil }
+            let day = calendar.startOfDay(for: date)
+            let isCurrent = currentMonth.map {
+                calendar.isDate(day, equalTo: $0, toGranularity: .month)
+            } ?? false
+            return MonthBalance(
+                date: day,
+                startCents: row.startCents,
+                endCents: row.endCents,
+                isCurrent: isCurrent,
+                label: longLabel.string(from: day)
+            )
+        }.sorted { $0.date < $1.date }
     }
 }
 

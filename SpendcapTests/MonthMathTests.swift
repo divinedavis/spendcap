@@ -115,15 +115,47 @@ final class MonthMathTests: XCTestCase {
         XCTAssertLessThan(stats.remainingCents, 0)
     }
 
-    func testAverageAndProjection() {
-        // $30 over 3 elapsed days = $10/day → projects to $300 across 30 days.
+    /// April 2026 starts on a Wednesday, so the first week exercises every
+    /// bucket: Wed/Thu/Mon/Tue are Mon–Thu days, Sat/Sun are the weekend, and
+    /// Friday belongs to neither.
+    func testWeekendTotalAndMonToThuAverage() {
         let stats = MonthMath.stats(
-            transactions: [txn("2026-04-01", 1000), txn("2026-04-02", 1000), txn("2026-04-03", 1000)],
+            transactions: [
+                txn("2026-04-01", 1000),   // Wednesday — Mon–Thu
+                txn("2026-04-03", 2000),   // Friday — neither bucket
+                txn("2026-04-04", 3000),   // Saturday — weekend
+                txn("2026-04-05", 4000),   // Sunday — weekend
+                txn("2026-04-06", 500),    // Monday — Mon–Thu
+            ],
             dailyLimitCents: 5000,
-            now: date("2026-04-03"), timeZone: utc
+            now: date("2026-04-07"), timeZone: utc
         )
-        XCTAssertEqual(stats.averagePerDayCents, 1000)
-        XCTAssertEqual(stats.projectedCents, 30_000)
+        XCTAssertEqual(stats.weekendSpentCents, 7000)
+        XCTAssertEqual(stats.weekendDaysElapsed, 2)
+        // Mon–Thu days elapsed by Tue the 7th: Wed 1, Thu 2, Mon 6, Tue 7.
+        XCTAssertEqual(stats.monToThuDaysElapsed, 4)
+        XCTAssertEqual(stats.monToThuAverageCents, 1500 / 4)
+        // Friday's $20 is in the month total but neither breakdown bucket.
+        XCTAssertEqual(stats.spentCents, 10_500)
+    }
+
+    /// The weekday is resolved in the series' own timezone. Auckland is a day
+    /// ahead of UTC for most of its day — a UTC-derived weekday would put this
+    /// Saturday spend on Friday.
+    func testWeekendResolvesInTheSeriesTimezone() {
+        let auckland = TimeZone(identifier: "Pacific/Auckland")!
+        let stats = MonthMath.stats(
+            transactions: [txn("2026-04-04", 1000)],   // Saturday everywhere
+            dailyLimitCents: 5000,
+            now: {
+                let f = DateFormatter()
+                f.dateFormat = "yyyy-MM-dd"
+                f.timeZone = auckland
+                return f.date(from: "2026-04-05")!
+            }(),
+            timeZone: auckland
+        )
+        XCTAssertEqual(stats.weekendSpentCents, 1000)
     }
 
     func testDaysOverCapCountsStrictlyGreater() {
@@ -147,7 +179,8 @@ final class MonthMathTests: XCTestCase {
             now: date("2026-04-15"), timeZone: utc
         )
         XCTAssertEqual(stats.spentCents, 0)
-        XCTAssertEqual(stats.averagePerDayCents, 0)
+        XCTAssertEqual(stats.monToThuAverageCents, 0)
+        XCTAssertEqual(stats.weekendSpentCents, 0)
         XCTAssertEqual(stats.daysOverCap, 0)
         XCTAssertEqual(stats.capProgress, 0)
     }

@@ -20,6 +20,9 @@ final class MonthsViewModel: ObservableObject {
     /// This month and last, by budget line — the same rollup the Budget screen
     /// uses, shown inline here.
     @Published var categoryMonths: [CategoryMonth] = []
+    /// Checking balance in and out of each month, oldest first. Empty means
+    /// no checking account on record, and the card hides itself.
+    @Published var balances: [MonthBalance] = []
     @Published var selectedCategoryPeriod: Date?
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -58,6 +61,12 @@ final class MonthsViewModel: ObservableObject {
                 || !categoryMonths.contains(where: { $0.period == selectedCategoryPeriod }) {
                 selectedCategoryPeriod = categoryMonths.first?.period
             }
+        }
+
+        // Balance history is derived from the same rows the totals are, but a
+        // failure here must not blank them — same posture as statements below.
+        if let rows = try? await SpendService.shared.monthlyBalances(monthsBack: 12) {
+            balances = BalanceMath.months(rows: rows)
         }
 
         // Statements are context, not the point of the screen — reading the
@@ -123,6 +132,9 @@ struct MonthsView: View {
                         // The month list is what the screen is for, so it sits
                         // above the year-level rollup rather than below it.
                         monthsCard
+                        if !model.balances.isEmpty {
+                            balanceCard
+                        }
                         if !model.stats.withData.isEmpty {
                             breakdownCard
                         }
@@ -534,6 +546,63 @@ struct MonthsView: View {
             parts.append("\(statements.count) statements")
         }
         return parts.joined(separator: " \u{00B7} ")
+    }
+
+    // MARK: - Checking balance
+
+    /// What each month did to the checking account: the balance it opened on,
+    /// the balance it closed on, and the difference. This is the figure the
+    /// spend totals above can't give — a month can stay under its cap and
+    /// still shrink the account if less came in than went out.
+    private var balanceCard: some View {
+        SurfaceCard {
+            SectionHeader(title: "Checking balance", actionSystemImage: nil, action: nil)
+
+            let rows = Array(model.balances.reversed())
+            ForEach(Array(rows.enumerated()), id: \.element.id) { index, month in
+                balanceRow(month)
+                if index < rows.count - 1 { Divider() }
+            }
+
+            Text("Start of the 1st to end of the last day, from your balance and posted transactions.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 2)
+        }
+    }
+
+    private func balanceRow(_ month: MonthBalance) -> some View {
+        let grew = month.diffCents >= 0
+        return HStack(spacing: 12) {
+            RowIcon(
+                systemName: grew ? "arrow.up.right.circle.fill" : "arrow.down.right.circle.fill",
+                tint: grew ? .green : .red
+            )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(month.label)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                Text("\(BudgetMath.dollars(month.startCents)) \u{2192} \(BudgetMath.dollars(month.endCents))\(month.isCurrent ? " today" : "")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text((grew ? "+" : "\u{2212}") + BudgetMath.dollars(abs(month.diffCents)))
+                    .font(.body.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(grew ? Color.green : Color.red)
+                if month.isCurrent {
+                    Text("so far")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 6)
+        .accessibilityIdentifier("months.balanceRow")
     }
 
     // MARK: - Category budget

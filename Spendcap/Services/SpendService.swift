@@ -76,6 +76,16 @@ final class SpendService {
             .value
     }
 
+    /// Checking balance at the start and end of each month, derived in
+    /// Postgres (`monthly_balances()`) from the current balance and posted
+    /// transactions. Empty when no checking account is on record.
+    func monthlyBalances(monthsBack: Int = 12) async throws -> [MonthlyBalanceRow] {
+        try await client
+            .rpc("monthly_balances", params: ["months_back": monthsBack])
+            .execute()
+            .value
+    }
+
     // MARK: - Category budgets
 
     /// Planned vs actual per category for the last `monthsBack` months, newest

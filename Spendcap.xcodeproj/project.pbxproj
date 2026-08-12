@@ -45,6 +45,7 @@
 		BA3281C114BBAA73B8B6136C /* SpendService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32328E88E358DEF3839466BD /* SpendService.swift */; };
 		C00C3E7B2BA9AD1E46CD75F5 /* PlaidLinkStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4087935D49D831BDA9CFAE0 /* PlaidLinkStoreTests.swift */; };
 		CB329C379A9A837A81B8FD0C /* UITestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DD146D25307F1072D6D423B /* UITestSupport.swift */; };
+		CD6F6F99FD07F78F2F9E8F75 /* BalanceMathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47B0773162FC5CFAE387D841 /* BalanceMathTests.swift */; };
 		CE06C0725FE2D69CC2D4A82F /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B2DC984C8DD235B85ADE4C /* AuthView.swift */; };
 		E373FF5521F5A6F0D564B865 /* BudgetMathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B70F26F0CECBC013339E8E2 /* BudgetMathTests.swift */; };
 		E7E4B7020352C02A5B762A68 /* DashboardComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2718EA432660E25E2181D3D6 /* DashboardComponents.swift */; };
@@ -79,6 +80,7 @@
 		2821BA90CD0918DC2B9B032B /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
 		32328E88E358DEF3839466BD /* SpendService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendService.swift; sourceTree = "<group>"; };
 		40336700D333C30091B449D3 /* TripsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripsView.swift; sourceTree = "<group>"; };
+		47B0773162FC5CFAE387D841 /* BalanceMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BalanceMathTests.swift; sourceTree = "<group>"; };
 		4B85634D8AC8E9652C0799DA /* Spendcap.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Spendcap.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4BAB16E5185C3193BF58AE38 /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityView.swift; sourceTree = "<group>"; };
 		4F5902D08BF2F679F3AF3FC9 /* SpendcapUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendcapUITests.swift; sourceTree = "<group>"; };
@@ -114,7 +116,7 @@
 		F3BA7D53E4C8AEC4EC9EDB50 /* BudgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetView.swift; sourceTree = "<group>"; };
 		F8EAFF728874C211BDBECA75 /* TrendsPeriodTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendsPeriodTests.swift; sourceTree = "<group>"; };
 		FC109E672012905CC6B889E6 /* MonthMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthMathTests.swift; sourceTree = "<group>"; };
-		"TEMP_5567E999-4B01-4345-B4E5-C4A132813491" /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
+		"TEMP_C46BEE25-850E-40E7-BC2F-D9958A38131B" /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -184,6 +186,7 @@
 			isa = PBXGroup;
 			children = (
 				F38C46304AE77D75066978FE /* AuthPhaseTests.swift */,
+				47B0773162FC5CFAE387D841 /* BalanceMathTests.swift */,
 				89AF577961D365388D0E24F1 /* BankStatementTests.swift */,
 				0B70F26F0CECBC013339E8E2 /* BudgetMathTests.swift */,
 				19627D9E00D44D10838E8B89 /* CategoryMathTests.swift */,
@@ -310,10 +313,10 @@
 			path = Notifications;
 			sourceTree = "<group>";
 		};
-		"TEMP_08F6350B-1C53-402D-9C0B-A9B07FC03F75" /* Spendcap */ = {
+		"TEMP_5880101F-A445-4A85-A214-446A8DBE5B00" /* Spendcap */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_5567E999-4B01-4345-B4E5-C4A132813491" /* Secrets.xcconfig */,
+				"TEMP_C46BEE25-850E-40E7-BC2F-D9958A38131B" /* Secrets.xcconfig */,
 			);
 			path = Spendcap;
 			sourceTree = "<group>";
@@ -450,6 +453,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7A37C01366570FB21D1FFFCE /* AuthPhaseTests.swift in Sources */,
+				CD6F6F99FD07F78F2F9E8F75 /* BalanceMathTests.swift in Sources */,
 				2BDA9AF47386F883F50D1163 /* BankStatementTests.swift in Sources */,
 				E373FF5521F5A6F0D564B865 /* BudgetMathTests.swift in Sources */,
 				30B0E5E915EA7D06434A7433 /* CategoryMathTests.swift in Sources */,
@@ -529,7 +533,7 @@
 		};
 		568F0089E9BF72A888B8F68D /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_5567E999-4B01-4345-B4E5-C4A132813491" /* Secrets.xcconfig */;
+			baseConfigurationReference = "TEMP_C46BEE25-850E-40E7-BC2F-D9958A38131B" /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -602,7 +606,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -695,7 +699,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -729,7 +733,7 @@
 		};
 		A2AF47695D6DE2F5696B08C5 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_5567E999-4B01-4345-B4E5-C4A132813491" /* Secrets.xcconfig */;
+			baseConfigurationReference = "TEMP_C46BEE25-850E-40E7-BC2F-D9958A38131B" /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
