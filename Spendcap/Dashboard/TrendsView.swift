@@ -209,13 +209,15 @@ struct TrendsView: View {
                     // spoken for: rent (paid outside this account, so it
                     // never shows in the spend above) plus the unpaid part of
                     // any debt-tagged budget lines (paid debt is already in
-                    // the spend, so only the remainder is reserved). Only the
-                    // month in progress: a finished month has nothing "left".
+                    // the spend, so only the remainder is reserved). The label
+                    // names the answer, not the formula — it must not grow a
+                    // clause per excluded kind. Only the month in progress: a
+                    // finished month has nothing left to spend.
                     if period.isCurrent {
-                        Text("\(BudgetMath.dollars(model.stats.remainingExcludingCommitmentsCents)) left excl. \(model.stats.hasDebtLines ? "rent & debts" : "rent")")
+                        Text("\(BudgetMath.dollars(model.stats.remainingExcludingCommitmentsCents)) free to spend")
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(model.stats.remainingExcludingCommitmentsCents >= 0 ? .green : .red)
-                            .accessibilityIdentifier("trends.leftExclRent")
+                            .accessibilityIdentifier("trends.freeToSpend")
                     }
                     Text(period.spentCaption)
                         .font(.caption)

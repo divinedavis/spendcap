@@ -244,13 +244,10 @@ struct MonthStats: Equatable {
     /// second subtraction.
     var debtReserveCents: Int { max(0, debtPlannedCents - debtSpentCents) }
 
-    /// Whether any budget line is tagged as debt this month — what flips the
-    /// chart-card label from "left excl. rent" to "left excl. rent & debts".
-    var hasDebtLines: Bool { debtPlannedCents > 0 || debtSpentCents > 0 }
-
     /// What is genuinely left to spend this month once the committed money —
     /// rent, plus whatever of the debt plan is still unpaid — is spoken for.
-    /// Negative means the month is over even before those commitments.
+    /// Shown as "free to spend" on the Trends chart card. Negative means the
+    /// month is over even before those commitments.
     var remainingExcludingCommitmentsCents: Int {
         monthCapCents - Self.rentReserveCents - debtReserveCents - spentCents
     }

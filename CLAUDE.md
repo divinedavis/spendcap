@@ -110,9 +110,9 @@ resolve it through `Budget.capCents(daysInMonth:)` / `MonthStats.monthCapCents`
 so they can never disagree. Nothing pushes on the monthly cap yet — that would
 need a server-side counterpart in `check_overspend`.
 
-**The rent reserve (2026-08-12).** Trends' chart card shows "left excl. rent":
-`monthCapCents − $2,000 − spentCents` (`MonthStats.rentReserveCents`, current
-month only). The $2,000 is a hardcoded reserve at the user's request, and the
+**The rent reserve (2026-08-12).** Trends' chart card shows a "free to spend"
+figure: `monthCapCents − $2,000 − spentCents` (`MonthStats.rentReserveCents`,
+current month only). The $2,000 is a hardcoded reserve at the user's request, and the
 subtraction is safe from double-counting for a data reason worth keeping: rent
 is paid **outside** the linked checking account — no rent-sized transaction has
 ever posted through it — so it can never also appear in `spentCents`. If a
@@ -120,8 +120,11 @@ rent payment ever starts flowing through the linked account, this math starts
 double-counting and needs a paid-this-month check.
 
 **Debt-tagged lines join the reserve (2026-08-12, same day).** A budget line
-tagged `kind = 'debt'` (0017) extends that figure to "left excl. rent & debts".
-Debts are the opposite data situation from rent: Best Egg, Liberty Mutual and
+tagged `kind = 'debt'` (0017) also comes out of that figure. The label is
+"free to spend" on purpose — it names the answer, not the formula, so it must
+not regrow into "left excl. rent & debts & …" as kinds get excluded (it
+briefly was exactly that, build 37). Debts are the opposite data situation
+from rent: Best Egg, Liberty Mutual and
 the rest post **through** the linked account, so the full plan cannot be
 reserved — the paid part is already inside `spentCents`. Only the *unpaid
 remainder* is: `debtReserveCents = max(0, debtPlanned − debtSpent)`, clamped so

@@ -119,7 +119,6 @@ final class MonthMathTests: XCTestCase {
         // $6,500 cap − $2,000 rent − $1,831.84 spent = $2,668.16. No debt
         // lines tagged, so the commitments figure is rent-only.
         XCTAssertEqual(stats.remainingExcludingCommitmentsCents, 266_816)
-        XCTAssertFalse(stats.hasDebtLines)
     }
 
     func testRemainingExcludingRentGoesNegativeBeforeTheCapDoes() {
@@ -148,7 +147,6 @@ final class MonthMathTests: XCTestCase {
         stats.debtPlannedCents = 250_000
         stats.debtSpentCents = 115_176
         XCTAssertEqual(stats.debtReserveCents, 134_824)
-        XCTAssertTrue(stats.hasDebtLines)
         // $6,500 − $2,000 rent − $1,348.24 unpaid debt − $1,831.84 spent.
         XCTAssertEqual(stats.remainingExcludingCommitmentsCents, 131_992)
     }
