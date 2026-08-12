@@ -83,6 +83,24 @@ final class CategoryMathTests: XCTestCase {
         XCTAssertEqual(month.uncategorizedCents, 412_882)
     }
 
+    /// The debt totals feed the chart card's reserve, so they must count only
+    /// lines *tagged* debt — a line merely named "Debts" is untagged and does
+    /// not qualify, the same rule that makes rent a field, not a name-guess.
+    func testDebtTotalsCountOnlyDebtTaggedLines() {
+        let tagged = CategorySpendRow(
+            period: "2026-08-01", categoryId: UUID(), categoryName: "Loans",
+            plannedCents: 100_000, spentCents: 40_000, txnCount: 2,
+            sortOrder: 3, kind: .debt)
+        let month = months([
+            row("2026-08-01", "Food", planned: 60_000, spent: 16_069, order: 1),
+            // Named "Debts" but untagged (row() leaves kind nil) — must not count.
+            row("2026-08-01", "Debts", planned: 250_000, spent: 115_176, order: 2),
+            tagged,
+        ]).first!
+        XCTAssertEqual(month.debtPlannedCents, 100_000)
+        XCTAssertEqual(month.debtSpentCents, 40_000)
+    }
+
     func testOverCountCountsOnlyLinesPastTheirPlan() {
         let month = months([
             row("2026-07-01", "Food", planned: 60_000, spent: 100_878, order: 1),     // over

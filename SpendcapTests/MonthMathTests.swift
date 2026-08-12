@@ -116,8 +116,10 @@ final class MonthMathTests: XCTestCase {
             monthlyLimitCents: 650_000,
             now: date("2026-04-12"), timeZone: utc
         )
-        // $6,500 cap − $2,000 rent − $1,831.84 spent = $2,668.16.
-        XCTAssertEqual(stats.remainingExcludingRentCents, 266_816)
+        // $6,500 cap − $2,000 rent − $1,831.84 spent = $2,668.16. No debt
+        // lines tagged, so the commitments figure is rent-only.
+        XCTAssertEqual(stats.remainingExcludingCommitmentsCents, 266_816)
+        XCTAssertFalse(stats.hasDebtLines)
     }
 
     func testRemainingExcludingRentGoesNegativeBeforeTheCapDoes() {
@@ -129,7 +131,43 @@ final class MonthMathTests: XCTestCase {
         )
         // $1,500 nominally left, but rent claims $2,000 of it.
         XCTAssertEqual(stats.remainingCents, 150_000)
-        XCTAssertEqual(stats.remainingExcludingRentCents, -50_000)
+        XCTAssertEqual(stats.remainingExcludingCommitmentsCents, -50_000)
+    }
+
+    /// Debt payments post *through* the linked account, so only the unpaid
+    /// remainder of the plan is reserved — the paid part already sits in the
+    /// spend and reserving the full plan would count it twice.
+    func testDebtReserveIsOnlyTheUnpaidRemainderOfThePlan() {
+        var stats = MonthMath.stats(
+            transactions: [txn("2026-04-01", 183_184)],
+            dailyLimitCents: 5000,
+            monthlyLimitCents: 650_000,
+            now: date("2026-04-12"), timeZone: utc
+        )
+        // $2,500 planned, $1,151.76 already paid (and inside the spend above).
+        stats.debtPlannedCents = 250_000
+        stats.debtSpentCents = 115_176
+        XCTAssertEqual(stats.debtReserveCents, 134_824)
+        XCTAssertTrue(stats.hasDebtLines)
+        // $6,500 − $2,000 rent − $1,348.24 unpaid debt − $1,831.84 spent.
+        XCTAssertEqual(stats.remainingExcludingCommitmentsCents, 131_992)
+    }
+
+    /// Debt paid beyond its plan is not subtracted twice: the overage is in
+    /// the spend already, so the reserve clamps to zero instead of going
+    /// negative and handing the overage back.
+    func testDebtPaidBeyondThePlanClampsTheReserveToZero() {
+        var stats = MonthMath.stats(
+            transactions: [txn("2026-04-01", 183_184)],
+            dailyLimitCents: 5000,
+            monthlyLimitCents: 650_000,
+            now: date("2026-04-12"), timeZone: utc
+        )
+        stats.debtPlannedCents = 100_000
+        stats.debtSpentCents = 115_176
+        XCTAssertEqual(stats.debtReserveCents, 0)
+        // Identical to the rent-only figure — the debt is fully paid.
+        XCTAssertEqual(stats.remainingExcludingCommitmentsCents, 266_816)
     }
 
     func testRemainingGoesNegativeWhenOverMonthlyCap() {

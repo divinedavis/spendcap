@@ -1637,7 +1637,9 @@ alter table public.budget_categories
 alter table public.budget_categories
   add constraint budget_categories_kind_check check (
     kind is null or kind in (
-      'rent', 'food', 'transportation', 'utilities', 'subscriptions',
+      -- 'debt' added in 0017: committed money like rent, but it posts through
+      -- the linked account, so the client reserves only the unpaid remainder.
+      'rent', 'debt', 'food', 'transportation', 'utilities', 'subscriptions',
       'entertainment', 'health', 'savings', 'other'
     )
   );

@@ -229,11 +229,30 @@ struct MonthStats: Equatable {
     /// revisit here if the rent changes.
     static let rentReserveCents = 200_000
 
-    /// What is genuinely left to spend this month once rent is spoken for:
-    /// the cap, minus the rent reserve, minus what has already been spent.
-    /// Negative means the month is over even before rent.
-    var remainingExcludingRentCents: Int {
-        monthCapCents - Self.rentReserveCents - spentCents
+    /// The debt-tagged budget lines' plan and month-to-date payments, filled
+    /// in from the category rollup once it loads (zero until then, and zero
+    /// when no line is tagged `debt` — either way the math degrades to
+    /// rent-only). Unlike rent, debt payments post *through* the linked
+    /// account, so they are already inside `spentCents`.
+    var debtPlannedCents: Int = 0
+    var debtSpentCents: Int = 0
+
+    /// The part of the debt plan still to be paid this month. Only the unpaid
+    /// remainder is reserved — the paid part is already in `spentCents`, and
+    /// reserving the full plan would count it twice. Debt paid beyond the plan
+    /// clamps to zero: the overage also sits in `spentCents` and needs no
+    /// second subtraction.
+    var debtReserveCents: Int { max(0, debtPlannedCents - debtSpentCents) }
+
+    /// Whether any budget line is tagged as debt this month — what flips the
+    /// chart-card label from "left excl. rent" to "left excl. rent & debts".
+    var hasDebtLines: Bool { debtPlannedCents > 0 || debtSpentCents > 0 }
+
+    /// What is genuinely left to spend this month once the committed money —
+    /// rent, plus whatever of the debt plan is still unpaid — is spoken for.
+    /// Negative means the month is over even before those commitments.
+    var remainingExcludingCommitmentsCents: Int {
+        monthCapCents - Self.rentReserveCents - debtReserveCents - spentCents
     }
 
     /// Mean spend across the Monday–Thursday days elapsed.
@@ -761,6 +780,7 @@ enum BalanceMath {
 /// the `budget_categories_kind_check` constraint accepts (0016).
 enum CategoryKind: String, CaseIterable, Codable, Identifiable {
     case rent
+    case debt
     case food
     case transportation
     case utilities
@@ -775,6 +795,7 @@ enum CategoryKind: String, CaseIterable, Codable, Identifiable {
     var label: String {
         switch self {
         case .rent: return "Rent"
+        case .debt: return "Debt"
         case .food: return "Food"
         case .transportation: return "Transportation"
         case .utilities: return "Utilities"
@@ -789,6 +810,7 @@ enum CategoryKind: String, CaseIterable, Codable, Identifiable {
     var systemImage: String {
         switch self {
         case .rent: return "house.fill"
+        case .debt: return "creditcard.fill"
         case .food: return "fork.knife"
         case .transportation: return "car.fill"
         case .utilities: return "bolt.fill"
@@ -1124,6 +1146,14 @@ struct CategoryMonth: Identifiable, Equatable {
     var spentCents: Int { rows.reduce(0) { $0 + $1.spentCents } }
     var overCount: Int { rows.filter(\.isOver).count }
     var uncategorizedCents: Int { rows.first(where: \.isUncategorized)?.spentCents ?? 0 }
+
+    /// Debt-tagged lines only — what feeds `MonthStats`' debt reserve.
+    var debtPlannedCents: Int {
+        rows.filter { $0.kind == .debt }.reduce(0) { $0 + $1.plannedCents }
+    }
+    var debtSpentCents: Int {
+        rows.filter { $0.kind == .debt }.reduce(0) { $0 + $1.spentCents }
+    }
 }
 
 enum CategoryMath {

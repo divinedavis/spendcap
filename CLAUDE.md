@@ -119,6 +119,19 @@ ever posted through it — so it can never also appear in `spentCents`. If a
 rent payment ever starts flowing through the linked account, this math starts
 double-counting and needs a paid-this-month check.
 
+**Debt-tagged lines join the reserve (2026-08-12, same day).** A budget line
+tagged `kind = 'debt'` (0017) extends that figure to "left excl. rent & debts".
+Debts are the opposite data situation from rent: Best Egg, Liberty Mutual and
+the rest post **through** the linked account, so the full plan cannot be
+reserved — the paid part is already inside `spentCents`. Only the *unpaid
+remainder* is: `debtReserveCents = max(0, debtPlanned − debtSpent)`, clamped so
+debt paid beyond its plan is not handed back. The figures come from the same
+`category_spend()` rollup the "By category" card reads
+(`CategoryMonth.debtPlannedCents/-SpentCents` → set on `MonthStats` in
+`TrendsViewModel.load`, current month only); a failed rollup read degrades the
+figure to rent-only rather than blanking it. Only lines the user *tagged*
+count — a line merely named "Debts" is untagged and does not qualify.
+
 **Category budgets (0007).** `budget_categories` (a planned amount per line) +
 `category_rules` (what routes into it) + `category_spend(months_back)` /
 `category_transactions(category, period)` / `seed_starter_budget()`. The
