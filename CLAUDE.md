@@ -144,7 +144,9 @@ from the Months toolbar and Settings.
   is a field, not a guess parsed from "Rent / Wifi / Utilities". The value set
   is closed (`budget_categories_kind_check` + `CategoryKind`); an unknown kind
   decodes as untagged rather than failing the rollup. Untagged (null) is a
-  valid state, never defaulted.
+  valid state, never defaulted. **No icon on the budget rows** — one shipped in
+  build 35 and was removed the same day at the user's request; the tag is for
+  finding lines by what they are, not decoration.
 
 **Tapping a budget line edits its planned amount**, on the Trends widget and
 on the Budget screen. If a tap there ever seems to do nothing in a UI test,

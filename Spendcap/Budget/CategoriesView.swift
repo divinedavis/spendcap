@@ -265,14 +265,9 @@ struct CategoryLineRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                // The tag's icon, so rent or food is spottable at a glance
-                // without reading every name.
-                if let kind = row.kind {
-                    Image(systemName: kind.systemImage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .accessibilityLabel(kind.label)
-                }
+                // No kind icon here on purpose (user request, 2026-08-12):
+                // the tag is data for finding lines by what they are, not
+                // decoration on every row. It's visible in the edit sheet.
                 Text(row.categoryName)
                     .font(.body.weight(.medium))
                     .foregroundStyle(row.isUncategorized ? .secondary : .primary)
