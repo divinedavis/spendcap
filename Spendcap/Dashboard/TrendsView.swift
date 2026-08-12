@@ -197,6 +197,17 @@ struct TrendsView: View {
                     Text(BudgetMath.dollars(model.stats.spentCents))
                         .font(.system(size: 30, weight: .bold, design: .rounded))
                         .accessibilityIdentifier("trends.monthSpend")
+                    // What's actually spendable once rent is spoken for —
+                    // rent is paid outside this account, so it never shows in
+                    // the spend above and has to be reserved out explicitly.
+                    // Only the month in progress: a finished month has
+                    // nothing "left".
+                    if period.isCurrent {
+                        Text("\(BudgetMath.dollars(model.stats.remainingExcludingRentCents)) left excl. rent")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(model.stats.remainingExcludingRentCents >= 0 ? .green : .red)
+                            .accessibilityIdentifier("trends.leftExclRent")
+                    }
                     Text(period.spentCaption)
                         .font(.caption)
                         .foregroundStyle(.secondary)

@@ -110,6 +110,15 @@ resolve it through `Budget.capCents(daysInMonth:)` / `MonthStats.monthCapCents`
 so they can never disagree. Nothing pushes on the monthly cap yet — that would
 need a server-side counterpart in `check_overspend`.
 
+**The rent reserve (2026-08-12).** Trends' chart card shows "left excl. rent":
+`monthCapCents − $2,000 − spentCents` (`MonthStats.rentReserveCents`, current
+month only). The $2,000 is a hardcoded reserve at the user's request, and the
+subtraction is safe from double-counting for a data reason worth keeping: rent
+is paid **outside** the linked checking account — no rent-sized transaction has
+ever posted through it — so it can never also appear in `spentCents`. If a
+rent payment ever starts flowing through the linked account, this math starts
+double-counting and needs a paid-this-month check.
+
 **Category budgets (0007).** `budget_categories` (a planned amount per line) +
 `category_rules` (what routes into it) + `category_spend(months_back)` /
 `category_transactions(category, period)` / `seed_starter_budget()`. The

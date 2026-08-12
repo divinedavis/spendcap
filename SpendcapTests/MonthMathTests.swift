@@ -106,6 +106,32 @@ final class MonthMathTests: XCTestCase {
         XCTAssertEqual(stats.dailyLimitCents, 5000)
     }
 
+    /// Rent never posts through the linked account, so "left excluding rent"
+    /// is the cap minus the $2,000 reserve minus the spend — all month, with
+    /// no double-count when rent is paid, because it never lands in spend.
+    func testRemainingExcludingRentReservesTwoThousand() {
+        let stats = MonthMath.stats(
+            transactions: [txn("2026-04-01", 183_184)],
+            dailyLimitCents: 5000,
+            monthlyLimitCents: 650_000,
+            now: date("2026-04-12"), timeZone: utc
+        )
+        // $6,500 cap − $2,000 rent − $1,831.84 spent = $2,668.16.
+        XCTAssertEqual(stats.remainingExcludingRentCents, 266_816)
+    }
+
+    func testRemainingExcludingRentGoesNegativeBeforeTheCapDoes() {
+        let stats = MonthMath.stats(
+            transactions: [txn("2026-04-01", 500_000)],
+            dailyLimitCents: 5000,
+            monthlyLimitCents: 650_000,
+            now: date("2026-04-12"), timeZone: utc
+        )
+        // $1,500 nominally left, but rent claims $2,000 of it.
+        XCTAssertEqual(stats.remainingCents, 150_000)
+        XCTAssertEqual(stats.remainingExcludingRentCents, -50_000)
+    }
+
     func testRemainingGoesNegativeWhenOverMonthlyCap() {
         let stats = MonthMath.stats(
             transactions: [txn("2026-04-01", 200_000)],

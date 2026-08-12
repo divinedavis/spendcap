@@ -221,6 +221,21 @@ struct MonthStats: Equatable {
     var monthCapCents: Int { monthlyLimitCents ?? dailyLimitCents * daysInMonth }
     var remainingCents: Int { monthCapCents - spentCents }
 
+    /// Money set aside for rent each month. Rent is paid outside the linked
+    /// checking account — no rent-sized transaction has ever posted through it
+    /// — so it never appears in `spentCents` and has to be reserved out of the
+    /// cap explicitly, or "left this month" overstates what is actually
+    /// spendable by a rent payment. Fixed at $2,000 at the user's request;
+    /// revisit here if the rent changes.
+    static let rentReserveCents = 200_000
+
+    /// What is genuinely left to spend this month once rent is spoken for:
+    /// the cap, minus the rent reserve, minus what has already been spent.
+    /// Negative means the month is over even before rent.
+    var remainingExcludingRentCents: Int {
+        monthCapCents - Self.rentReserveCents - spentCents
+    }
+
     /// Mean spend across the Monday–Thursday days elapsed.
     var monToThuAverageCents: Int {
         let days = series.filter(\.isMonToThu)
