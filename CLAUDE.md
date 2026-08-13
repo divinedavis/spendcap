@@ -110,30 +110,28 @@ resolve it through `Budget.capCents(daysInMonth:)` / `MonthStats.monthCapCents`
 so they can never disagree. Nothing pushes on the monthly cap yet — that would
 need a server-side counterpart in `check_overspend`.
 
-**The rent reserve (2026-08-12).** Trends' chart card shows a "free to spend"
-figure: `monthCapCents − $2,000 − spentCents` (`MonthStats.rentReserveCents`,
-current month only). The $2,000 is a hardcoded reserve at the user's request, and the
-subtraction is safe from double-counting for a data reason worth keeping: rent
-is paid **outside** the linked checking account — no rent-sized transaction has
-ever posted through it — so it can never also appear in `spentCents`. If a
-rent payment ever starts flowing through the linked account, this math starts
-double-counting and needs a paid-this-month check.
+**"Free to spend this week" (2026-08-12, the third model that day — this one
+is Divine's own).** Trends' chart card shows
+`(discretionaryPlanned − discretionarySpent) / 4`, current month only, hidden
+until the rollup lands (`discretionaryPlannedCents > 0`). The model: the
+**untagged** budget lines — Food and Socializing, $1,200/month between them —
+are the money that is actually free; every line tagged with a **committed
+kind** (`CategoryKind.isCommitted`: rent, debt, personal_care, transportation,
+savings — Divine's list, hair entered as `personal_care` in 0019) was spoken
+for before the month started and is fenced off entirely. Discretionary spent
+**includes Uncategorized** (unclaimed spending came out of the free money, not
+out of rent); discretionary planned excludes it (no plan by definition). The
+divisor is a **flat 4 at Divine's request**, not weeks-remaining. Figures flow
+`CategoryMonth.discretionaryPlanned/-SpentCents` → `MonthStats` in
+`TrendsViewModel.load`; committed status comes from the *tag*, never the
+line's name.
 
-**Debt-tagged lines join the reserve (2026-08-12, same day).** A budget line
-tagged `kind = 'debt'` (0017) also comes out of that figure. The label is
-"free to spend" on purpose — it names the answer, not the formula, so it must
-not regrow into "left excl. rent & debts & …" as kinds get excluded (it
-briefly was exactly that, build 37). Debts are the opposite data situation
-from rent: Best Egg, Liberty Mutual and
-the rest post **through** the linked account, so the full plan cannot be
-reserved — the paid part is already inside `spentCents`. Only the *unpaid
-remainder* is: `debtReserveCents = max(0, debtPlanned − debtSpent)`, clamped so
-debt paid beyond its plan is not handed back. The figures come from the same
-`category_spend()` rollup the "By category" card reads
-(`CategoryMonth.debtPlannedCents/-SpentCents` → set on `MonthStats` in
-`TrendsViewModel.load`, current month only); a failed rollup read degrades the
-figure to rent-only rather than blanking it. Only lines the user *tagged*
-count — a line merely named "Debts" is untagged and does not qualify.
+This deliberately ignores the month cap and replaced two same-day reserve
+models (builds 36–39: cap − hardcoded $2,000 rent reserve, then also
+− `max(0, debtPlanned − debtSpent)`). If reserve math ever comes back, the
+data facts that shaped it still hold: rent is paid **outside** the linked
+account (never in `spentCents`), debts post **through** it (already in
+`spentCents`, so a full-plan reserve double-counts).
 
 **Category budgets (0007).** `budget_categories` (a planned amount per line) +
 `category_rules` (what routes into it) + `category_spend(months_back)` /

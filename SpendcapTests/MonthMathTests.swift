@@ -106,66 +106,33 @@ final class MonthMathTests: XCTestCase {
         XCTAssertEqual(stats.dailyLimitCents, 5000)
     }
 
-    /// Rent never posts through the linked account, so "left excluding rent"
-    /// is the cap minus the $2,000 reserve minus the spend — all month, with
-    /// no double-count when rent is paid, because it never lands in spend.
-    func testRemainingExcludingRentReservesTwoThousand() {
-        let stats = MonthMath.stats(
-            transactions: [txn("2026-04-01", 183_184)],
-            dailyLimitCents: 5000,
-            monthlyLimitCents: 650_000,
-            now: date("2026-04-12"), timeZone: utc
-        )
-        // $6,500 cap − $2,000 rent − $1,831.84 spent = $2,668.16. No debt
-        // lines tagged, so the commitments figure is rent-only.
-        XCTAssertEqual(stats.remainingExcludingCommitmentsCents, 266_816)
-    }
-
-    func testRemainingExcludingRentGoesNegativeBeforeTheCapDoes() {
-        let stats = MonthMath.stats(
-            transactions: [txn("2026-04-01", 500_000)],
-            dailyLimitCents: 5000,
-            monthlyLimitCents: 650_000,
-            now: date("2026-04-12"), timeZone: utc
-        )
-        // $1,500 nominally left, but rent claims $2,000 of it.
-        XCTAssertEqual(stats.remainingCents, 150_000)
-        XCTAssertEqual(stats.remainingExcludingCommitmentsCents, -50_000)
-    }
-
-    /// Debt payments post *through* the linked account, so only the unpaid
-    /// remainder of the plan is reserved — the paid part already sits in the
-    /// spend and reserving the full plan would count it twice.
-    func testDebtReserveIsOnlyTheUnpaidRemainderOfThePlan() {
+    /// "Free to spend this week" is the discretionary budget minus what has
+    /// come out of it, over a flat 4 — the month cap plays no part, and
+    /// committed spending (rent, debts, hair, transport, savings) can
+    /// neither shrink nor free up the figure.
+    func testFreeToSpendThisWeekIsTheRemainingDiscretionaryBudgetOverFour() {
         var stats = MonthMath.stats(
             transactions: [txn("2026-04-01", 183_184)],
             dailyLimitCents: 5000,
             monthlyLimitCents: 650_000,
             now: date("2026-04-12"), timeZone: utc
         )
-        // $2,500 planned, $1,151.76 already paid (and inside the spend above).
-        stats.debtPlannedCents = 250_000
-        stats.debtSpentCents = 115_176
-        XCTAssertEqual(stats.debtReserveCents, 134_824)
-        // $6,500 − $2,000 rent − $1,348.24 unpaid debt − $1,831.84 spent.
-        XCTAssertEqual(stats.remainingExcludingCommitmentsCents, 131_992)
+        // $1,200 budget (Food + Socializing), $680 of it already spent.
+        stats.discretionaryPlannedCents = 120_000
+        stats.discretionarySpentCents = 68_000
+        // ($1,200 − $680) / 4 = $130 a week.
+        XCTAssertEqual(stats.freeToSpendThisWeekCents, 13_000)
     }
 
-    /// Debt paid beyond its plan is not subtracted twice: the overage is in
-    /// the spend already, so the reserve clamps to zero instead of going
-    /// negative and handing the overage back.
-    func testDebtPaidBeyondThePlanClampsTheReserveToZero() {
+    func testFreeToSpendThisWeekGoesNegativeWhenTheBudgetIsOverspent() {
         var stats = MonthMath.stats(
-            transactions: [txn("2026-04-01", 183_184)],
+            transactions: [],
             dailyLimitCents: 5000,
-            monthlyLimitCents: 650_000,
             now: date("2026-04-12"), timeZone: utc
         )
-        stats.debtPlannedCents = 100_000
-        stats.debtSpentCents = 115_176
-        XCTAssertEqual(stats.debtReserveCents, 0)
-        // Identical to the rent-only figure — the debt is fully paid.
-        XCTAssertEqual(stats.remainingExcludingCommitmentsCents, 266_816)
+        stats.discretionaryPlannedCents = 120_000
+        stats.discretionarySpentCents = 140_000
+        XCTAssertEqual(stats.freeToSpendThisWeekCents, -5_000)
     }
 
     func testRemainingGoesNegativeWhenOverMonthlyCap() {

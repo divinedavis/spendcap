@@ -83,22 +83,30 @@ final class CategoryMathTests: XCTestCase {
         XCTAssertEqual(month.uncategorizedCents, 412_882)
     }
 
-    /// The debt totals feed the chart card's reserve, so they must count only
-    /// lines *tagged* debt — a line merely named "Debts" is untagged and does
-    /// not qualify, the same rule that makes rent a field, not a name-guess.
-    func testDebtTotalsCountOnlyDebtTaggedLines() {
-        let tagged = CategorySpendRow(
-            period: "2026-08-01", categoryId: UUID(), categoryName: "Loans",
-            plannedCents: 100_000, spentCents: 40_000, txnCount: 2,
-            sortOrder: 3, kind: .debt)
+    /// The discretionary totals feed "free to spend this week": untagged
+    /// lines are the budget, committed-tagged lines (rent, debt, hair,
+    /// transport, savings) are fenced off entirely, and Uncategorized
+    /// spending draws the budget down without adding a plan.
+    func testDiscretionaryTotalsFenceOffCommittedLines() {
+        let committed = [
+            CategorySpendRow(period: "2026-08-01", categoryId: UUID(),
+                             categoryName: "Debts", plannedCents: 250_000,
+                             spentCents: 115_176, txnCount: 9, sortOrder: 3, kind: .debt),
+            CategorySpendRow(period: "2026-08-01", categoryId: UUID(),
+                             categoryName: "Haircuts", plannedCents: 40_000,
+                             spentCents: 10_000, txnCount: 1, sortOrder: 4, kind: .personalCare),
+            CategorySpendRow(period: "2026-08-01", categoryId: UUID(),
+                             categoryName: "Rent / Wifi / Utilities", plannedCents: 200_000,
+                             spentCents: 0, txnCount: 0, sortOrder: 5, kind: .rent),
+        ]
         let month = months([
+            // Untagged = discretionary (row() leaves kind nil).
             row("2026-08-01", "Food", planned: 60_000, spent: 16_069, order: 1),
-            // Named "Debts" but untagged (row() leaves kind nil) — must not count.
-            row("2026-08-01", "Debts", planned: 250_000, spent: 115_176, order: 2),
-            tagged,
-        ]).first!
-        XCTAssertEqual(month.debtPlannedCents, 100_000)
-        XCTAssertEqual(month.debtSpentCents, 40_000)
+            row("2026-08-01", "Socializing", planned: 60_000, spent: 30_000, order: 2),
+            uncategorized("2026-08-01", spent: 5_000),
+        ] + committed).first!
+        XCTAssertEqual(month.discretionaryPlannedCents, 120_000)
+        XCTAssertEqual(month.discretionarySpentCents, 16_069 + 30_000 + 5_000)
     }
 
     func testOverCountCountsOnlyLinesPastTheirPlan() {

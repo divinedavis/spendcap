@@ -246,35 +246,26 @@ struct MonthStats: Equatable {
     var monthCapCents: Int { monthlyLimitCents ?? dailyLimitCents * daysInMonth }
     var remainingCents: Int { monthCapCents - spentCents }
 
-    /// Money set aside for rent each month. Rent is paid outside the linked
-    /// checking account — no rent-sized transaction has ever posted through it
-    /// — so it never appears in `spentCents` and has to be reserved out of the
-    /// cap explicitly, or "left this month" overstates what is actually
-    /// spendable by a rent payment. Fixed at $2,000 at the user's request;
-    /// revisit here if the rent changes.
-    static let rentReserveCents = 200_000
+    /// The discretionary budget and what has already come out of it, filled in
+    /// from the category rollup once it loads (zero until then, which hides
+    /// the figure rather than showing a wrong one).
+    ///
+    /// Divine's model: the untagged budget lines — Food and Socializing,
+    /// $1,200/month between them — are the money that is actually free;
+    /// everything tagged with a committed kind (rent, debts, hair, transport,
+    /// savings) was spoken for before the month started. Spending outside the
+    /// committed lines, Uncategorized included, draws the budget down. Note
+    /// the month cap and the committed lines play no part here — a debt
+    /// payment can neither shrink nor free up food money.
+    var discretionaryPlannedCents: Int = 0
+    var discretionarySpentCents: Int = 0
 
-    /// The debt-tagged budget lines' plan and month-to-date payments, filled
-    /// in from the category rollup once it loads (zero until then, and zero
-    /// when no line is tagged `debt` — either way the math degrades to
-    /// rent-only). Unlike rent, debt payments post *through* the linked
-    /// account, so they are already inside `spentCents`.
-    var debtPlannedCents: Int = 0
-    var debtSpentCents: Int = 0
-
-    /// The part of the debt plan still to be paid this month. Only the unpaid
-    /// remainder is reserved — the paid part is already in `spentCents`, and
-    /// reserving the full plan would count it twice. Debt paid beyond the plan
-    /// clamps to zero: the overage also sits in `spentCents` and needs no
-    /// second subtraction.
-    var debtReserveCents: Int { max(0, debtPlannedCents - debtSpentCents) }
-
-    /// What is genuinely left to spend this month once the committed money —
-    /// rent, plus whatever of the debt plan is still unpaid — is spoken for.
-    /// Shown as "free to spend" on the Trends chart card. Negative means the
-    /// month is over even before those commitments.
-    var remainingExcludingCommitmentsCents: Int {
-        monthCapCents - Self.rentReserveCents - debtReserveCents - spentCents
+    /// "Free to spend this week": what remains of the discretionary budget,
+    /// spread over the month's four weeks — at Divine's request the divisor
+    /// is a flat 4, not weeks remaining. Negative means the budget is already
+    /// overspent.
+    var freeToSpendThisWeekCents: Int {
+        (discretionaryPlannedCents - discretionarySpentCents) / 4
     }
 
     /// Mean spend across the Monday–Thursday days elapsed.
@@ -810,6 +801,7 @@ enum CategoryKind: String, CaseIterable, Codable, Identifiable {
     case entertainment
     case health
     case savings
+    case personalCare = "personal_care"
     case other
 
     var id: String { rawValue }
@@ -825,6 +817,7 @@ enum CategoryKind: String, CaseIterable, Codable, Identifiable {
         case .entertainment: return "Entertainment"
         case .health: return "Health"
         case .savings: return "Savings"
+        case .personalCare: return "Personal care"
         case .other: return "Other"
         }
     }
@@ -840,10 +833,21 @@ enum CategoryKind: String, CaseIterable, Codable, Identifiable {
         case .entertainment: return "ticket.fill"
         case .health: return "heart.fill"
         case .savings: return "banknote.fill"
+        case .personalCare: return "scissors"
         case .other: return "tag.fill"
         }
     }
 
+    /// Committed money — spoken for before the month starts, so it is fenced
+    /// off from the discretionary free-to-spend budget. The list is Divine's:
+    /// rent, debts, hair, transport, savings. A line with no kind is
+    /// discretionary; committed is opted into by tagging.
+    var isCommitted: Bool {
+        switch self {
+        case .rent, .debt, .transportation, .savings, .personalCare: return true
+        case .food, .utilities, .subscriptions, .entertainment, .health, .other: return false
+        }
+    }
 }
 
 /// One budget line. `id` nil is impossible here; the *rollup* row below uses a
@@ -1168,12 +1172,19 @@ struct CategoryMonth: Identifiable, Equatable {
     var overCount: Int { rows.filter(\.isOver).count }
     var uncategorizedCents: Int { rows.first(where: \.isUncategorized)?.spentCents ?? 0 }
 
-    /// Debt-tagged lines only — what feeds `MonthStats`' debt reserve.
-    var debtPlannedCents: Int {
-        rows.filter { $0.kind == .debt }.reduce(0) { $0 + $1.plannedCents }
+    /// The discretionary side of the month — what feeds the Trends card's
+    /// "free to spend this week". A line is discretionary unless tagged with
+    /// a committed kind, so the planned total is the untagged lines' plans
+    /// (Uncategorized has no plan by definition) and the spent total includes
+    /// Uncategorized: unclaimed spending came out of the free money, not out
+    /// of rent.
+    var discretionaryPlannedCents: Int {
+        rows.filter { !$0.isUncategorized && $0.kind?.isCommitted != true }
+            .reduce(0) { $0 + $1.plannedCents }
     }
-    var debtSpentCents: Int {
-        rows.filter { $0.kind == .debt }.reduce(0) { $0 + $1.spentCents }
+    var discretionarySpentCents: Int {
+        rows.filter { $0.kind?.isCommitted != true }
+            .reduce(0) { $0 + $1.spentCents }
     }
 }
 

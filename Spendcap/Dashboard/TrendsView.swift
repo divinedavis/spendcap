@@ -84,13 +84,13 @@ final class TrendsViewModel: ObservableObject {
                 || !categoryMonths.contains(where: { $0.period == selectedCategoryPeriod }) {
                 selectedCategoryPeriod = categoryMonths.first?.period
             }
-            // Debt-tagged lines feed the chart card's "left excl." figure —
-            // current month only, which is the only month that has a "left".
-            // A failed rollup read leaves the fields at zero and the figure
-            // degrades to rent-only rather than blanking.
+            // The discretionary budget feeds the chart card's free-to-spend
+            // figure — current month only, which is the only month that has
+            // money left. A failed rollup read leaves the fields at zero,
+            // which hides the figure rather than showing a wrong one.
             if period.isCurrent, let current = categoryMonths.first(where: \.isCurrent) {
-                stats.debtPlannedCents = current.debtPlannedCents
-                stats.debtSpentCents = current.debtSpentCents
+                stats.discretionaryPlannedCents = current.discretionaryPlannedCents
+                stats.discretionarySpentCents = current.discretionarySpentCents
             }
         }
     }
@@ -205,18 +205,17 @@ struct TrendsView: View {
                     Text(BudgetMath.dollars(model.stats.spentCents))
                         .font(.system(size: 30, weight: .bold, design: .rounded))
                         .accessibilityIdentifier("trends.monthSpend")
-                    // What's actually spendable once committed money is
-                    // spoken for: rent (paid outside this account, so it
-                    // never shows in the spend above) plus the unpaid part of
-                    // any debt-tagged budget lines (paid debt is already in
-                    // the spend, so only the remainder is reserved). The label
-                    // names the answer, not the formula — it must not grow a
-                    // clause per excluded kind. Only the month in progress: a
-                    // finished month has nothing left to spend.
-                    if period.isCurrent {
-                        Text("\(BudgetMath.dollars(model.stats.remainingExcludingCommitmentsCents)) free to spend")
+                    // What remains of the discretionary budget — the untagged
+                    // budget lines, everything committed (rent, debts, hair,
+                    // transport, savings) fenced off — spread over the
+                    // month's four weeks. The label names the answer, not the
+                    // formula. Only the month in progress, and only once a
+                    // budget exists: zero-planned means the rollup hasn't
+                    // loaded or there is nothing to measure against.
+                    if period.isCurrent && model.stats.discretionaryPlannedCents > 0 {
+                        Text("\(BudgetMath.dollars(model.stats.freeToSpendThisWeekCents)) free to spend this week")
                             .font(.footnote.weight(.semibold))
-                            .foregroundStyle(model.stats.remainingExcludingCommitmentsCents >= 0 ? .green : .red)
+                            .foregroundStyle(model.stats.freeToSpendThisWeekCents >= 0 ? .green : .red)
                             .accessibilityIdentifier("trends.freeToSpend")
                     }
                     Text(period.spentCaption)
