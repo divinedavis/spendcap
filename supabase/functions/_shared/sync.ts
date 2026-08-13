@@ -101,18 +101,64 @@ export async function syncItem(supabase: SupabaseClient, item: ItemRow): Promise
 
 export async function syncAllItems(supabase: SupabaseClient): Promise<{ synced: number; errors: string[] }> {
   const { data: items } = await supabase
-    .from("plaid_items").select("id, user_id, plaid_item_id, sync_cursor").eq("status", "active");
+    .from("plaid_items")
+    .select("id, user_id, plaid_item_id, sync_cursor, last_refresh_requested_at")
+    .eq("status", "active");
   const errors: string[] = [];
   let synced = 0;
-  for (const item of (items ?? []) as ItemRow[]) {
+  for (const item of (items ?? []) as (ItemRow & { last_refresh_requested_at: string | null })[]) {
     try {
       await syncItem(supabase, item);
       synced++;
     } catch (e) {
       errors.push(`${item.plaid_item_id}: ${String(e)}`);
     }
+    // A stalled item is not a failed sync — /transactions/sync answers fine,
+    // there is just nothing new — so the nudge runs regardless, and its own
+    // failure must not mark the sweep red.
+    try {
+      await nudgeIfStale(supabase, item);
+    } catch (e) {
+      console.warn(`refresh nudge ${item.plaid_item_id}: ${String(e)}`);
+    }
   }
   return { synced, errors };
+}
+
+// Plaid's own background refresh can silently stall: on 2026-08-12/13 a
+// healthy Wells Fargo item (no error, webhook set) went 35 hours without a
+// successful transactions update, and a manual /transactions/refresh brought
+// the missing rows in within two minutes. So each cron run asks Plaid — via
+// the free /item/get — when it last successfully pulled from the bank, and
+// past 24 hours requests an on-demand refresh. The refresh is a billed call,
+// hence the second clock: at most one request per item per 24 hours, however
+// long the staleness lasts. New data still arrives through the normal
+// SYNC_UPDATES_AVAILABLE webhook; this only prompts Plaid to go look.
+const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
+const RENUDGE_AFTER_MS = 24 * 60 * 60 * 1000;
+
+async function nudgeIfStale(
+  supabase: SupabaseClient,
+  item: ItemRow & { last_refresh_requested_at: string | null },
+): Promise<void> {
+  const { data: secret } = await supabase
+    .from("plaid_item_secrets").select("access_token").eq("item_id", item.id).single();
+  if (!secret) return;
+
+  const info = await plaid("/item/get", { access_token: secret.access_token });
+  const lastUpdate = info?.status?.transactions?.last_successful_update;
+  if (!lastUpdate || Date.now() - Date.parse(lastUpdate) < STALE_AFTER_MS) return;
+
+  const lastRequest = item.last_refresh_requested_at
+    ? Date.parse(item.last_refresh_requested_at)
+    : 0;
+  if (Date.now() - lastRequest < RENUDGE_AFTER_MS) return;
+
+  await plaid("/transactions/refresh", { access_token: secret.access_token });
+  await supabase.from("plaid_items")
+    .update({ last_refresh_requested_at: new Date().toISOString() })
+    .eq("id", item.id);
+  console.log(`requested refresh for stale item ${item.plaid_item_id} (last update ${lastUpdate})`);
 }
 
 function dollars(cents: number): string {
