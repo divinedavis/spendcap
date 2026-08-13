@@ -172,6 +172,18 @@ laid out arrives where the row *used* to be. Wait for the row's frame to stop
 moving before tapping. Several entry points were wrongly diagnosed as dead
 buttons before this was understood.
 
+- **A bank fee never wears a merchant's name (0018).** Wells Fargo names an
+  overdraft fee after the purchase that overdrew the account, and Plaid
+  extracts that merchant into `merchant_name` (twice it rewrote the *name* to
+  just "Lyft") — so fees displayed as Affirm/Lyft charges and merchant rules
+  claimed them into the wrong lines ($70 of fees sat under Transport).
+  `txn_display_name()` resolves BANK_FEES rows to "Overdraft fee" (bank text
+  says so) or "Bank fee" (Plaid erased it; the category alone can't prove
+  overdraft — service fees are BANK_FEES too), and every rollup + the Swift
+  `TransactionNaming` mirror use it, so the name shown is the name rules
+  match. Fee rows can only be claimed by `plaid_category` rules (currently
+  BANK_FEES → Debts) or by a rule written from the new names.
+
 **Reassigning a merchant is in the app** (Budget > a line > tap a transaction).
 It writes a `merchant_contains` rule, upserted on `(user_id, match_type,
 match_value)` so a merchant can only ever have one home. Rules are applied at

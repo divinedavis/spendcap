@@ -1,5 +1,31 @@
 import Foundation
 
+/// How a transaction introduces itself, shared by every screen so a row
+/// cannot change identity between Activity and a budget drill-down.
+///
+/// The interesting case is bank fees. Wells Fargo names an overdraft fee
+/// after the purchase that overdrew the account, and Plaid extracts that
+/// merchant ("Affirm", "Lyft") into merchant_name — so a $35 fee masquerades
+/// as another charge from the merchant. A BANK_FEES row therefore never takes
+/// a merchant's name: it is "Overdraft fee" when the bank's own text says so,
+/// and "Bank fee" when Plaid erased the text entirely — the category alone
+/// cannot prove "overdraft" (a monthly service fee is BANK_FEES too).
+///
+/// Mirrored exactly by `txn_display_name()` server-side (0018), where the
+/// same string is what category rules match — so reassigning a row named
+/// "Overdraft fee" writes a rule that actually fires.
+enum TransactionNaming {
+    static func displayName(name: String, merchantName: String?, category: String?) -> String {
+        if category == "BANK_FEES" {
+            return name.range(of: "overdraft fee", options: .caseInsensitive) != nil
+                ? "Overdraft fee"
+                : "Bank fee"
+        }
+        let merchant = merchantName?.trimmingCharacters(in: .whitespaces) ?? ""
+        return merchant.isEmpty ? name : merchant
+    }
+}
+
 struct BankTransaction: Codable, Identifiable, Equatable {
     let id: UUID
     let date: String            // "yyyy-MM-dd" from Postgres date column
@@ -57,8 +83,7 @@ struct BankTransaction: Codable, Identifiable, Equatable {
     }
 
     var displayName: String {
-        let merchant = merchantName?.trimmingCharacters(in: .whitespaces) ?? ""
-        return merchant.isEmpty ? name : merchant
+        TransactionNaming.displayName(name: name, merchantName: merchantName, category: category)
     }
 
     /// Whether this row should count toward a day's spending.
@@ -924,8 +949,7 @@ struct CategoryTransaction: Codable, Identifiable, Equatable {
     }
 
     var displayName: String {
-        let merchant = merchantName?.trimmingCharacters(in: .whitespaces) ?? ""
-        return merchant.isEmpty ? name : merchant
+        TransactionNaming.displayName(name: name, merchantName: merchantName, category: plaidCategory)
     }
 
     /// "General services" — Plaid's SCREAMING_SNAKE made readable.
