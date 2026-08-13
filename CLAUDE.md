@@ -133,6 +133,20 @@ data facts that shaped it still hold: rent is paid **outside** the linked
 account (never in `spentCents`), debts post **through** it (already in
 `spentCents`, so a full-plan reserve double-counts).
 
+**Trends opens on last-known numbers, not $0.00 (2026-08-13).** The first
+frame used to show empty stats that jumped when the network answered.
+`TrendsSnapshot` persists the *fetched rows* (month transactions + budget +
+category rollup) after every complete current-month load;
+`TrendsViewModel.init` restores them synchronously and re-derives through the
+same `MonthMath`/`CategoryMath`, so a cached frame can never disagree with
+what a live one would have shown — storing derived stats instead would let
+the two drift. Guards are the point: same user (checked against the local
+session, synchronously — same trick as cold-start auth), same calendar month
+(stale months rebuild into an empty chart, worse than loading), cleared on
+sign-out and account deletion, written with `.completeFileProtection`
+(these are bank transactions at rest). A partial load never overwrites a
+complete snapshot.
+
 **Category budgets (0007).** `budget_categories` (a planned amount per line) +
 `category_rules` (what routes into it) + `category_spend(months_back)` /
 `category_transactions(category, period)` / `seed_starter_budget()`. The

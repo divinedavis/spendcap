@@ -249,6 +249,9 @@ final class AuthViewModel: ObservableObject {
 
     func signOut() async {
         await PushNotificationManager.shared.unregisterCurrentToken()
+        // The cached Trends rows are this user's bank history; they must not
+        // outlive the session that fetched them.
+        TrendsSnapshotStore.clear()
         try? await client.auth.signOut()
         session = nil
         identities = []
@@ -271,6 +274,7 @@ final class AuthViewModel: ObservableObject {
     func deleteAccount() async {
         await run {
             await PushNotificationManager.shared.unregisterCurrentToken()
+            TrendsSnapshotStore.clear()
             try await SpendService.shared.deleteStoredStatements()
             try await self.client.rpc("delete_account").execute()
             try? await self.client.auth.signOut()

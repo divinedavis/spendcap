@@ -51,10 +51,26 @@ final class TrendsViewModel: ObservableObject {
         categoryMonths.contains { month in month.rows.contains { !$0.isUncategorized } }
     }
 
+    /// Seed the first frame from the last successful load, so opening the app
+    /// shows the numbers as of the last visit instead of $0.00 that jumps
+    /// when the network answers. The snapshot is raw rows, re-derived through
+    /// the same math as a live load; the network refresh then lands quietly —
+    /// on identical numbers unless something actually changed.
+    init() {
+        guard let snapshot = TrendsSnapshotStore.load(),
+              snapshot.isUsable(for: SpendService.shared.currentUserId)
+        else { return }
+        apply(transactions: snapshot.transactions, budget: snapshot.budget,
+              reference: Date())
+        apply(categoryRows: snapshot.categoryRows, wireDiscretionary: true)
+    }
+
     func load(period: TrendsPeriod = .thisMonth) async {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
+
+        var loaded: (transactions: [BankTransaction], budget: Budget)?
         do {
             // One reference date drives the fetch and the math, so the rows
             // pulled and the days charted can never describe different months.
@@ -62,15 +78,8 @@ final class TrendsViewModel: ObservableObject {
             async let txns = SpendService.shared.monthTransactions(now: reference)
             async let budg = SpendService.shared.budget()
             let (t, b) = try await (txns, budg)
-            // Both caps: the daily one colours the per-day bars, the monthly
-            // one (when set) is what the month is judged against — Months uses
-            // the same resolution, and the two screens must not disagree.
-            stats = MonthMath.stats(
-                transactions: t,
-                dailyLimitCents: b.dailyLimitCents,
-                monthlyLimitCents: b.monthlyLimitCents,
-                now: reference
-            )
+            apply(transactions: t, budget: b, reference: reference)
+            loaded = (t, b)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -78,20 +87,48 @@ final class TrendsViewModel: ObservableObject {
         // Budget lines are a second read of the same months; a failure here
         // must not blank the chart above them. Always this month and last —
         // the card has its own picker and does not follow the period chip.
-        if let rows = try? await SpendService.shared.categorySpend(monthsBack: 2) {
-            categoryMonths = CategoryMath.months(rows: rows)
-            if selectedCategoryPeriod == nil
-                || !categoryMonths.contains(where: { $0.period == selectedCategoryPeriod }) {
-                selectedCategoryPeriod = categoryMonths.first?.period
-            }
-            // The discretionary budget feeds the chart card's free-to-spend
-            // figure — current month only, which is the only month that has
-            // money left. A failed rollup read leaves the fields at zero,
-            // which hides the figure rather than showing a wrong one.
-            if period.isCurrent, let current = categoryMonths.first(where: \.isCurrent) {
-                stats.discretionaryPlannedCents = current.discretionaryPlannedCents
-                stats.discretionarySpentCents = current.discretionarySpentCents
-            }
+        let rows = try? await SpendService.shared.categorySpend(monthsBack: 2)
+        if let rows {
+            apply(categoryRows: rows, wireDiscretionary: period.isCurrent)
+        }
+
+        // Persist what the next cold launch should open on: the current
+        // month, fully loaded. A partial load must not overwrite a complete
+        // snapshot from an earlier visit.
+        if period.isCurrent, let loaded, let rows,
+           let userId = SpendService.shared.currentUserId {
+            TrendsSnapshotStore.save(TrendsSnapshot(
+                userId: userId, savedAt: Date(),
+                transactions: loaded.transactions, budget: loaded.budget,
+                categoryRows: rows))
+        }
+    }
+
+    /// Both caps: the daily one colours the per-day bars, the monthly one
+    /// (when set) is what the month is judged against — Months uses the same
+    /// resolution, and the two screens must not disagree.
+    private func apply(transactions: [BankTransaction], budget: Budget, reference: Date) {
+        stats = MonthMath.stats(
+            transactions: transactions,
+            dailyLimitCents: budget.dailyLimitCents,
+            monthlyLimitCents: budget.monthlyLimitCents,
+            now: reference
+        )
+    }
+
+    /// The discretionary budget feeds the chart card's free-to-spend figure —
+    /// current month only, which is the only month that has money left. When
+    /// the rollup is missing the fields stay zero, which hides the figure
+    /// rather than showing a wrong one.
+    private func apply(categoryRows: [CategorySpendRow], wireDiscretionary: Bool) {
+        categoryMonths = CategoryMath.months(rows: categoryRows)
+        if selectedCategoryPeriod == nil
+            || !categoryMonths.contains(where: { $0.period == selectedCategoryPeriod }) {
+            selectedCategoryPeriod = categoryMonths.first?.period
+        }
+        if wireDiscretionary, let current = categoryMonths.first(where: \.isCurrent) {
+            stats.discretionaryPlannedCents = current.discretionaryPlannedCents
+            stats.discretionarySpentCents = current.discretionarySpentCents
         }
     }
 }

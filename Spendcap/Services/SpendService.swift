@@ -23,6 +23,13 @@ final class SpendService {
 
     private init() {}
 
+    /// Lowercased UUID of the signed-in user, from the locally stored session
+    /// — synchronous on purpose, so first-frame code (the Trends snapshot
+    /// check) can use it without waiting on a network round trip.
+    var currentUserId: String? {
+        client.auth.currentSession?.user.id.uuidString.lowercased()
+    }
+
     // MARK: - Reads
 
     func todayTransactions() async throws -> [BankTransaction] {
