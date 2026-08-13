@@ -212,12 +212,21 @@ numbers, mixed letter–digit codes ≥6, `$`/`#` tokens) and keeps the longest
 stable phrase; under 8 chars it falls back to the exact string (a too-short
 contains-match claims strangers; a one-shot rule is the lesser wrong).
 Existing one-shot rules for PayPal-monthly, online-transfers and Zelle were
-collapsed to stable form in the DB. **The Apple Cash → Haircuts one-shots
-were deliberately NOT collapsed**: an Apple Cash descriptor does not name the
-recipient, so the stable form ("MONEY TRANSFER AUTHORIZED") claims *every*
-Apple Cash send — including ones currently landing in Debts via the "Apple"
-rule. The next tap on an Apple Cash row will write that broad rule; the sheet
-header shows the value so the trade is visible.
+collapsed to stable form in the DB.
+
+**A rule can require an exact amount (0021).** `category_rules.amount_cents`,
+null = any amount. This is how the Apple Cash ambiguity was actually solved:
+the descriptor never names the recipient, but Divine's haircut is always a
+$100 send and nothing else is, so `'APPLE CASH SENT' + 10000 → Haircuts`
+files every haircut past and future while the other Apple Cash amounts keep
+falling to the "Apple" rule (→ Debts). Precedence has a middle tier now:
+merchant beats category, **amount-qualified beats unqualified**, longer
+beats shorter — without that tier, long one-shot strings would outrank the
+qualified rule on length. Two caveats: the unique constraint is still
+`(user_id, match_type, match_value)` because shipped clients upsert on
+exactly those columns, so one match_value carries at most one amount; and
+the app UI only writes unqualified rules — amount rules are set in the DB
+for now.
 
 Still to build: per-category push alerts.
 
