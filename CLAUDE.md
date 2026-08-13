@@ -759,6 +759,15 @@ privacy-policy line covering stored statement PDFs.
 
 ## Known quirks
 
+- **Plaid's background refresh can silently stall on a healthy item.** No
+  item error, webhook configured, hourly sync returning 200 with `errors: []`
+  — and `status.transactions.last_successful_update` frozen for 35 hours
+  (2026-08-13), so "no new transactions" looked identical to "no activity".
+  When data seems stale, check `/item/get` **first**. The cron now
+  self-heals: past 24h of staleness it requests `/transactions/refresh`
+  (billed — bounded to one per item per 24h via
+  `plaid_items.last_refresh_requested_at`, 0020). A manual refresh brought
+  the missing rows within two minutes.
 - Plaid sandbox: use institution `ins_109508` ("First Platypus Bank"),
   credentials `user_good` / `pass_good`. Fire test transactions with
   `/sandbox/item/fire_webhook` or `sandbox/transactions/create`.
