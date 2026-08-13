@@ -37,6 +37,50 @@ final class TransactionNamingTests: XCTestCase {
         )
     }
 
+    // MARK: - Stable match values
+
+    /// The real shapes that forced this: each month's copy of the same payment
+    /// carries a fresh date and reference code, so a rule written from the
+    /// exact string can never fire again. The stable phrase survives.
+    func testStableMatchValueSurvivesTheMonthlyReferenceChurn() {
+        XCTAssertEqual(
+            TransactionNaming.stableMatchValue(
+                from: "PAYPAL INST XFER 260805 PYPL PAYMTHLY DIVINE DAVIS"),
+            "PYPL PAYMTHLY DIVINE DAVIS"
+        )
+        XCTAssertEqual(
+            TransactionNaming.stableMatchValue(
+                from: "ZELLE TO CARLO CHAMAINE ON 07/30 REF # WFCT22GS4599"),
+            "ZELLE TO CARLO CHAMAINE"
+        )
+        XCTAssertEqual(
+            TransactionNaming.stableMatchValue(
+                from: "ONLINE TRANSFER TO DAVIS D EVERYDAY CHECKING XXXXXXXXX1395 REF #IB0Z59K433 ON 07/30/26"),
+            "ONLINE TRANSFER TO DAVIS D EVERYDAY CHECKING"
+        )
+    }
+
+    /// PAYMTHLY and PAYIN4 are different products behind the same PayPal
+    /// prefix — the stable value must keep them apart or one rule would file
+    /// both.
+    func testStableMatchValueKeepsDistinctPaypalProductsApart() {
+        XCTAssertNotEqual(
+            TransactionNaming.stableMatchValue(
+                from: "PAYPAL INST XFER 260805 PYPL PAYMTHLY DIVINE DAVIS"),
+            TransactionNaming.stableMatchValue(
+                from: "PAYPAL INST XFER 260601 PYPL PAYIN4 DIVINE DAVIS")
+        )
+    }
+
+    /// Clean merchant names contain nothing volatile and pass through — and a
+    /// candidate too short to be a safe contains-match falls back to the
+    /// exact string rather than claiming strangers.
+    func testStableMatchValueLeavesCleanNamesAlone() {
+        XCTAssertEqual(TransactionNaming.stableMatchValue(from: "Coqodaq"), "Coqodaq")
+        XCTAssertEqual(TransactionNaming.stableMatchValue(from: "Lyft"), "Lyft")
+        XCTAssertEqual(TransactionNaming.stableMatchValue(from: "arcane e"), "arcane e")
+    }
+
     func testNonFeeRowsFallBackToTheBankTextWhenMerchantIsBlank() {
         XCTAssertEqual(
             TransactionNaming.displayName(name: "SAVE AS YOU GO TRANSFER DEBIT",

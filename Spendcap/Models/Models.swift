@@ -24,6 +24,69 @@ enum TransactionNaming {
         let merchant = merchantName?.trimmingCharacters(in: .whitespaces) ?? ""
         return merchant.isEmpty ? name : merchant
     }
+
+    /// What a reassignment rule should match on, so filing a transaction once
+    /// keeps working next month.
+    ///
+    /// Bank-transfer descriptors carry a date and a reference number that are
+    /// unique per transaction — "PAYPAL INST XFER 260805 PYPL PAYMTHLY …",
+    /// "ZELLE TO CARLO CHAMAINE ON 07/30 REF # WFCT22GS4599" — so a rule
+    /// written from the whole string can never match the next month's copy,
+    /// and the same payment had to be refiled every month (three one-shot
+    /// rules for three months of one PayPal payment, weekly ones for
+    /// haircuts). This keeps the longest run of *stable* tokens instead:
+    /// dates, long numbers, mixed letter–digit reference codes, and dollar
+    /// amounts are volatile; what survives is the phrase that recurs
+    /// ("PYPL PAYMTHLY DIVINE DAVIS", "ZELLE TO CARLO CHAMAINE").
+    ///
+    /// A candidate shorter than 8 characters falls back to the exact string:
+    /// a too-short contains-match would claim strangers, and a one-shot rule
+    /// is the lesser wrong. Short clean merchant names ("Lyft", "Coqodaq")
+    /// pass through unchanged either way — they contain nothing volatile.
+    static func stableMatchValue(from name: String) -> String {
+        func isVolatile(_ token: Substring) -> Bool {
+            let s = String(token)
+            // Dates: 07/09, 07/30/26.
+            if s.range(of: #"^\d{1,2}/\d{1,2}(/\d{2,4})?$"#, options: .regularExpression) != nil {
+                return true
+            }
+            // Long pure numbers (compact dates, account refs). Four digits or
+            // fewer stay — "CARD 9424" is the stable part of a descriptor.
+            if s.range(of: #"^\d{5,}$"#, options: .regularExpression) != nil { return true }
+            // Reference codes: letters and digits mixed, long enough not to
+            // be a word ("S466190338974488", "IB0Z59K433", "WAY2SAVE" too —
+            // an acceptable loss, the surrounding phrase still identifies it).
+            if s.count >= 6, s.contains(where: \.isNumber), s.contains(where: \.isLetter) {
+                return true
+            }
+            // Amounts and bare reference markers.
+            if s.hasPrefix("$") || s.hasPrefix("#") { return true }
+            return false
+        }
+
+        let tokens = name.split(separator: " ")
+        var best: [Substring] = []
+        var run: [Substring] = []
+        for token in tokens {
+            if isVolatile(token) {
+                if run.joined(separator: " ").count > best.joined(separator: " ").count { best = run }
+                run = []
+            } else {
+                run.append(token)
+            }
+        }
+        if run.joined(separator: " ").count > best.joined(separator: " ").count { best = run }
+
+        // A run often ends on the connective that introduced the volatile bit
+        // ("… ON 07/30", "… REF #…") — the connective carries no identity.
+        let connectives: Set<String> = ["ON", "REF", "TO", "FROM"]
+        while let last = best.last, connectives.contains(String(last).uppercased()) {
+            best.removeLast()
+        }
+
+        let candidate = best.joined(separator: " ")
+        return candidate.count >= 8 ? candidate : name
+    }
 }
 
 struct BankTransaction: Codable, Identifiable, Equatable {

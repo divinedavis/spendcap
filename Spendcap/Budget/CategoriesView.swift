@@ -673,7 +673,10 @@ struct TransactionDetailView: View {
         .navigationTitle(transaction.displayName)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingMove) {
-            MerchantRuleView(merchant: transaction.displayName) {
+            // The rule matches on the stable part of the descriptor, not the
+            // exact string — a transfer's date/reference number is unique per
+            // transaction, and a rule written from it dies with the month.
+            MerchantRuleView(merchant: TransactionNaming.stableMatchValue(from: transaction.displayName)) {
                 showingMove = false
                 onChange()
             }

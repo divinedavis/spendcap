@@ -202,6 +202,23 @@ match_value)` so a merchant can only ever have one home. Rules are applied at
 *read* time by the rollups, so a reassignment re-buckets every month on record
 — that is intended: a merchant filed wrongly was filed wrongly in April too.
 
+**The rule matches on the stable part of the descriptor, not the exact string
+(2026-08-13).** Bank-transfer descriptors carry a per-transaction date and
+reference code ("PAYPAL INST XFER **260805** PYPL PAYMTHLY …"), so a rule
+written from the whole string can never match next month's copy — Divine was
+refiling the same PayPal payment monthly and haircut transfers weekly.
+`TransactionNaming.stableMatchValue` strips volatile tokens (dates, 5+-digit
+numbers, mixed letter–digit codes ≥6, `$`/`#` tokens) and keeps the longest
+stable phrase; under 8 chars it falls back to the exact string (a too-short
+contains-match claims strangers; a one-shot rule is the lesser wrong).
+Existing one-shot rules for PayPal-monthly, online-transfers and Zelle were
+collapsed to stable form in the DB. **The Apple Cash → Haircuts one-shots
+were deliberately NOT collapsed**: an Apple Cash descriptor does not name the
+recipient, so the stable form ("MONEY TRANSFER AUTHORIZED") claims *every*
+Apple Cash send — including ones currently landing in Debts via the "Apple"
+rule. The next tap on an Apple Cash row will write that broad rule; the sheet
+header shows the value so the trade is visible.
+
 Still to build: per-category push alerts.
 
 Anything that opens `BudgetView` must pass the **real** `Budget` row, never one
