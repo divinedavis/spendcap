@@ -244,8 +244,8 @@ struct TrendsView: View {
                         .accessibilityIdentifier("trends.monthSpend")
                     // What remains of the discretionary budget — the untagged
                     // budget lines, everything committed (rent, debts, hair,
-                    // transport, savings) fenced off — spread over the
-                    // month's four weeks. The label names the answer, not the
+                    // transport, savings) fenced off — paced over the weeks
+                    // left in the month. The label names the answer, not the
                     // formula. Only the month in progress, and only once a
                     // budget exists: zero-planned means the rollup hasn't
                     // loaded or there is nothing to measure against.

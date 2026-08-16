@@ -112,7 +112,8 @@ need a server-side counterpart in `check_overspend`.
 
 **"Free to spend this week" (2026-08-12, the third model that day — this one
 is Divine's own).** Trends' chart card shows
-`(discretionaryPlanned − discretionarySpent) / 4`, current month only, hidden
+`(discretionaryPlanned − discretionarySpent)` paced over the weeks left in the
+month (see the divisor note below), current month only, hidden
 until the rollup lands (`discretionaryPlannedCents > 0`). The model: the
 **untagged** budget lines — Food and Socializing, $1,200/month between them —
 are the money that is actually free; every line tagged with a **committed
@@ -120,11 +121,31 @@ kind** (`CategoryKind.isCommitted`: rent, debt, personal_care, transportation,
 savings — Divine's list, hair entered as `personal_care` in 0019) was spoken
 for before the month started and is fenced off entirely. Discretionary spent
 **includes Uncategorized** (unclaimed spending came out of the free money, not
-out of rent); discretionary planned excludes it (no plan by definition). The
-divisor is a **flat 4 at Divine's request**, not weeks-remaining. Figures flow
-`CategoryMonth.discretionaryPlanned/-SpentCents` → `MonthStats` in
+out of rent); discretionary planned excludes it (no plan by definition).
+Figures flow `CategoryMonth.discretionaryPlanned/-SpentCents` → `MonthStats` in
 `TrendsViewModel.load`; committed status comes from the *tag*, never the
 line's name.
+
+**The divisor is weeks remaining, since 2026-08-16.** It shipped as a **flat 4**
+at Divine's request and was changed on the same request: with a fixed divisor
+the label was the one thing the figure did not mean — the same number showed on
+the 3rd and the 29th, reading generous early and miserly late (on Aug 16, $101.72
+where the ~2 weeks left actually allowed ~$203). It is now
+`remaining × 7 / daysRemainingInMonth`, and three details are load-bearing:
+
+- **Fractional weeks, not a whole-week count.** A whole-week count steps, so the
+  figure would jump by a third or a half overnight on the day a week falls off —
+  on a card whose entire job is a steady sense of pace.
+- **The divisor is pinned to 1 under a week left**, i.e. the figure is the whole
+  remainder. Below 1 it *multiplies* the money up, and the last three days of
+  the month would be told they can spend more than is actually left.
+- **`× 7 / days`, never through a `Double`.** Exact, and integer division
+  truncates toward zero, which keeps an overspent budget symmetric with a
+  healthy one.
+
+`daysRemainingInMonth` counts today (`daysElapsed` includes today, so the 16th
+of a 31-day month has 16 days left) and floors at 1 — a past period is read as
+of its last day, where the figure is hidden anyway.
 
 This deliberately ignores the month cap and replaced two same-day reserve
 models (builds 36–39: cap − hardcoded $2,000 rent reserve, then also

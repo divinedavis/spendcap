@@ -107,10 +107,10 @@ final class MonthMathTests: XCTestCase {
     }
 
     /// "Free to spend this week" is the discretionary budget minus what has
-    /// come out of it, over a flat 4 — the month cap plays no part, and
-    /// committed spending (rent, debts, hair, transport, savings) can
-    /// neither shrink nor free up the figure.
-    func testFreeToSpendThisWeekIsTheRemainingDiscretionaryBudgetOverFour() {
+    /// come out of it, over the weeks left in the month — the month cap plays
+    /// no part, and committed spending (rent, debts, hair, transport, savings)
+    /// can neither shrink nor free up the figure.
+    func testFreeToSpendThisWeekPacesTheRemainderOverTheWeeksLeft() {
         var stats = MonthMath.stats(
             transactions: [txn("2026-04-01", 183_184)],
             dailyLimitCents: 5000,
@@ -120,8 +120,44 @@ final class MonthMathTests: XCTestCase {
         // $1,200 budget (Food + Socializing), $680 of it already spent.
         stats.discretionaryPlannedCents = 120_000
         stats.discretionarySpentCents = 68_000
-        // ($1,200 − $680) / 4 = $130 a week.
-        XCTAssertEqual(stats.freeToSpendThisWeekCents, 13_000)
+        // April 12 of 30: the 12th through the 30th is 19 days, 19/7 weeks.
+        XCTAssertEqual(stats.daysRemainingInMonth, 19)
+        // $520 / (19/7) = $191.57 a week.
+        XCTAssertEqual(stats.freeToSpendThisWeekCents, 19_157)
+    }
+
+    /// The same remainder is worth more per week the earlier it is asked
+    /// about — the whole point of moving off a flat divisor.
+    func testFreeToSpendThisWeekRisesAsTheMonthRunsOut() {
+        func free(on day: String) -> Int {
+            var stats = MonthMath.stats(
+                transactions: [], dailyLimitCents: 5000,
+                now: date(day), timeZone: utc
+            )
+            stats.discretionaryPlannedCents = 120_000
+            stats.discretionarySpentCents = 68_000
+            return stats.freeToSpendThisWeekCents
+        }
+        // $520 over 30, 19 and 8 days left: /(30/7), /(19/7), /(8/7).
+        XCTAssertEqual(free(on: "2026-04-01"), 12_133)
+        XCTAssertEqual(free(on: "2026-04-12"), 19_157)
+        XCTAssertEqual(free(on: "2026-04-23"), 45_500)
+    }
+
+    /// Inside the last week the divisor floors at 1: the rest of the month is
+    /// this week, so the figure is the whole remainder and never more. A
+    /// fractional divisor below 1 would multiply the money up instead.
+    func testFreeToSpendThisWeekNeverExceedsWhatIsActuallyLeft() {
+        for day in ["2026-04-24", "2026-04-28", "2026-04-30"] {
+            var stats = MonthMath.stats(
+                transactions: [], dailyLimitCents: 5000,
+                now: date(day), timeZone: utc
+            )
+            stats.discretionaryPlannedCents = 120_000
+            stats.discretionarySpentCents = 68_000
+            XCTAssertLessThanOrEqual(stats.daysRemainingInMonth, 7, "on \(day)")
+            XCTAssertEqual(stats.freeToSpendThisWeekCents, 52_000, "on \(day)")
+        }
     }
 
     func testFreeToSpendThisWeekGoesNegativeWhenTheBudgetIsOverspent() {
@@ -132,7 +168,8 @@ final class MonthMathTests: XCTestCase {
         )
         stats.discretionaryPlannedCents = 120_000
         stats.discretionarySpentCents = 140_000
-        XCTAssertEqual(stats.freeToSpendThisWeekCents, -5_000)
+        // −$200 / (19/7), truncated toward zero like the positive side.
+        XCTAssertEqual(stats.freeToSpendThisWeekCents, -7_368)
     }
 
     func testRemainingGoesNegativeWhenOverMonthlyCap() {

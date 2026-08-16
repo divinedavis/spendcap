@@ -323,12 +323,32 @@ struct MonthStats: Equatable {
     var discretionaryPlannedCents: Int = 0
     var discretionarySpentCents: Int = 0
 
+    /// Days left in the month, today included — `daysElapsed` counts today, so
+    /// the 16th of a 31-day month has 16 days left, not 15. Never below 1: a
+    /// finished period is read as of its last day, and a zero would make the
+    /// divisor below meaningless.
+    var daysRemainingInMonth: Int { max(1, daysInMonth - daysElapsed + 1) }
+
     /// "Free to spend this week": what remains of the discretionary budget,
-    /// spread over the month's four weeks — at Divine's request the divisor
-    /// is a flat 4, not weeks remaining. Negative means the budget is already
-    /// overspent.
+    /// paced over the weeks still to come. Negative means the budget is
+    /// already overspent.
+    ///
+    /// The divisor is *fractional* weeks (`days / 7`), not a whole-week count:
+    /// a whole-week count steps, so the figure would jump by a third or a half
+    /// overnight on the day a week falls off, on a card whose whole job is a
+    /// steady sense of pace. Under a week left the divisor is pinned to 1 —
+    /// the rest of the month *is* this week, and a divisor below 1 would
+    /// multiply the money up and tell the last three days of the month they
+    /// can spend more than is actually left.
+    ///
+    /// Written as `× 7 / days` rather than through a `Double`: the arithmetic
+    /// is then exact, and integer division truncates toward zero, which keeps
+    /// an overspent budget symmetric with a healthy one.
     var freeToSpendThisWeekCents: Int {
-        (discretionaryPlannedCents - discretionarySpentCents) / 4
+        let remaining = discretionaryPlannedCents - discretionarySpentCents
+        let days = daysRemainingInMonth
+        guard days > 7 else { return remaining }
+        return remaining * 7 / days
     }
 
     /// Mean spend across the Monday–Thursday days elapsed.
