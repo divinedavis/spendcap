@@ -104,6 +104,22 @@ final class SpendService {
             .value
     }
 
+    /// Discretionary outflow day by day for one month — the input to the
+    /// weekly buckets on Trends. Only days with spending come back, so an
+    /// empty result is a month with no discretionary spending yet, not a
+    /// failure. Summing it equals `category_spend`'s discretionary total for
+    /// the same month; `WeekMath` relies on that to keep the weekly card and
+    /// the budget card describing the same money.
+    func discretionaryDaily(period: Date = Date()) async throws -> [DiscretionaryDay] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        let start = calendar.dateInterval(of: .month, for: period)?.start ?? period
+        return try await client
+            .rpc("discretionary_daily", params: ["period": Self.localDateString(now: start)])
+            .execute()
+            .value
+    }
+
     /// Every transaction that landed in one category in one month. Pass a nil
     /// id for the Uncategorized line.
     func categoryTransactions(categoryId: UUID?, period: Date) async throws -> [CategoryTransaction] {

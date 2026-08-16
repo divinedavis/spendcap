@@ -13,6 +13,11 @@ struct TrendsSnapshot: Codable, Equatable {
     let transactions: [BankTransaction]
     let budget: Budget
     let categoryRows: [CategorySpendRow]
+    /// Per-day discretionary spend, for the weekly buckets. Optional so a
+    /// snapshot written before the weekly card shipped still decodes — an
+    /// older file restores the chart and simply carries no weekly figure until
+    /// the network answers, which is the state the card already handles.
+    var dailyDiscretionary: [DiscretionaryDay]?
 
     /// Usable only for the same signed-in user in the same calendar month.
     /// Last month's rows would rebuild into an empty chart — worse than the

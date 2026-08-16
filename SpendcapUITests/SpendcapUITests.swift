@@ -188,6 +188,45 @@ final class SpendcapUITests: XCTestCase {
                       "Months should show the 12-month total")
     }
 
+    /// The weekly figure survives a real load.
+    ///
+    /// Worth its own test because the card is the only thing on Trends that
+    /// needs *two* reads to agree — `category_spend` for the discretionary
+    /// plan and `discretionary_daily` for the buckets — and it hides itself
+    /// when either is missing. A dropped grant, a renamed column or a
+    /// PostgREST schema that was never reloaded all land as a silently absent
+    /// card, which no other assertion here would notice.
+    ///
+    /// The test account carries budget lines but no transactions, so the
+    /// figure is the full opening bucket and the range is whichever week today
+    /// falls in. Both are asserted for existence rather than value: the
+    /// arithmetic is `WeekMathTests`' job, and pinning a number here would
+    /// break every Monday.
+    func testTrendsShowsTheWeeklyFreeToSpendFigure() throws {
+        guard let email = ProcessInfo.processInfo.environment["SPENDCAP_TEST_EMAIL"],
+              let password = ProcessInfo.processInfo.environment["SPENDCAP_TEST_PASSWORD"],
+              !email.isEmpty, !password.isEmpty else {
+            throw XCTSkip("SPENDCAP_TEST_EMAIL/PASSWORD not set")
+        }
+
+        let app = launch()
+        signIn(app, email: email, password: password)
+
+        XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20),
+                      "Trends should show month-to-date spend")
+
+        // Generous: this waits on the category rollup and the daily rows, both
+        // of which land after the chart the assertion above cleared.
+        let free = app.staticTexts["trends.freeToSpend"]
+        XCTAssertTrue(free.waitForExistence(timeout: 30),
+                      "Trends should show the weekly free-to-spend figure")
+        XCTAssertTrue(free.label.contains("free to spend this week"),
+                      "the figure should name the week it describes, got \(free.label)")
+
+        XCTAssertTrue(app.staticTexts["trends.freeToSpendWeek"].waitForExistence(timeout: 5),
+                      "the figure should be captioned with the week's date range")
+    }
+
     /// The Trends period chip offers three months and switching to one takes.
     ///
     /// The chip is a menu now rather than a static "This month" label, and the

@@ -110,21 +110,19 @@ resolve it through `Budget.capCents(daysInMonth:)` / `MonthStats.monthCapCents`
 so they can never disagree. Nothing pushes on the monthly cap yet — that would
 need a server-side counterpart in `check_overspend`.
 
-**"Free to spend this week" (2026-08-12, the third model that day — this one
-is Divine's own).** Trends' chart card shows
-`(discretionaryPlanned − discretionarySpent) / 4`, current month only, hidden
-until the rollup lands (`discretionaryPlannedCents > 0`). The model: the
-**untagged** budget lines — Food and Socializing, $1,200/month between them —
-are the money that is actually free; every line tagged with a **committed
-kind** (`CategoryKind.isCommitted`: rent, debt, personal_care, transportation,
-savings — Divine's list, hair entered as `personal_care` in 0019) was spoken
-for before the month started and is fenced off entirely. Discretionary spent
-**includes Uncategorized** (unclaimed spending came out of the free money, not
-out of rent); discretionary planned excludes it (no plan by definition). The
-divisor is a **flat 4 at Divine's request**, not weeks-remaining. Figures flow
-`CategoryMonth.discretionaryPlanned/-SpentCents` → `MonthStats` in
-`TrendsViewModel.load`; committed status comes from the *tag*, never the
-line's name.
+**"Free to spend this week".** Trends' chart card, current month only, hidden
+unless both the discretionary plan and the daily rows have landed.
+
+*What money it counts (2026-08-12, the third model that day — this one is
+Divine's own).* The **untagged** budget lines — Food and Socializing,
+$1,200/month between them — are the money that is actually free; every line
+tagged with a **committed kind** (`CategoryKind.isCommitted`: rent, debt,
+personal_care, transportation, savings — Divine's list, hair entered as
+`personal_care` in 0019) was spoken for before the month started and is fenced
+off entirely. Discretionary spent **includes Uncategorized** (unclaimed
+spending came out of the free money, not out of rent); discretionary planned
+excludes it (no plan by definition). Committed status comes from the *tag*,
+never the line's name.
 
 This deliberately ignores the month cap and replaced two same-day reserve
 models (builds 36–39: cap − hardcoded $2,000 rent reserve, then also
@@ -133,10 +131,64 @@ data facts that shaped it still hold: rent is paid **outside** the linked
 account (never in `spentCents`), debts post **through** it (already in
 `spentCents`, so a full-plan reserve double-counts).
 
+*How it is paced — weekly buckets with rollover (2026-08-16, build 43).* The
+flat `(discretionaryPlanned − discretionarySpent) / 4` is gone. Weeks are
+**Monday–Sunday**, clipped to the month, and when a week opens its bucket is
+**what the month has left, divided across the days that remain, times the days
+in that week** (`WeekMath`). One formula does both halves of what was asked
+for: underspend and the leftover is still in "what the month has left", so the
+next Monday comes back bigger; overspend and the shortfall is already missing,
+so it comes off *every* remaining week rather than landing on the next one.
+Nothing recalculates while a week is under; an over week reads **negative in
+red until Monday**, deliberately — recutting mid-week would refill a bucket the
+user had already emptied.
+
+Four things that are load-bearing and easy to undo:
+
+- **Pro-rate by days, not by whole weeks.** A month is 4–6 Mon–Sun buckets and
+  the ends are usually stubs — August 2026 opens with a two-day Sat–Sun and
+  closes with a lone Monday. `remaining / weeksLeft` hands the 31st a full
+  week's money. Day-pro-rating also makes the last bucket exact (`daysLeft`
+  equals its own length, so it gets the whole remainder) and keeps the weeks
+  adding back to the month's budget.
+- **Subtract what was *spent*, never what was allowed.** Carrying the allowance
+  forward instead makes an underspent week vanish and an overspent one free.
+- **The week start is derived, not `Calendar.firstWeekday`.** That property
+  follows the device locale and would put the boundary on Sunday on a US phone.
+- **The 6am Monday flip moves the *view*, not the money.** Bank transactions
+  carry a date and no time of day, so a charge dated Monday is Monday's
+  whatever hour it happened; the flip only holds the card on the outgoing week
+  until 6am so Sunday-night spending doesn't appear to belong to a week that
+  hasn't started. `WeekMath.flipHour`.
+
+Consequence worth knowing before "fixing" it: a leftover is **spread over all
+the remaining weeks, not dumped on the next one**. Spend nothing in week 1 of a
+four-week month and week 2 opens at $400, not $600 — the other $200 is in weeks
+3 and 4. Same mechanism in both directions, which is why an overspend behaves
+symmetrically.
+
+*Where the numbers come from.* The plan is `CategoryMonth.discretionaryPlanned-
+Cents` off `category_spend`; the per-day spend is **`discretionary_daily(period)`
+(0022)**, because discretionary is a server-side answer — it depends on which
+line the rules route a transaction into and what kind that line carries, and
+the month transactions Trends fetches carry no resolved line at all. The server
+aggregates where the rules are, the client buckets where the timezone is: the
+same split as `monthly_spend()`/`YearMath` and `DailySpend.weekday`. Summing
+`discretionary_daily` **must** equal `category_spend`'s discretionary total for
+the month (verified live on the real account: $793.09 both ways), or the weekly
+card and the budget card describe different money — which is why its outflow
+filter and rule-resolution block are copied verbatim rather than approximated.
+
+That block is now in **four** places (`category_spend`,
+`category_transactions`, `month_activity`, `discretionary_daily`) and they must
+move together. Changing precedence in one and not the others silently
+re-buckets history on one screen only.
+
 **Trends opens on last-known numbers, not $0.00 (2026-08-13).** The first
 frame used to show empty stats that jumped when the network answered.
 `TrendsSnapshot` persists the *fetched rows* (month transactions + budget +
-category rollup) after every complete current-month load;
+category rollup + the daily discretionary rows) after every complete
+current-month load;
 `TrendsViewModel.init` restores them synchronously and re-derives through the
 same `MonthMath`/`CategoryMath`, so a cached frame can never disagree with
 what a live one would have shown — storing derived stats instead would let

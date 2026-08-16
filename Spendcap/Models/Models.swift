@@ -323,13 +323,27 @@ struct MonthStats: Equatable {
     var discretionaryPlannedCents: Int = 0
     var discretionarySpentCents: Int = 0
 
-    /// "Free to spend this week": what remains of the discretionary budget,
-    /// spread over the month's four weeks — at Divine's request the divisor
-    /// is a flat 4, not weeks remaining. Negative means the budget is already
-    /// overspent.
+    /// The month's Monday–Sunday buckets, filled in once `discretionary_daily`
+    /// lands. Nil until then, which hides the figure rather than showing a
+    /// wrong one — the same rule the discretionary totals above follow.
+    ///
+    /// This replaced a flat `(planned - spent) / 4` on 2026-08-16. That figure
+    /// re-spread the whole month's remaining money over four equal weeks every
+    /// time it was read, so an underspent week never banked anything and an
+    /// overspent one was quietly forgiven by a quarter of the shortfall. See
+    /// `WeekMath` for the rule that replaced it.
+    var weekStats: WeekStats?
+
+    /// "Free to spend this week": this week's bucket less what this week has
+    /// already spent. Negative means the week is over its bucket, and it stays
+    /// negative until Monday recuts it.
     var freeToSpendThisWeekCents: Int {
-        (discretionaryPlannedCents - discretionarySpentCents) / 4
+        weekStats?.freeToSpendThisWeekCents ?? 0
     }
+
+    /// The week the figure above describes, for the caption under it. A bucket
+    /// whose edges you cannot see is hard to argue with.
+    var currentWeek: SpendWeek? { weekStats?.currentWeek }
 
     /// Mean spend across the Monday–Thursday days elapsed.
     var monToThuAverageCents: Int {

@@ -106,33 +106,45 @@ final class MonthMathTests: XCTestCase {
         XCTAssertEqual(stats.dailyLimitCents, 5000)
     }
 
-    /// "Free to spend this week" is the discretionary budget minus what has
-    /// come out of it, over a flat 4 — the month cap plays no part, and
-    /// committed spending (rent, debts, hair, transport, savings) can
-    /// neither shrink nor free up the figure.
-    func testFreeToSpendThisWeekIsTheRemainingDiscretionaryBudgetOverFour() {
+    /// "Free to spend this week" is now this week's bucket less this week's
+    /// spending — the weekly rule lives in `WeekMath` and is tested there. What
+    /// matters here is the wiring: `MonthStats` reports whatever the buckets
+    /// say. The month cap still plays no part, and committed spending (rent,
+    /// debts, hair, transport, savings) can neither shrink nor free the figure,
+    /// because neither reaches the discretionary total the buckets are cut
+    /// from.
+    func testFreeToSpendThisWeekComesFromTheWeeklyBuckets() {
         var stats = MonthMath.stats(
             transactions: [txn("2026-04-01", 183_184)],
             dailyLimitCents: 5000,
             monthlyLimitCents: 650_000,
             now: date("2026-04-12"), timeZone: utc
         )
-        // $1,200 budget (Food + Socializing), $680 of it already spent.
+        // $1,200 budget (Food + Socializing), $680 of it spent in week one.
+        // April 2026 opens on a Wednesday, so week one is a 5-day stub:
+        // $1,200 × 5/30 = $200 allowed, $680 spent.
         stats.discretionaryPlannedCents = 120_000
         stats.discretionarySpentCents = 68_000
-        // ($1,200 − $680) / 4 = $130 a week.
-        XCTAssertEqual(stats.freeToSpendThisWeekCents, 13_000)
+        stats.weekStats = WeekMath.stats(
+            month: date("2026-04-01"), discretionaryPlannedCents: 120_000,
+            daily: [DiscretionaryDay(day: "2026-04-02", spentCents: 68_000)],
+            now: date("2026-04-03"), timeZone: utc
+        )
+        XCTAssertEqual(stats.freeToSpendThisWeekCents, 20_000 - 68_000)
+        XCTAssertEqual(stats.currentWeek?.dayCount, 5)
     }
 
-    func testFreeToSpendThisWeekGoesNegativeWhenTheBudgetIsOverspent() {
-        var stats = MonthMath.stats(
+    /// Before the rollup lands there are no buckets, and the card hides rather
+    /// than showing a wrong number.
+    func testFreeToSpendIsZeroUntilTheBucketsLoad() {
+        let stats = MonthMath.stats(
             transactions: [],
             dailyLimitCents: 5000,
             now: date("2026-04-12"), timeZone: utc
         )
-        stats.discretionaryPlannedCents = 120_000
-        stats.discretionarySpentCents = 140_000
-        XCTAssertEqual(stats.freeToSpendThisWeekCents, -5_000)
+        XCTAssertNil(stats.weekStats)
+        XCTAssertNil(stats.currentWeek)
+        XCTAssertEqual(stats.freeToSpendThisWeekCents, 0)
     }
 
     func testRemainingGoesNegativeWhenOverMonthlyCap() {

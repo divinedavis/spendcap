@@ -62,7 +62,9 @@ final class TrendsViewModel: ObservableObject {
         else { return }
         apply(transactions: snapshot.transactions, budget: snapshot.budget,
               reference: Date())
-        apply(categoryRows: snapshot.categoryRows, wireDiscretionary: true)
+        apply(categoryRows: snapshot.categoryRows,
+              daily: snapshot.dailyDiscretionary,
+              wireDiscretionary: true)
     }
 
     func load(period: TrendsPeriod = .thisMonth) async {
@@ -87,20 +89,28 @@ final class TrendsViewModel: ObservableObject {
         // Budget lines are a second read of the same months; a failure here
         // must not blank the chart above them. Always this month and last —
         // the card has its own picker and does not follow the period chip.
-        let rows = try? await SpendService.shared.categorySpend(monthsBack: 2)
+        // The per-day discretionary rows ride along: they feed the weekly
+        // buckets, and only the current month has weeks left to spend.
+        async let rowsTask = try? await SpendService.shared.categorySpend(monthsBack: 2)
+        async let dailyTask = period.isCurrent
+            ? try? await SpendService.shared.discretionaryDaily()
+            : nil
+        let (rows, daily) = await (rowsTask, dailyTask)
         if let rows {
-            apply(categoryRows: rows, wireDiscretionary: period.isCurrent)
+            apply(categoryRows: rows, daily: daily, wireDiscretionary: period.isCurrent)
         }
 
         // Persist what the next cold launch should open on: the current
         // month, fully loaded. A partial load must not overwrite a complete
-        // snapshot from an earlier visit.
-        if period.isCurrent, let loaded, let rows,
+        // snapshot from an earlier visit — and the daily rows are part of
+        // "complete" now, or the restored frame would open with no weekly
+        // figure and pop one in when the network answered.
+        if period.isCurrent, let loaded, let rows, let daily,
            let userId = SpendService.shared.currentUserId {
             TrendsSnapshotStore.save(TrendsSnapshot(
                 userId: userId, savedAt: Date(),
                 transactions: loaded.transactions, budget: loaded.budget,
-                categoryRows: rows))
+                categoryRows: rows, dailyDiscretionary: daily))
         }
     }
 
@@ -120,7 +130,8 @@ final class TrendsViewModel: ObservableObject {
     /// current month only, which is the only month that has money left. When
     /// the rollup is missing the fields stay zero, which hides the figure
     /// rather than showing a wrong one.
-    private func apply(categoryRows: [CategorySpendRow], wireDiscretionary: Bool) {
+    private func apply(categoryRows: [CategorySpendRow], daily: [DiscretionaryDay]?,
+                       wireDiscretionary: Bool) {
         categoryMonths = CategoryMath.months(rows: categoryRows)
         if selectedCategoryPeriod == nil
             || !categoryMonths.contains(where: { $0.period == selectedCategoryPeriod }) {
@@ -129,6 +140,14 @@ final class TrendsViewModel: ObservableObject {
         if wireDiscretionary, let current = categoryMonths.first(where: \.isCurrent) {
             stats.discretionaryPlannedCents = current.discretionaryPlannedCents
             stats.discretionarySpentCents = current.discretionarySpentCents
+            // Both halves or neither: the weekly buckets are cut from the
+            // planned total, so a bucket built without it would read as a
+            // whole month overspent.
+            stats.weekStats = daily.map {
+                WeekMath.stats(month: Date(),
+                               discretionaryPlannedCents: current.discretionaryPlannedCents,
+                               daily: $0)
+            }
         }
     }
 }
@@ -141,6 +160,15 @@ struct TrendsView: View {
 
     private var monthLabel: String {
         period.monthName()
+    }
+
+    /// "Aug 10–16", or just "Aug 31" for a one-day bucket. Weeks are clipped to
+    /// the month, so the two ends always share a month name and printing it
+    /// twice would only add noise.
+    static func weekRange(_ week: SpendWeek) -> String {
+        let start = week.start.formatted(.dateTime.month(.abbreviated).day())
+        guard week.dayCount > 1 else { return start }
+        return "\(start)–\(week.end.formatted(.dateTime.day()))"
     }
 
     var body: some View {
@@ -242,18 +270,29 @@ struct TrendsView: View {
                     Text(BudgetMath.dollars(model.stats.spentCents))
                         .font(.system(size: 30, weight: .bold, design: .rounded))
                         .accessibilityIdentifier("trends.monthSpend")
-                    // What remains of the discretionary budget — the untagged
-                    // budget lines, everything committed (rent, debts, hair,
-                    // transport, savings) fenced off — spread over the
-                    // month's four weeks. The label names the answer, not the
-                    // formula. Only the month in progress, and only once a
-                    // budget exists: zero-planned means the rollup hasn't
-                    // loaded or there is nothing to measure against.
-                    if period.isCurrent && model.stats.discretionaryPlannedCents > 0 {
-                        Text("\(BudgetMath.dollars(model.stats.freeToSpendThisWeekCents)) free to spend this week")
+                    // This week's bucket, less what this week has spent. The
+                    // bucket is cut from the discretionary budget — the
+                    // untagged lines, everything committed (rent, debts, hair,
+                    // transport, savings) fenced off — and recut every Monday
+                    // from what the month has left, so an underspent week
+                    // shows up here as a bigger number and an overspent one
+                    // as a smaller one. The label names the answer, not the
+                    // formula. Only the month in progress, and only once both
+                    // halves have loaded: a bucket without the planned total
+                    // reads as a whole month overspent.
+                    if period.isCurrent, model.stats.discretionaryPlannedCents > 0,
+                       let week = model.stats.currentWeek {
+                        Text("\(BudgetMath.dollars(week.leftCents)) free to spend this week")
                             .font(.footnote.weight(.semibold))
-                            .foregroundStyle(model.stats.freeToSpendThisWeekCents >= 0 ? .green : .red)
+                            .foregroundStyle(week.leftCents >= 0 ? .green : .red)
                             .accessibilityIdentifier("trends.freeToSpend")
+                        // The bucket's edges. A week you cannot see the ends
+                        // of is a number you cannot argue with — and these
+                        // weeks are short at both ends of the month.
+                        Text(Self.weekRange(week))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("trends.freeToSpendWeek")
                     }
                     Text(period.spentCaption)
                         .font(.caption)
