@@ -228,6 +228,22 @@ from the Months toolbar and Settings.
   build 35 and was removed the same day at the user's request; the tag is for
   finding lines by what they are, not decoration.
 
+**The card's header totals the whole budget (2026-08-16, build 44):** what
+every line actually spent, over what every line planned between them. The two
+are **not symmetrical and that is the point** — planned excludes Uncategorized
+(no plan by definition), spent includes it (the money left the account either
+way) — so the pair can read over budget with no single line over, which is
+exactly the state worth surfacing. `CategoryMonth.plannedCents` /
+`.spentCents`, unchanged; only the display is new. The "N over" count moved
+under them.
+
+**A line's transactions are listed newest first (0023, 2026-08-16)**, matching
+`month_activity`, so the two screens agree about what the top of a list means.
+It was ordered by amount, which read as arbitrary past one screen. Amount is
+the tie-break within a day and has to stay one: transactions carry a date and
+no time of day, so a busy day arrives as a block with nothing else to order it
+by.
+
 **Tapping a budget line edits its planned amount**, on the Trends widget and
 on the Budget screen. If a tap there ever seems to do nothing in a UI test,
 suspect the layout rather than the control: the widget appears only once the

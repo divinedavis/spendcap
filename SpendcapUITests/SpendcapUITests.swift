@@ -393,6 +393,19 @@ final class SpendcapUITests: XCTestCase {
         // laid out lands the touch wherever the row used to be.
         let line = app.buttons["trends.line"].firstMatch
         if line.waitForExistence(timeout: 20) {
+            // The card's header carries the month's whole budget: what was
+            // actually spent across every line, and what they planned between
+            // them. Existence only — the test account's figures move with
+            // whatever has been seeded into it, so a value assertion here would
+            // be pinned to data no test controls.
+            XCTAssertTrue(app.staticTexts["trends.categoryTotalSpent"].exists,
+                          "the category card should total what every line spent")
+            let plannedTotal = app.staticTexts["trends.categoryTotalPlanned"]
+            XCTAssertTrue(plannedTotal.exists,
+                          "the category card should total what every line planned")
+            XCTAssertTrue(plannedTotal.label.contains("planned"),
+                          "the planned total should say what it is, got \(plannedTotal.label)")
+
             // Three *consecutive* stable reads, not one matching pair: the
             // rollup lands asynchronously and an in-flight layout can hold
             // still across a single 0.4s gap, which is how this passed alone

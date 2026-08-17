@@ -379,10 +379,40 @@ struct TrendsView: View {
                     Text("By category")
                         .font(.title3.weight(.bold))
                     Spacer(minLength: 8)
-                    if month.overCount > 0 {
-                        Text("\(month.overCount) over")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.red)
+                    // The whole budget in one pair: everything that actually
+                    // left the account this month against everything the lines
+                    // planned between them. The rows below already carry both
+                    // figures line by line, but nowhere said what they came to.
+                    //
+                    // The two totals are not symmetrical and that is
+                    // deliberate — planned excludes Uncategorized (it has no
+                    // plan by definition) while spent includes it (the money
+                    // left the account either way). So this pair can read over
+                    // budget with no single line over, which is exactly the
+                    // state worth surfacing: unclaimed spending.
+                    //
+                    // Identifiers go on each Text, never on the stacks. A
+                    // container's identifier is pushed down onto every
+                    // descendant and would make all three unfindable under one
+                    // name.
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text(BudgetMath.wholeDollars(month.spentCents))
+                            .font(.headline)
+                            .foregroundStyle(month.spentCents > month.plannedCents
+                                             ? Color.red : Color.primary)
+                            .accessibilityIdentifier("trends.categoryTotalSpent")
+                        HStack(spacing: 5) {
+                            Text("of \(BudgetMath.wholeDollars(month.plannedCents)) planned")
+                                .foregroundStyle(.secondary)
+                                .accessibilityIdentifier("trends.categoryTotalPlanned")
+                            if month.overCount > 0 {
+                                Text("\(month.overCount) over")
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(.red)
+                                    .accessibilityIdentifier("trends.categoryOverCount")
+                            }
+                        }
+                        .font(.caption)
                     }
                 }
 
