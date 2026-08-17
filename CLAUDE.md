@@ -110,6 +110,31 @@ resolve it through `Budget.capCents(daysInMonth:)` / `MonthStats.monthCapCents`
 so they can never disagree. Nothing pushes on the monthly cap yet — that would
 need a server-side counterpart in `check_overspend`.
 
+**A line's planned amount moves the monthly cap (0024, 2026-08-17).** The cap
+and the category lines had become two unrelated budgets — Divine's lines
+planned $7,000 while `monthly_limit_cents` still said $6,500, set once and
+drifting further with every line edit. The rule he chose is **keep both, sync
+on edit**: the cap is still a real editable setting and typing one in still
+holds, but any change to a line's `planned_cents` overwrites it with the new
+line total. So the cap follows the budget by default and can be overridden
+until the next line edit.
+
+It is a **trigger**, not a client call, because the planned amount is editable
+from three places (the Trends widget, the full Budget screen,
+`seed_starter_budget`) and a rule enforced in one of them is a rule that
+drifts. It watches `planned_cents` specifically — renaming a line or changing
+its kind leaves the cap alone. `nullif(sum, 0)` is load-bearing: a null cap
+means "no monthly cap" and falls back to daily × days, where a zero cap would
+read as a $0 budget every month is instantly over, so deleting the last line
+restores the fallback instead of pinning the month to zero. 0024 also
+backfilled every existing budget so the rule starts from agreement.
+
+Known sharp edge, inherited rather than introduced: `updateBudget` upserts
+every column, so a screen holding a `Budget` row fetched *before* a line edit
+will write the stale cap back if its own cap sheet is saved. Both screens
+refetch on load, so the window is small — but it is the same hazard as the
+"pass the real `Budget` row" rule below.
+
 **"Free to spend this week".** Trends' chart card, current month only, hidden
 unless both the discretionary plan and the daily rows have landed.
 
