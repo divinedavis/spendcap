@@ -162,15 +162,6 @@ struct TrendsView: View {
         period.monthName()
     }
 
-    /// "Aug 10–16", or just "Aug 31" for a one-day bucket. Weeks are clipped to
-    /// the month, so the two ends always share a month name and printing it
-    /// twice would only add noise.
-    static func weekRange(_ week: SpendWeek) -> String {
-        let start = week.start.formatted(.dateTime.month(.abbreviated).day())
-        guard week.dayCount > 1 else { return start }
-        return "\(start)–\(week.end.formatted(.dateTime.day()))"
-    }
-
     var body: some View {
         NavigationStack {
             ZStack {
@@ -270,30 +261,21 @@ struct TrendsView: View {
                     Text(BudgetMath.dollars(model.stats.spentCents))
                         .font(.system(size: 30, weight: .bold, design: .rounded))
                         .accessibilityIdentifier("trends.monthSpend")
-                    // This week's bucket, less what this week has spent. The
-                    // bucket is cut from the discretionary budget — the
-                    // untagged lines, everything committed (rent, debts, hair,
-                    // transport, savings) fenced off — and recut every Monday
-                    // from what the month has left, so an underspent week
-                    // shows up here as a bigger number and an overspent one
-                    // as a smaller one. The label names the answer, not the
-                    // formula. Only the month in progress, and only once both
-                    // halves have loaded: a bucket without the planned total
-                    // reads as a whole month overspent.
-                    if period.isCurrent, model.stats.discretionaryPlannedCents > 0,
-                       let week = model.stats.currentWeek {
-                        Text("\(BudgetMath.dollars(week.leftCents)) free to spend this week")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(week.leftCents >= 0 ? .green : .red)
-                            .accessibilityIdentifier("trends.freeToSpend")
-                        // The bucket's edges. A week you cannot see the ends
-                        // of is a number you cannot argue with — and these
-                        // weeks are short at both ends of the month.
-                        Text(Self.weekRange(week))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .accessibilityIdentifier("trends.freeToSpendWeek")
-                    }
+                    // The weekly free-to-spend figure came off this card on
+                    // 2026-08-19. The arithmetic was right, but the week it
+                    // described was not one: Wells Fargo posts every weekend
+                    // purchase on the following Monday — 240 Monday rows
+                    // against one weekend row across the whole history — so a
+                    // Mon–Sun bucket opens already carrying the weekend before
+                    // it, and the card read deep red every Monday and Tuesday
+                    // before recovering. A number that is only honest midweek
+                    // is worse than no number. The same posting quirk took the
+                    // weekend-spend row off Months in build 32.
+                    //
+                    // WeekMath and the daily fetch stay: they are unit-tested
+                    // and cost nothing extra on a load that already happens,
+                    // and bucketing Sat–Fri instead would make the figure
+                    // truthful without rebuilding any of it.
                     Text(period.spentCaption)
                         .font(.caption)
                         .foregroundStyle(.secondary)

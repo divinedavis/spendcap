@@ -404,6 +404,28 @@ Two rules that shaped that screen and are easy to undo by accident:
    touching them must be service-role only; audit for the updatable-view RLS
    bypass before granting anything.
 
+## The weekly free-to-spend figure was removed (2026-08-19)
+
+The card on Trends that read "$X free to spend this week" is gone. The
+arithmetic was never wrong — it reproduced to the cent on the day it came off —
+but **the week it described was not a week**. Wells Fargo posts every weekend
+purchase on the following Monday: across the whole transaction history there
+are **240 Monday rows and exactly one weekend row**. A Mon–Sun bucket therefore
+opens already carrying the weekend before it, so the figure went deep red every
+Monday and Tuesday and recovered by Thursday. It read −$202.45 on a month that
+was, at that moment, $96 *under* its discretionary plan. A number that is only
+honest midweek is worse than no number, and this is the second feature the same
+posting quirk has killed — the weekend-spend row came off Months in build 32
+for it.
+
+**What is still there:** `WeekMath`, `WeekMathTests`, `MonthStats.weekStats`,
+the `discretionary_daily` RPC and the daily rows in `TrendsSnapshot`. Nothing
+renders them today. They were left deliberately rather than ripped out — the
+fix is to bucket **Saturday–Friday** instead of Monday–Sunday, which puts a
+Monday-posted weekend in the week it was actually spent and needs no new math.
+If that is not going to happen, delete the lot; do not leave it half-alive
+indefinitely.
+
 ## Debt (0025, shipped 2026-08-18)
 
 The fourth tab. Every recurring obligation as its own row — name, a note saying
