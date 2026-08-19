@@ -49,6 +49,7 @@ after every sync → check_overspend:
 - `device_push_tokens` — APNs tokens, self-only
 - `spend_alerts` — alert dedupe log
 - `debt_groups`, `debt_items` — the Debt tab (0025); no `anon` grants at all
+- `debt_auto_skips` — tombstones so a deleted Debt item is never re-synced (0027)
 - `delete_account()` RPC — App Store 5.1.1 account deletion
 
 ### Tabs
@@ -446,6 +447,34 @@ for three identical-descriptor Google rows; the live data turned out to name
 them distinctly ("YouTube TV", "YouTube Premium", "Google Workspace"), so the
 seeded rules match on name. The qualifier stays — it is the only tool for a
 merchant that genuinely sends one descriptor for several products.
+
+**Items arrive from the budget on their own (0027).** A transaction that
+resolves to a budget line tagged `debt` and that no Debt item already claims
+gets an item created for it in a **"From budget"** group with a $0 plan, on
+Debt-tab load. Four rules keep it from being a nuisance:
+
+- **`loans_only` defaults to true**, so only charges Plaid calls
+  `LOAN_PAYMENTS` qualify. A debt-kind budget line is not necessarily full of
+  debts — the one this was built against had 27 merchant rules pointing at it,
+  most of them developer SaaS and recurring bills, and syncing all of them
+  would have buried the tab in subscriptions and inflated the paid figure on
+  the total card. Pass false to take everything on a debt line.
+- **`debt_auto_skips` is a tombstone table**, written both when the sync
+  creates an item and when the app deletes one. Deleting a row the bank still
+  charges has to stick; without this it returns on the next load, forever, and
+  the user cannot win the argument. Note the delete-then-tombstone order in
+  `deleteDebtItem` — a tombstone written for a failed delete would block a row
+  that still exists.
+- **Named merchants only, never bank fees.** An empty `merchant_name` falls
+  back to a descriptor carrying a date and a reference code and would mint a
+  fresh junk row monthly; an overdraft fee filed on a debt line is neither
+  recurring nor owed.
+- **Bounded at `max_new` per call** so one broad rule cannot produce a hundred
+  rows.
+
+Auto-added rows land in their own group precisely because some will be wrong —
+Plaid files the occasional plant subscription as `LOAN_PAYMENTS`. Machine-added
+and obvious beats machine-added and mixed into hand-arranged groups.
 
 **Planned figures are guesses until the tab checks them**, which is the whole
 point of showing paid beside planned. Three patterns showed up the first time

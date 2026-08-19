@@ -614,6 +614,19 @@ final class SpendService {
             .value
     }
 
+    /// Adds an item for any borrowing merchant filed into a debt-kind budget
+    /// line that nothing on the Debt tab claims yet, in a "From budget" group.
+    /// Returns how many were created — zero on almost every call, which is the
+    /// normal case, not a failure.
+    ///
+    /// Deliberately narrowed to charges Plaid calls LOAN_PAYMENTS: a debt-kind
+    /// budget line tends to accumulate every recurring bill, not just debts,
+    /// and syncing all of them would bury the tab in subscriptions.
+    @discardableResult
+    func syncDebtItemsFromBudget() async throws -> Int {
+        try await client.rpc("sync_debt_items_from_budget").execute().value
+    }
+
     /// Creates the four starter buckets. Server-side no-op once any group
     /// exists, so a double tap cannot duplicate them.
     @discardableResult
@@ -718,11 +731,29 @@ final class SpendService {
             .execute()
     }
 
-    func deleteDebtItem(id: UUID) async throws {
+    /// Deletes an item and tombstones its match value, so the budget sync
+    /// cannot put it back. Without the second write, deleting a row the bank
+    /// still charges is an argument the user cannot win: it returns on the
+    /// next load, every time.
+    ///
+    /// Delete first, tombstone second — a tombstone written for a delete that
+    /// then failed would block a row the user still has. This way the worst
+    /// case is one reappearance, not a permanently un-syncable merchant.
+    func deleteDebtItem(id: UUID, matchValue: String? = nil) async throws {
         try await client
             .from("debt_items")
             .delete()
             .eq("id", value: id.uuidString.lowercased())
+            .execute()
+
+        guard let userId = client.auth.currentUser?.id,
+              let match = matchValue.flatMap(Self.trimmedOrNil) else { return }
+        try? await client
+            .from("debt_auto_skips")
+            .upsert([
+                "user_id": AnyJSON.string(userId.uuidString.lowercased()),
+                "match_value": AnyJSON.string(match),
+            ], onConflict: "user_id,match_value")
             .execute()
     }
 

@@ -30,6 +30,8 @@ struct DebtItemEditor: View {
     @State private var qualifyByAmount: Bool
     @State private var matchAmountText: String
     @State private var isSaving = false
+    @State private var isDeleting = false
+    @State private var confirmingDelete = false
     @State private var errorMessage: String?
 
     init(groups: [DebtGroup], groupId: UUID, row: DebtSummaryRow?, onSave: @escaping () async -> Void) {
@@ -104,9 +106,39 @@ struct DebtItemEditor: View {
                     Text("Any part of how the charge reads on your statement. Leave it blank if this never posts through the linked account — the item still counts toward the totals, it just won't show a paid figure. Turn on the amount when several items share a name, like three Google subscriptions.")
                 }
 
+                // Editing only: there is nothing to delete before the row
+                // exists. A visible button rather than only the row's context
+                // menu — a long press is not something anyone discovers, and
+                // the cards on the Debt screen are not a List, so there is no
+                // swipe-to-delete to fall back on.
+                if row != nil {
+                    Section {
+                        Button(role: .destructive) {
+                            confirmingDelete = true
+                        } label: {
+                            if isDeleting {
+                                ProgressView()
+                            } else {
+                                Text("Delete item")
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .disabled(isDeleting || isSaving)
+                        .accessibilityIdentifier("debtItem.delete")
+                    } footer: {
+                        Text("Removes this row and takes its amount out of the group's total. Nothing is removed from your transaction history.")
+                    }
+                }
+
                 if let errorMessage {
                     Text(errorMessage).foregroundStyle(.red).font(.footnote)
                 }
+            }
+            .confirmationDialog("Delete \(row?.itemName ?? "this item")?",
+                                isPresented: $confirmingDelete,
+                                titleVisibility: .visible) {
+                Button("Delete", role: .destructive) { Task { await delete() } }
+                Button("Cancel", role: .cancel) { }
             }
             .navigationTitle(row == nil ? "New item" : (row?.itemName ?? "Item"))
             .navigationBarTitleDisplayMode(.inline)
@@ -160,6 +192,20 @@ struct DebtItemEditor: View {
     /// symbol and separators the decimal pad cannot reproduce.
     private static func editableAmount(_ cents: Int) -> String {
         cents % 100 == 0 ? String(cents / 100) : String(format: "%.2f", Double(cents) / 100)
+    }
+
+    private func delete() async {
+        guard let id = row?.itemId else { return }
+        isDeleting = true
+        errorMessage = nil
+        do {
+            try await SpendService.shared.deleteDebtItem(id: id, matchValue: row?.matchValue)
+            await onSave()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            isDeleting = false
+        }
     }
 
     private func save() async {

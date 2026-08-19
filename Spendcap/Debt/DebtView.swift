@@ -32,6 +32,12 @@ final class DebtViewModel: ObservableObject {
         errorMessage = nil
         defer { isLoading = false }
         do {
+            // Pull anything new off the budget first, so a lender that started
+            // charging this month is on screen the first time it is opened
+            // rather than the second. A failure here must not blank the tab —
+            // the sync is an enrichment, the summary below is the screen.
+            _ = try? await SpendService.shared.syncDebtItemsFromBudget()
+
             async let rows = SpendService.shared.debtSummary()
             async let stored = SpendService.shared.debtGroups()
             summary = DebtMath.summary(rows: try await rows)
@@ -55,7 +61,7 @@ final class DebtViewModel: ObservableObject {
     func deleteItem(_ row: DebtSummaryRow) async {
         guard let id = row.itemId else { return }
         do {
-            try await SpendService.shared.deleteDebtItem(id: id)
+            try await SpendService.shared.deleteDebtItem(id: id, matchValue: row.matchValue)
             await load()
         } catch {
             errorMessage = error.localizedDescription
@@ -244,6 +250,10 @@ struct DebtView: View {
         }
     }
 
+    /// No per-group "Paid this month" row: the total card at the top already
+    /// answers paid for the month, and repeating it on every card cost a line
+    /// each for a figure the reader had passed on the way in. The per-item
+    /// paid line stays, because that one is not shown anywhere else.
     private func groupCard(_ group: DebtGroupSummary) -> some View {
         SurfaceCard {
             HStack(alignment: .firstTextBaseline) {
@@ -278,18 +288,6 @@ struct DebtView: View {
                     }
                 }
 
-                if group.hasTrackedItems {
-                    Divider()
-                    HStack {
-                        Text("Paid this month")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text(BudgetMath.dollars(group.paidCents))
-                            .font(.caption.weight(.semibold))
-                            .monospacedDigit()
-                    }
-                }
             }
 
             HStack {

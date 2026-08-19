@@ -730,19 +730,30 @@ final class SpendcapUITests: XCTestCase {
         XCTAssertTrue(groupTotal.waitForExistence(timeout: 10),
                       "the group should carry a subtotal")
 
-        // Clean up: this account is shared with the other UI tests, and a
-        // stray row changes what the next run sees.
+        // Deleting goes through the item sheet, not the row's context menu: a
+        // long press is not a thing anyone discovers, and these cards are not
+        // a List so there is no swipe-to-delete either. Testing the visible
+        // path is also testing the only one a user will find.
+        //
+        // This doubles as the cleanup — the account is shared with the other
+        // UI tests, and a stray row changes what the next run sees.
         let row = app.staticTexts["UITest Item"]
-        row.press(forDuration: 1.0)
-        let delete = app.buttons["Delete"].firstMatch
-        if delete.waitForExistence(timeout: 10) {
-            delete.tap()
-            // The confirmation dialog repeats the label.
-            let confirm = app.buttons["Delete"].firstMatch
-            if confirm.waitForExistence(timeout: 5) { confirm.tap() }
-        }
+        row.tap()
+
+        let deleteButton = app.buttons["debtItem.delete"]
+        XCTAssertTrue(deleteButton.waitForExistence(timeout: 15),
+                      "an existing item's sheet should offer a visible delete")
+        deleteButton.tap()
+
+        let confirm = app.buttons["Delete"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10),
+                      "deleting should ask for confirmation first")
+        confirm.tap()
+
         XCTAssertTrue(row.waitForNonExistence(timeout: 20),
-                      "the test item should be gone again")
+                      "the deleted item should be gone from its group")
+        XCTAssertTrue(total.waitForExistence(timeout: 15),
+                      "the screen should still be showing its totals afterwards")
     }
 
     /// Trips opens from Settings and can build a trip end to end: name it,
