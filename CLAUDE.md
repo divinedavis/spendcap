@@ -48,12 +48,17 @@ after every sync → check_overspend:
 - `budgets` — daily_limit_cents (default $50), thresholds
 - `device_push_tokens` — APNs tokens, self-only
 - `spend_alerts` — alert dedupe log
+- `debt_groups`, `debt_items` — the Debt tab (0025); no `anon` grants at all
 - `delete_account()` RPC — App Store 5.1.1 account deletion
 
 ### Tabs
 
-**Trends · Activity · Months · Trips · Settings.** Trips arrived 2026-08-06
-(see below). Home was removed 2026-08-03 — its
+**Trends · Activity · Months · Debt · Settings.** Debt arrived 2026-08-18 and
+took the fourth slot from **Trips**, which now opens from Settings → "Trips and
+events" as a sheet (it owns a `NavigationStack`, so pushing it into Settings'
+stack would stack two nav bars). iPhone shows five tabs before folding the rest
+into a "More" menu, and obligations are looked at monthly while a trip is set up
+a few times a year. Trips arrived 2026-08-06 (see below). Home was removed 2026-08-03 — its
 hero card, today's activity list and suggested-actions carousel are gone, and
 Trends took the landing slot. **Connecting a bank moved to Settings** in the
 same change: Home held the only entry into Plaid Link, so deleting it without
@@ -386,12 +391,78 @@ Two rules that shaped that screen and are easy to undo by accident:
    `supabase-pat-clockin`, non-default User-Agent or Cloudflare 403s, then
    `notify pgrst, 'reload schema'`).
 6. **Every new table needs explicit GRANTs** (`authenticated` +
-   `service_role`; `anon` select is fine — RLS default-denies).
+   `service_role`; `anon` select is fine — RLS default-denies). **TRUNCATE is
+   not**: it bypasses RLS entirely, and Supabase's default privileges hand it
+   to `anon` and `authenticated` on every table. 0026 revoked it (plus TRIGGER
+   and REFERENCES) across the schema and altered the default privileges so new
+   tables do not get it back. Not reachable through PostgREST, which has no
+   TRUNCATE verb — this is defence in depth, not a patched breach.
 7. **Regenerate the Xcode project after adding files:** `./scripts/generate.sh`.
    Never hand-edit `project.pbxproj`.
 8. **Plaid access tokens live server-side only.** Any new table/view/function
    touching them must be service-role only; audit for the updatable-view RLS
    bypass before granting anything.
+
+## Debt (0025, shipped 2026-08-18)
+
+The fourth tab. Every recurring obligation as its own row — name, a note saying
+which product it is, what it costs each month — collected into user-named groups
+with a subtotal per group and a total across all of them. It is the spreadsheet
+Divine kept by hand, with the totals derived instead of typed: his sheet wrote
+$500 over a group whose rows add to $498 and $350 over one that adds to $1,350,
+and a figure that can drift from what it is summing is the least trustworthy
+number on a screen.
+
+**Two tables, not one.** `debt_groups` and `debt_items`. A group is something
+the user names, orders and keeps around while empty; a `group` text column on a
+single table would delete the bucket the moment its last item went.
+
+**No unique constraint on the item name.** "Google" is three rows — YouTube TV,
+YouTube Premium, Workspace — at three different prices. Uniqueness would have
+made the real data unrepresentable. The `note` is what tells them apart and it
+is optional.
+
+**Planned and actual at once.** `debt_summary(period)` returns each item with
+what actually posted against it that month, matched on `txn_display_name()` —
+the same name the budget rollups match on, so the Debt tab and the budget can't
+disagree about a charge. The outflow filter is copied verbatim from
+`category_spend()` and must stay identical.
+
+- Matching is **per item** and **independent of `category_rules`**. A BNPL
+  charge belongs to the Debts budget line *and* to that lender's item; one
+  table doing both jobs would mean one of the two screens lying.
+- Precedence copies 0021: **amount-qualified beats unqualified, then longer
+  match wins**, id as a stable tiebreak. A transaction is claimed by at most
+  one item, so subtotals add up without double-counting.
+- `match_value` is **nullable and expected to stay null on some rows**. A 401k
+  loan repaid out of payroll never touches the linked checking account. Those
+  items read **"Not tracked"**, never "$0 paid" — and they are excluded from the
+  paid/outstanding figures, which is why paid can be much smaller than the
+  total. Inventing a zero there would report money as unpaid that was never
+  going to appear.
+
+**Plaid resolved the Google problem for free.** The amount qualifier was built
+for three identical-descriptor Google rows; the live data turned out to name
+them distinctly ("YouTube TV", "YouTube Premium", "Google Workspace"), so the
+seeded rules match on name. The qualifier stays — it is the only tool for a
+merchant that genuinely sends one descriptor for several products.
+
+**Planned figures are guesses until the tab checks them**, which is the whole
+point of showing paid beside planned. Three patterns showed up the first time
+the seeded list met real transactions, and all three will recur for anyone:
+
+- **A service bills under a different name than you call it.** The match string
+  has to be the descriptor Plaid emits, not the brand you think in. Query
+  `txn_display_name()` over the history before writing one.
+- **Usage-priced services drift past a flat plan**; a fixed monthly figure for
+  one is a placeholder, not a budget.
+- **Installment lenders arrive as many small charges, not one payment**, so a
+  BNPL row's paid figure is a sum of a dozen debits and will look nothing like
+  the plan mid-month.
+
+And a row that stops charging keeps its plan forever unless someone looks — a
+tracked item with a plan and zero charges for months is the signal to check,
+not a rendering bug.
 
 ## Trips and events (0010, shipped 2026-08-06)
 
@@ -527,6 +598,13 @@ python3 scripts/attach_build.py --dry-run  # just report what is attached now
   checkbox inside it from `trip.lineCheck` to `trip.line` and made it
   unfindable — the control was on screen and tappable the whole time. Put
   identifiers on the controls, not the row.
+- **A row far enough down a SwiftUI `Form` does not exist at all.** The list is
+  lazy, so an unrealized row is absent from the accessibility tree — not merely
+  off-screen — and `waitForExistence` fails on it however long it waits. Adding
+  the Trips row to Settings on 2026-08-18 tipped `settings.statements` over that
+  edge and broke a test that had nothing to do with the change. Anything below
+  the first screenful of Settings must go through `scrollToSettingsRow`. Suspect
+  this whenever adding one row breaks an assertion on a different one.
 - **Tab taps need `app.tapTab(_:in:)`**, not `tabBars.buttons[x].tap()`. On
   iOS 26's floating tab bar a plain `.tap()` reports success but does not
   change the selection. The helper in `UITestSupport.swift` falls back to a

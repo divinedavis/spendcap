@@ -595,6 +595,142 @@ final class SpendService {
             .execute()
     }
 
+    // MARK: - Debt
+
+    /// Every obligation with its planned monthly amount and what actually
+    /// posted against it this month. Empty groups come back too, as a row with
+    /// a nil item id.
+    func debtSummary(period: Date? = nil) async throws -> [DebtSummaryRow] {
+        var params: [String: AnyJSON] = ["period": .null]
+        if let period {
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = .current
+            let start = calendar.dateInterval(of: .month, for: period)?.start ?? period
+            params["period"] = .string(Self.localDateString(now: start))
+        }
+        return try await client
+            .rpc("debt_summary", params: params)
+            .execute()
+            .value
+    }
+
+    /// Creates the four starter buckets. Server-side no-op once any group
+    /// exists, so a double tap cannot duplicate them.
+    @discardableResult
+    func seedStarterDebt() async throws -> Int {
+        try await client.rpc("seed_starter_debt").execute().value
+    }
+
+    func createDebtGroup(name: String) async throws {
+        guard let userId = client.auth.currentUser?.id else { return }
+        let existing: [DebtGroup] = try await debtGroups()
+        let nextOrder = (existing.map(\.sortOrder).max() ?? -1) + 1
+        try await client
+            .from("debt_groups")
+            .insert([
+                "user_id": AnyJSON.string(userId.uuidString.lowercased()),
+                "name": AnyJSON.string(name),
+                "sort_order": AnyJSON.integer(nextOrder),
+            ])
+            .execute()
+    }
+
+    func debtGroups() async throws -> [DebtGroup] {
+        try await client
+            .from("debt_groups")
+            .select("id, name, sort_order")
+            .order("sort_order", ascending: true)
+            .execute()
+            .value
+    }
+
+    func renameDebtGroup(id: UUID, name: String) async throws {
+        try await client
+            .from("debt_groups")
+            .update([
+                "name": AnyJSON.string(name),
+                "updated_at": AnyJSON.string(ISO8601DateFormatter().string(from: Date())),
+            ])
+            .eq("id", value: id.uuidString.lowercased())
+            .execute()
+    }
+
+    /// Removes a bucket and the items in it. Transactions are untouched — this
+    /// deletes a list, not history.
+    func deleteDebtGroup(id: UUID) async throws {
+        try await client
+            .from("debt_groups")
+            .delete()
+            .eq("id", value: id.uuidString.lowercased())
+            .execute()
+    }
+
+    /// Adds an item at the end of its group. Sort order is max + 1 within the
+    /// group so a new row cannot jump into the middle of an arranged list.
+    func createDebtItem(groupId: UUID, name: String, note: String?,
+                        plannedCents: Int, matchValue: String?,
+                        matchAmountCents: Int?) async throws {
+        guard let userId = client.auth.currentUser?.id else { return }
+        let siblings: [DebtItem] = try await debtItems(groupId: groupId)
+        let nextOrder = (siblings.map(\.sortOrder).max() ?? -1) + 1
+        try await client
+            .from("debt_items")
+            .insert([
+                "user_id": AnyJSON.string(userId.uuidString.lowercased()),
+                "group_id": AnyJSON.string(groupId.uuidString.lowercased()),
+                "name": AnyJSON.string(name),
+                "note": note.flatMap(Self.trimmedOrNil).map { AnyJSON.string($0) } ?? .null,
+                "planned_cents": AnyJSON.integer(plannedCents),
+                "match_value": matchValue.flatMap(Self.trimmedOrNil).map { AnyJSON.string($0) } ?? .null,
+                "match_amount_cents": matchAmountCents.map { AnyJSON.integer($0) } ?? .null,
+                "sort_order": AnyJSON.integer(nextOrder),
+            ])
+            .execute()
+    }
+
+    func debtItems(groupId: UUID) async throws -> [DebtItem] {
+        try await client
+            .from("debt_items")
+            .select("id, group_id, name, note, planned_cents, match_value, match_amount_cents, sort_order")
+            .eq("group_id", value: groupId.uuidString.lowercased())
+            .order("sort_order", ascending: true)
+            .execute()
+            .value
+    }
+
+    func updateDebtItem(id: UUID, groupId: UUID, name: String, note: String?,
+                        plannedCents: Int, matchValue: String?,
+                        matchAmountCents: Int?) async throws {
+        try await client
+            .from("debt_items")
+            .update([
+                "group_id": AnyJSON.string(groupId.uuidString.lowercased()),
+                "name": AnyJSON.string(name),
+                // Explicit null clears the field — an emptied note or match
+                // string is a choice the sheet can save, not just an absence.
+                "note": note.flatMap(Self.trimmedOrNil).map { AnyJSON.string($0) } ?? .null,
+                "planned_cents": AnyJSON.integer(plannedCents),
+                "match_value": matchValue.flatMap(Self.trimmedOrNil).map { AnyJSON.string($0) } ?? .null,
+                "match_amount_cents": matchAmountCents.map { AnyJSON.integer($0) } ?? .null,
+                "updated_at": AnyJSON.string(ISO8601DateFormatter().string(from: Date())),
+            ])
+            .eq("id", value: id.uuidString.lowercased())
+            .execute()
+    }
+
+    func deleteDebtItem(id: UUID) async throws {
+        try await client
+            .from("debt_items")
+            .delete()
+            .eq("id", value: id.uuidString.lowercased())
+            .execute()
+    }
+
+    private static func trimmedOrNil(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     // MARK: - Helpers
 
     /// Today's date in the device's local timezone, matching the server-side

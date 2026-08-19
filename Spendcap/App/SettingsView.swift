@@ -5,6 +5,7 @@ struct SettingsView: View {
     @State private var items: [PlaidItem] = []
     @State private var showingDeleteConfirm = false
     @State private var showingLink = false
+    @State private var showingTrips = false
     @State private var errorMessage: String?
 
     var body: some View {
@@ -99,6 +100,18 @@ struct SettingsView: View {
                         Label("Budget by category", systemImage: "list.bullet.rectangle")
                     }
                     .accessibilityIdentifier("settings.categories")
+
+                    // Trips lost its tab to Debt on 2026-08-18 and lives here
+                    // now — same screen, one tap deeper. A sheet, not a push:
+                    // Trips owns a NavigationStack of its own and nesting it
+                    // inside this one stacks two navigation bars.
+                    Button {
+                        showingTrips = true
+                    } label: {
+                        Label("Trips and events", systemImage: "airplane")
+                            .foregroundStyle(.primary)
+                    }
+                    .accessibilityIdentifier("settings.trips")
                 }
 
                 Section("Documents") {
@@ -150,6 +163,9 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showingLink) {
                 PlaidLinkFlow { Task { await load() } }
+            }
+            .sheet(isPresented: $showingTrips) {
+                TripsView(isModal: true)
             }
         }
     }

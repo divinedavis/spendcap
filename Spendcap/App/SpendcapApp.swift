@@ -132,11 +132,12 @@ struct MainTabView: View {
             MonthsView()
                 .tabItem { Label("Months", systemImage: "calendar") }
 
-            // Trips sit outside the daily cap on purpose — a flight and eight
-            // hotel nights are one decision, not a day of overspending, and an
-            // over-cap push on the day of a booking is noise.
-            TripsView()
-                .tabItem { Label("Trips", systemImage: "airplane") }
+            // Debt took the fourth slot from Trips on 2026-08-18: iPhone shows
+            // five tabs before folding the rest into a "More" menu, and the
+            // recurring obligations are looked at monthly while a trip is set
+            // up a few times a year. Trips is unchanged, one tap into Settings.
+            DebtView()
+                .tabItem { Label("Debt", systemImage: "creditcard.fill") }
 
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }

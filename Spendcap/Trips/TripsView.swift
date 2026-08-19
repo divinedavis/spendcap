@@ -66,6 +66,12 @@ final class TripsViewModel: ObservableObject {
 }
 
 struct TripsView: View {
+    /// Presented as a sheet from Settings rather than owning a tab, so it needs
+    /// its own way out. Trips keeps its own NavigationStack — pushing this into
+    /// Settings' stack would nest two of them and stack two nav bars.
+    var isModal = false
+
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var model = TripsViewModel()
     @State private var showingNew = false
     @State private var pendingDelete: TripTotals?
@@ -119,6 +125,12 @@ struct TripsView: View {
                         Label("New trip", systemImage: "plus")
                     }
                     .accessibilityIdentifier("trips.new")
+                }
+                if isModal {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done") { dismiss() }
+                            .accessibilityIdentifier("trips.done")
+                    }
                 }
             }
             .refreshable { await model.load() }

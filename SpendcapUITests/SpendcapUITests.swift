@@ -494,12 +494,11 @@ final class SpendcapUITests: XCTestCase {
 
         app.tapTab("Settings", in: self)
 
-        let statementsRow = app.buttons["settings.statements"]
-        if !statementsRow.waitForExistence(timeout: 5) {
-            app.tapTab("Settings", in: self)   // same dismissal race the sign-out test guards
-            XCTAssertTrue(statementsRow.waitForExistence(timeout: 10),
-                          "Statements row should exist in Settings")
-        }
+        // Scrolled, not just waited for: SwiftUI's Form is lazy, so a row far
+        // enough below the fold does not exist as an element at all and no
+        // amount of waiting will conjure it. Adding the Trips row above it on
+        // 2026-08-18 was enough to tip Statements over that edge.
+        let statementsRow = scrollToSettingsRow(app, "settings.statements")
         statementsRow.tap()
 
         XCTAssertTrue(app.navigationBars["Statements"].waitForExistence(timeout: 15),
@@ -670,16 +669,15 @@ final class SpendcapUITests: XCTestCase {
         return result
     }
 
-    /// The Trips tab exists, opens, and can build a trip end to end: name it,
-    /// give it dates, create it, and land on a detail screen that has its own
-    /// budget and its own cost lines.
+    /// The Debt tab opens, totals its groups, and can add and remove an item
+    /// without the totals going stale.
     ///
-    /// Worth a UI test rather than leaving it to the unit suite, because the
-    /// thing being verified is that a *fifth* tab is reachable at all — iOS
-    /// collapses tabs past a limit into a More list on some layouts, and the
-    /// rollups underneath are already covered by TripMathTests and the live
-    /// end-to-end script. Skipped when creds are absent.
-    func testTripsTabCreatesATripWithCostLines() throws {
+    /// The assertion that earns this test is the arithmetic one: the group
+    /// subtotal and the grand total are derived from the rows, and the bug
+    /// this screen exists to prevent is a written total that disagrees with
+    /// what it sums. DebtMathTests proves the fold; this proves the screen is
+    /// actually showing it. Skipped when creds are absent.
+    func testDebtTabTotalsAndAddsAnItem() throws {
         guard let email = ProcessInfo.processInfo.environment["SPENDCAP_TEST_EMAIL"],
               let password = ProcessInfo.processInfo.environment["SPENDCAP_TEST_PASSWORD"],
               !email.isEmpty, !password.isEmpty else {
@@ -692,7 +690,85 @@ final class SpendcapUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20),
                       "Trends should appear after sign-in")
 
-        app.tapTab("Trips", in: self)
+        app.tapTab("Debt", in: self)
+
+        // A fresh account lands on the starter card instead of the totals, and
+        // the seed is the only way through to the rest of the screen.
+        let seed = app.buttons["debt.seed"]
+        if seed.waitForExistence(timeout: 10) {
+            seed.tap()
+        }
+
+        let total = app.staticTexts["debt.total"]
+        XCTAssertTrue(total.waitForExistence(timeout: 20),
+                      "Debt should show a monthly total")
+
+        let addItem = app.buttons.matching(identifier: "debt.addItem").firstMatch
+        XCTAssertTrue(addItem.waitForExistence(timeout: 15),
+                      "each group should offer a way to add an item")
+        addItem.tap()
+
+        let name = app.textFields["debtItem.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 15),
+                      "the item sheet should offer a name field")
+        name.tap()
+        name.typeText("UITest Item")
+
+        let planned = app.textFields["debtItem.planned"]
+        XCTAssertTrue(planned.waitForExistence(timeout: 10))
+        planned.tap()
+        planned.typeText("12")
+
+        app.buttons["debtItem.save"].tap()
+
+        // The row has to land, and the group subtotal has to have moved with
+        // it — a screen that adds a row and leaves its total behind is the
+        // exact failure this feature is designed against.
+        XCTAssertTrue(app.staticTexts["UITest Item"].waitForExistence(timeout: 20),
+                      "the new item should appear in its group")
+        let groupTotal = app.staticTexts.matching(identifier: "debt.groupTotal").firstMatch
+        XCTAssertTrue(groupTotal.waitForExistence(timeout: 10),
+                      "the group should carry a subtotal")
+
+        // Clean up: this account is shared with the other UI tests, and a
+        // stray row changes what the next run sees.
+        let row = app.staticTexts["UITest Item"]
+        row.press(forDuration: 1.0)
+        let delete = app.buttons["Delete"].firstMatch
+        if delete.waitForExistence(timeout: 10) {
+            delete.tap()
+            // The confirmation dialog repeats the label.
+            let confirm = app.buttons["Delete"].firstMatch
+            if confirm.waitForExistence(timeout: 5) { confirm.tap() }
+        }
+        XCTAssertTrue(row.waitForNonExistence(timeout: 20),
+                      "the test item should be gone again")
+    }
+
+    /// Trips opens from Settings and can build a trip end to end: name it,
+    /// give it dates, create it, and land on a detail screen that has its own
+    /// budget and its own cost lines.
+    ///
+    /// It lost its tab to Debt on 2026-08-18 (iPhone shows five tabs before
+    /// folding the rest into More), so the first thing this now proves is that
+    /// the screen is still *reachable* — a moved entry point is exactly the
+    /// kind of change that silently strands a feature. The rollups underneath
+    /// stay covered by TripMathTests. Skipped when creds are absent.
+    func testTripsOpensFromSettingsAndCreatesATripWithCostLines() throws {
+        guard let email = ProcessInfo.processInfo.environment["SPENDCAP_TEST_EMAIL"],
+              let password = ProcessInfo.processInfo.environment["SPENDCAP_TEST_PASSWORD"],
+              !email.isEmpty, !password.isEmpty else {
+            throw XCTSkip("SPENDCAP_TEST_EMAIL/PASSWORD not set")
+        }
+
+        let app = launch()
+        signIn(app, email: email, password: password)
+
+        XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20),
+                      "Trends should appear after sign-in")
+
+        app.tapTab("Settings", in: self)
+        scrollToSettingsRow(app, "settings.trips").tap()
         XCTAssertTrue(app.navigationBars["Trips"].waitForExistence(timeout: 15),
                       "Trips screen should appear")
 

@@ -93,12 +93,22 @@ final class MarketingScreenshots: XCTestCase {
             app.buttons["Cancel"].tap()
         }
 
+        // Debt: the tab that says what is going out every month, grouped, with
+        // a subtotal per group. Shot before Trips because it is a tab now and
+        // Trips is not.
+        app.tapTab("Debt", in: self)
+        if app.staticTexts["debt.total"].waitForExistence(timeout: 20) {
+            save(app, "08-debt")
+        }
+
         // Trips: both states are worth having. The empty state explains what a
         // trip is for, and a real one shows planned against actual — which is
-        // the screenshot that says what the tab does.
-        app.tapTab("Trips", in: self)
+        // the screenshot that says what the screen does. It opens from Settings
+        // now, not from a tab.
+        app.tapTab("Settings", in: self)
+        scrollToSettingsRow(app, "settings.trips").tap()
         if app.navigationBars["Trips"].waitForExistence(timeout: 20) {
-            save(app, "08-trips")
+            save(app, "09-trips")
 
             if app.buttons["trips.new"].waitForExistence(timeout: 10) {
                 app.buttons["trips.new"].tap()
@@ -106,7 +116,7 @@ final class MarketingScreenshots: XCTestCase {
                 if name.waitForExistence(timeout: 15) {
                     name.tap()
                     name.typeText("Tokyo")
-                    save(app, "09-trip-new")
+                    save(app, "10-trip-new")
                     app.buttons["trip.save"].tap()
 
                     if app.staticTexts["trip.spent"].waitForExistence(timeout: 25) {
@@ -116,7 +126,7 @@ final class MarketingScreenshots: XCTestCase {
                             check.tap()
                             _ = app.staticTexts["trip.settledCount"].waitForExistence(timeout: 10)
                         }
-                        save(app, "10-trip-detail")
+                        save(app, "11-trip-detail")
                         // Leave nothing behind: the account is shared with the
                         // assertion suite, and a stray trip changes what it sees.
                         if app.buttons["trip.delete"].waitForExistence(timeout: 10) {
@@ -129,10 +139,15 @@ final class MarketingScreenshots: XCTestCase {
             }
         }
 
+        // Trips is a sheet now — close it before shooting Settings underneath.
+        if app.buttons["trips.done"].waitForExistence(timeout: 5) {
+            app.buttons["trips.done"].tap()
+        }
+
         app.tapTab("Settings", in: self)
         if true {
             if app.buttons["settings.signOut"].waitForExistence(timeout: 10) {
-                save(app, "11-settings")
+                save(app, "12-settings")
             }
         }
     }
