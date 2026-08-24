@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 import Charts
 
 // Trends template, modelled on Monzo's Trends screen:
@@ -471,9 +470,8 @@ struct TrendsView: View {
                 }
 
                 ForEach(Array(month.rows.enumerated()), id: \.element.id) { index, row in
-                    // Three gestures, two destinations (user request,
-                    // 2026-08-23): tap or hold opens the editor, swiping left
-                    // deletes the line.
+                    // Tap opens the editor, swiping left deletes the line
+                    // (user request, 2026-08-23).
                     //
                     // Uncategorized opens too — it has nothing to plan, but
                     // routing those transactions out of it is the whole point
@@ -486,10 +484,7 @@ struct TrendsView: View {
                         deleteIdentifier: "trends.deleteLine",
                         onDelete: { pendingDelete = row }
                     ) {
-                        HoldableRow {
-                            editingLine = row
-                        } onHold: {
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        SwipeSafeRow {
                             editingLine = row
                         } label: {
                             CategoryLineRow(row: row, showsChevron: true)
@@ -498,13 +493,6 @@ struct TrendsView: View {
                     }
                     if index < month.rows.count - 1 { Divider() }
                 }
-
-                Text("Tap or hold a line to change what it plans to spend, or swipe it left to delete it. Settings \u{203A} Budget by category has the transactions behind each one.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 2)
-                    .accessibilityIdentifier("trends.budgetHint")
             }
         } else {
             // Nothing to break down yet.

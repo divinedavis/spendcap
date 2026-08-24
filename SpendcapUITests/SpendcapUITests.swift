@@ -444,12 +444,11 @@ final class SpendcapUITests: XCTestCase {
         XCTAssertTrue(resolved, "Budget should settle into either the list or the starter prompt")
     }
 
-    /// The two gestures added to a budget line on Trends (2026-08-23): hold to
-    /// open its editor, swipe left to reveal Delete. Deliberately stops at
-    /// revealing the button — confirming it would delete a line out of the
-    /// shared test account, and destructive tests are opt-in in this suite.
-    /// Skipped when creds are absent.
-    func testCategoryLineHoldsToEditAndSwipesToDelete() throws {
+    /// Swiping a budget line on Trends left reveals Delete (2026-08-23).
+    /// Deliberately stops at revealing the button — confirming it would delete
+    /// a line out of the shared test account, and destructive tests are opt-in
+    /// in this suite. Skipped when creds are absent.
+    func testCategoryLineSwipesToDelete() throws {
         guard let email = ProcessInfo.processInfo.environment["SPENDCAP_TEST_EMAIL"],
               let password = ProcessInfo.processInfo.environment["SPENDCAP_TEST_PASSWORD"],
               !email.isEmpty, !password.isEmpty else {
@@ -484,19 +483,17 @@ final class SpendcapUITests: XCTestCase {
         let middle = app.coordinate(withNormalizedOffset: .zero)
             .withOffset(CGVector(dx: box.midX, dy: box.midY))
 
-        // Hold — 0.45s in the app, pressed for longer here so it has fired
-        // well before the release. Retried: the first hold on this card lands
-        // on nothing at all, and a second identical press then works, so the
-        // card wants one interaction to settle before it takes a long one.
-        // Taps do not have this problem.
+        // Tap first, and close it again. Two things at once: the tap into the
+        // editor still works with a swipe gesture wrapped around the row, and
+        // the card gets the one interaction it wants before it takes a
+        // gesture — the first touch on it, whatever it is, lands on nothing.
         let planned = app.descendants(matching: .any)
             .matching(identifier: "category.planned").firstMatch
-        for _ in 0..<4 {
-            middle.press(forDuration: 1.0)
-            if planned.waitForExistence(timeout: 4) { break }
+        for _ in 0..<3 {
+            middle.tap()
+            if planned.waitForExistence(timeout: 5) { break }
         }
-        XCTAssertTrue(planned.waitForExistence(timeout: 8),
-                      "holding a budget line should open its planned amount")
+        XCTAssertTrue(planned.exists, "tapping a budget line should open its editor")
         app.buttons["Cancel"].tap()
         XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 10),
                       "the editor should dismiss back to Trends")

@@ -275,33 +275,37 @@ the tie-break within a day and has to stay one: transactions carry a date and
 no time of day, so a busy day arrives as a block with nothing else to order it
 by.
 
-**Tap, hold, or swipe a budget line (2026-08-23, user request).** On the Trends
-widget a line now opens its editor on a **tap or a hold**, and **swipes left to
-delete** — the same delete the Budget screen has had, with the same
-confirmation wording, because it is the same call (`deleteCategory`, rules
-cascade, transactions re-matched). Uncategorized does not swipe: there is no
-line there to delete.
+**Swipe a budget line to delete it (2026-08-23, user request).** On the Trends
+widget a line opens its editor on a tap and **swipes left to delete** — the same
+delete the Budget screen has had, with the same confirmation wording, because it
+is the same call (`deleteCategory`, rules cascade, transactions re-matched).
+Uncategorized does not swipe: there is no line there to delete. A **hold** to
+open the editor shipped in build 48 and was removed the same evening at the
+user's request; `HoldableRow` went with it.
 
-Both gestures live in `DashboardComponents`, and both are there because the
-obvious version does not work in a card stack:
+`SwipeToDeleteRow` (in `DashboardComponents`) reveals the button with a
+**`DragGesture` attached simultaneously**, ignored unless the finger is
+travelling sideways, so the page still scrolls under it (asserted in the UI
+test). Two things it is built around:
 
-- `SwipeToDeleteRow` reveals the button with a **`DragGesture` attached
-  simultaneously**, ignored unless the finger is travelling sideways, so the
-  page still scrolls under it (asserted in the UI test). The first build gave
-  each row its own horizontal `ScrollView` with a `ScrollTargetBehavior` — it
-  snapped well, but a row that owns a scroll view is one more thing between a
-  finger and the button underneath it.
-- `HoldableRow` times the hold off the **button's own `isPressed`**. A
-  `LongPressGesture` hung on the Button with `.simultaneousGesture` or
-  `.highPriorityGesture` never fired in testing.
+- The first build gave each row its own horizontal `ScrollView` with a
+  `ScrollTargetBehavior`. It snapped well, but a row that owns a scroll view is
+  one more thing between a finger and the button underneath it — and long
+  presses on it did not register at all.
 - A sideways drag **never leaves the button's frame**, so the button keeps its
-  press for the whole swipe and its release arrived as a tap — a swipe opened
-  the editor over the Delete it had just revealed. The row publishes
-  `rowSwipeActive` through the environment, held 0.35s past the end of the
-  drag, and the button drops both the hold and that release. The UI test
-  asserts the editor stays shut after a swipe.
-- **In XCUITest, the first `press` on this card lands on nothing** — a second
-  identical press works. Retry the hold; taps do not need it.
+  press for the whole swipe and its release arrived as a tap: a swipe opened the
+  editor over the Delete it had just revealed. The row publishes
+  `rowSwipeActive` through the environment, held 0.35s past the end of the drag,
+  and `SwipeSafeRow` drops that release. The UI test asserts the editor stays
+  shut after a swipe.
+
+**In XCUITest, the first gesture on this card lands on nothing** — a press or a
+drag both need a warm-up interaction first, and the second one works. Tap the
+row and cancel the editor before asserting on a swipe. Plain taps retry
+themselves.
+
+The card carries **no instruction caption** — the line under the rows explaining
+the gestures was removed 2026-08-23 at the user's request.
 
 If a tap there ever seems to do nothing in a UI test,
 suspect the layout rather than the control: the widget appears only once the

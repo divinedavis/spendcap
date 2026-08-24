@@ -241,7 +241,7 @@ struct SuggestionCard: View {
 /// competitor for it. The first build wrapped each row in its own horizontal
 /// `ScrollView` and let `ScrollTargetBehavior` do the snapping; it was dropped
 /// because a row that owns a scroll view of its own is one more thing between a
-/// finger and the button underneath it, for a snap this can do in four lines.
+/// finger and the button underneath it, for a snap this does in four lines.
 ///
 /// Opening a row publishes its id through `openRowID`, so the siblings that see
 /// someone else's id close themselves, as rows in a List do.
@@ -257,10 +257,10 @@ struct SwipeToDeleteRow<Content: View>: View {
     @ViewBuilder var content: Content
 
     @State private var offsetX: CGFloat = 0
-    /// True while a swipe is in flight, and for a beat afterwards. The row
-    /// underneath watches it so the drag doesn't also read as a tap or a hold:
-    /// a finger sliding sideways never leaves the button's frame, so the
-    /// button keeps its press the whole way and fires on release.
+    /// True while a swipe is in flight, and for a beat afterwards. The button
+    /// underneath watches it so the drag doesn't also read as a tap: a finger
+    /// sliding sideways never leaves the button's frame, so the button keeps
+    /// its press the whole way and fires on release.
     @State private var swiping = false
     @State private var settleSwipe: Task<Void, Never>?
 
@@ -365,39 +365,38 @@ struct SwipeToDeleteRow<Content: View>: View {
     }
 }
 
-// MARK: - Tap or hold
+// MARK: - Row button
 
-/// A row that opens on a tap *and* on a hold, staying a Button to the
-/// accessibility tree (which is what the UI tests query).
-///
-/// The hold is timed off the button's own pressed state rather than a
-/// `LongPressGesture`. The Button owns the touch, and a long press hung off it
-/// with `.simultaneousGesture` or `.highPriorityGesture` never fired in testing
-/// (Trends, 2026-08-23) — where the pressed state the button publishes itself
-/// arrives every time, and races neither the tap nor the swipe drag beside it.
-struct HoldableRow<Label: View>: View {
-    var holdDuration: Double = 0.45
+/// The row button in a `SwipeToDeleteRow`. It exists for one reason: a sideways
+/// drag never leaves the button's frame, so the button keeps its press for the
+/// whole swipe and its release arrives as a tap — which opened the editor over
+/// the Delete the swipe had just revealed. It drops that release.
+struct SwipeSafeRow<Label: View>: View {
     let onTap: () -> Void
-    let onHold: () -> Void
     @ViewBuilder var label: Label
 
     @Environment(\.rowSwipeActive) private var isSwiping
-    @State private var didHold = false
 
     var body: some View {
         Button {
-            // Neither the release that ends a hold nor the one that ends a
-            // swipe is a tap.
-            if didHold { didHold = false; return }
             guard !isSwiping else { return }
             onTap()
         } label: {
             label
         }
-        .buttonStyle(HoldButtonStyle(holdDuration: holdDuration, isSuppressed: isSwiping) {
-            didHold = true
-            onHold()
-        })
+        // A custom style, not `.plain`: with `.plain` the button claims the
+        // drag and the swipe gesture around it never sees one (measured — the
+        // row simply stops swiping). This one also gives the row a pressed
+        // state, and a hit area that covers the gaps between its text.
+        .buttonStyle(RowButtonStyle())
+    }
+}
+
+private struct RowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .contentShape(Rectangle())
+            .opacity(configuration.isPressed ? 0.6 : 1)
     }
 }
 
@@ -410,53 +409,5 @@ extension EnvironmentValues {
     var rowSwipeActive: Bool {
         get { self[RowSwipeActiveKey.self] }
         set { self[RowSwipeActiveKey.self] = newValue }
-    }
-}
-
-private struct HoldButtonStyle: ButtonStyle {
-    let holdDuration: Double
-    /// A swipe is under way: the press belongs to the drag, not to a hold.
-    let isSuppressed: Bool
-    let onHold: () -> Void
-
-    func makeBody(configuration: Configuration) -> some View {
-        HoldTracker(isPressed: configuration.isPressed,
-                    holdDuration: holdDuration,
-                    isSuppressed: isSuppressed,
-                    onHold: onHold) {
-            configuration.label
-        }
-    }
-
-    /// A view, not the style itself: the countdown needs `@State` to survive
-    /// the re-render that flipping `isPressed` causes.
-    private struct HoldTracker<Content: View>: View {
-        let isPressed: Bool
-        let holdDuration: Double
-        let isSuppressed: Bool
-        let onHold: () -> Void
-        @ViewBuilder var content: Content
-
-        @State private var countdown: Task<Void, Never>?
-
-        var body: some View {
-            content
-                .contentShape(Rectangle())
-                .opacity(isPressed ? 0.6 : 1)
-                .onChange(of: isPressed) { _, pressed in
-                    countdown?.cancel()
-                    guard pressed, !isSuppressed else { return }
-                    countdown = Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: UInt64(holdDuration * 1_000_000_000))
-                        guard !Task.isCancelled else { return }
-                        onHold()
-                    }
-                }
-                // A press that turns into a swipe stops being a hold.
-                .onChange(of: isSuppressed) { _, suppressed in
-                    if suppressed { countdown?.cancel() }
-                }
-                .onDisappear { countdown?.cancel() }
-        }
     }
 }
