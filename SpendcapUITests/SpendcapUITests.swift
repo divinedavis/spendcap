@@ -444,6 +444,99 @@ final class SpendcapUITests: XCTestCase {
         XCTAssertTrue(resolved, "Budget should settle into either the list or the starter prompt")
     }
 
+    /// The two gestures added to a budget line on Trends (2026-08-23): hold to
+    /// open its editor, swipe left to reveal Delete. Deliberately stops at
+    /// revealing the button — confirming it would delete a line out of the
+    /// shared test account, and destructive tests are opt-in in this suite.
+    /// Skipped when creds are absent.
+    func testCategoryLineHoldsToEditAndSwipesToDelete() throws {
+        guard let email = ProcessInfo.processInfo.environment["SPENDCAP_TEST_EMAIL"],
+              let password = ProcessInfo.processInfo.environment["SPENDCAP_TEST_PASSWORD"],
+              !email.isEmpty, !password.isEmpty else {
+            throw XCTSkip("SPENDCAP_TEST_EMAIL/PASSWORD not set")
+        }
+
+        let app = launch()
+        signIn(app, email: email, password: password)
+
+        XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20),
+                      "Trends should appear after sign-in")
+
+        let line = app.buttons["trends.line"].firstMatch
+        guard line.waitForExistence(timeout: 20) else {
+            throw XCTSkip("no category rollup on this account — nothing to swipe")
+        }
+
+        // Same settle-then-tap-a-point discipline as the tap test above: the
+        // card lays out asynchronously and a gesture aimed at a moving row
+        // lands where the row used to be.
+        var frame = line.frame
+        var stable = 0
+        for _ in 0..<15 {
+            Thread.sleep(forTimeInterval: 0.4)
+            let next = line.frame
+            stable = (next == frame) ? stable + 1 : 0
+            frame = next
+            if stable >= 3 { break }
+        }
+
+        let box = line.frame
+        let middle = app.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: box.midX, dy: box.midY))
+
+        // Hold — 0.45s in the app, pressed for longer here so it has fired
+        // well before the release. Retried: the first hold on this card lands
+        // on nothing at all, and a second identical press then works, so the
+        // card wants one interaction to settle before it takes a long one.
+        // Taps do not have this problem.
+        let planned = app.descendants(matching: .any)
+            .matching(identifier: "category.planned").firstMatch
+        for _ in 0..<4 {
+            middle.press(forDuration: 1.0)
+            if planned.waitForExistence(timeout: 4) { break }
+        }
+        XCTAssertTrue(planned.waitForExistence(timeout: 8),
+                      "holding a budget line should open its planned amount")
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 10),
+                      "the editor should dismiss back to Trends")
+
+        // Swipe left — a real drag across the row, which is what the gesture
+        // in the app is watching for.
+        let target = app.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: max(box.midX - 160, 8), dy: box.midY))
+        let deleteButton = app.buttons["trends.deleteLine"].firstMatch
+        for _ in 0..<3 {
+            middle.press(forDuration: 0.1, thenDragTo: target)
+            if deleteButton.waitForExistence(timeout: 3) { break }
+        }
+        XCTAssertTrue(deleteButton.exists,
+                      "swiping a budget line left should reveal Delete")
+        // And only that: the finger is still down through the whole drag and
+        // never leaves the row, so a swipe used to end as a tap and open the
+        // editor over the button it had just revealed.
+        XCTAssertFalse(planned.exists,
+                       "swiping should not also open the line's editor")
+
+        // Leave it closed, and confirm it closes — a row stuck open would be
+        // the visible half of a broken swipe.
+        target.press(forDuration: 0.1, thenDragTo: middle)
+        Thread.sleep(forTimeInterval: 1.0)
+        XCTAssertFalse(deleteButton.isHittable,
+                       "swiping back should put the Delete button away")
+
+        // And the page still scrolls under the finger that just swiped a row.
+        // The swipe gesture runs alongside the scroll rather than instead of
+        // it, and this is the assertion that says so. Dragged from the row
+        // itself — `app.swipeUp()` starts from the middle of the screen and
+        // would prove nothing about this card.
+        let beforeScroll = line.frame.minY
+        app.scrollViews.firstMatch.swipeUp(velocity: .slow)
+        Thread.sleep(forTimeInterval: 1.5)
+        XCTAssertLessThan(line.frame.minY, beforeScroll,
+                          "Trends should still scroll vertically over a budget row")
+    }
+
     /// Statements is reachable from Settings and renders one of its two valid
     /// states. The test account has no linked bank, so this exercises the
     /// "nothing to show" path — the screen must still appear rather than hang

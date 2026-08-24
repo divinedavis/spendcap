@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import Charts
 
 // Trends template, modelled on Monzo's Trends screen:
@@ -40,6 +41,10 @@ final class TrendsViewModel: ObservableObject {
     @Published var selectedCategoryPeriod: Date?
     @Published var isLoading = false
     @Published var errorMessage: String?
+    /// Failures the user caused, kept apart from `errorMessage`: a load that
+    /// fails is silent here (the card just doesn't change), but a delete that
+    /// fails has to say so or the line looks like it survived on purpose.
+    @Published var actionError: String?
 
     var selectedCategoryMonth: CategoryMonth? {
         categoryMonths.first { $0.period == selectedCategoryPeriod } ?? categoryMonths.first
@@ -65,6 +70,20 @@ final class TrendsViewModel: ObservableObject {
         apply(categoryRows: snapshot.categoryRows,
               daily: snapshot.dailyDiscretionary,
               wireDiscretionary: true)
+    }
+
+    /// Deleting a line cascades its rules, so the transactions it claimed fall
+    /// back to Uncategorized on the next read. The transactions themselves are
+    /// untouched — this removes a bucket, not history. Same call the Budget
+    /// screen's swipe makes; the two must not diverge.
+    func delete(_ row: CategorySpendRow, period: TrendsPeriod) async {
+        guard let id = row.categoryId else { return }
+        do {
+            try await SpendService.shared.deleteCategory(id: id)
+            await load(period: period)
+        } catch {
+            actionError = error.localizedDescription
+        }
     }
 
     func load(period: TrendsPeriod = .thisMonth) async {
@@ -157,6 +176,10 @@ struct TrendsView: View {
     @State private var mode: TrendsMode = .spending
     @State private var period: TrendsPeriod = .thisMonth
     @State private var editingLine: CategorySpendRow?
+    @State private var pendingDelete: CategorySpendRow?
+    /// Which budget line is currently swiped open, so opening one closes the
+    /// rest — the behaviour a List gives for free.
+    @State private var openSwipeRow: String?
 
     private var monthLabel: String {
         period.monthName()
@@ -196,6 +219,40 @@ struct TrendsView: View {
                 CategoryEditView(row: row) {
                     Task { await model.load(period: period) }
                 }
+            }
+            .confirmationDialog(
+                pendingDelete.map { "Delete \($0.categoryName)?" } ?? "",
+                isPresented: Binding(
+                    get: { pendingDelete != nil },
+                    set: { if !$0 { pendingDelete = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) {
+                    if let row = pendingDelete {
+                        pendingDelete = nil
+                        Task { await model.delete(row, period: period) }
+                    }
+                }
+                Button("Cancel", role: .cancel) { pendingDelete = nil }
+            } message: {
+                if let row = pendingDelete {
+                    // Word for word what the Budget screen says, because it is
+                    // the same delete: the line and its rules go, and its
+                    // transactions are re-matched — not moved wholesale to
+                    // Uncategorized, which another broad rule may well claim.
+                    Text("The line and its rules go. Its \(row.txnCount) transaction\(row.txnCount == 1 ? "" : "s") this month are re-matched against your other rules, and land in Uncategorized if nothing else claims them. Nothing is deleted from your history.")
+                }
+            }
+            .alert("Couldn't delete that line",
+                   isPresented: Binding(
+                       get: { model.actionError != nil },
+                       set: { if !$0 { model.actionError = nil } }
+                   ),
+                   presenting: model.actionError) { _ in
+                Button("OK", role: .cancel) { model.actionError = nil }
+            } message: { message in
+                Text(message)
             }
         }
     }
@@ -414,21 +471,35 @@ struct TrendsView: View {
                 }
 
                 ForEach(Array(month.rows.enumerated()), id: \.element.id) { index, row in
-                    // Tapping a line opens what it plans to spend and the
-                    // transactions behind it. Uncategorized opens too — it has
-                    // nothing to plan, but routing those out of it is the whole
-                    // point of being able to see them.
-                    Button {
-                        editingLine = row
-                    } label: {
-                        CategoryLineRow(row: row, showsChevron: true)
+                    // Three gestures, two destinations (user request,
+                    // 2026-08-23): tap or hold opens the editor, swiping left
+                    // deletes the line.
+                    //
+                    // Uncategorized opens too — it has nothing to plan, but
+                    // routing those transactions out of it is the whole point
+                    // of being able to see them. It does not swipe: there is no
+                    // line there to delete.
+                    SwipeToDeleteRow(
+                        rowID: row.id,
+                        openRowID: $openSwipeRow,
+                        isDeletable: !row.isUncategorized,
+                        deleteIdentifier: "trends.deleteLine",
+                        onDelete: { pendingDelete = row }
+                    ) {
+                        HoldableRow {
+                            editingLine = row
+                        } onHold: {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            editingLine = row
+                        } label: {
+                            CategoryLineRow(row: row, showsChevron: true)
+                        }
+                        .accessibilityIdentifier("trends.line")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("trends.line")
                     if index < month.rows.count - 1 { Divider() }
                 }
 
-                Text("Tap a line to change what it plans to spend. Settings \u{203A} Budget by category has the transactions behind each one.")
+                Text("Tap or hold a line to change what it plans to spend, or swipe it left to delete it. Settings \u{203A} Budget by category has the transactions behind each one.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
