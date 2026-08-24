@@ -235,13 +235,14 @@ struct SuggestionCard: View {
 /// affordance, rebuilt for the `VStack`-inside-a-`SurfaceCard` layout the
 /// dashboard uses (`.swipeActions` only exists inside a `List`).
 ///
-/// The reveal is a drag, attached **simultaneously** so the page's own vertical
-/// scroll still receives the same touches, and ignored unless the finger is
-/// travelling sideways — the row is a passenger on the page's scroll, not a
-/// competitor for it. The first build wrapped each row in its own horizontal
-/// `ScrollView` and let `ScrollTargetBehavior` do the snapping; it was dropped
-/// because a row that owns a scroll view of its own is one more thing between a
-/// finger and the button underneath it, for a snap this does in four lines.
+/// The reveal is a **horizontal `ScrollView` per row**, snapped by a
+/// `ScrollTargetBehavior`. That is not the obvious way to build it; a
+/// `DragGesture` is, and it shipped for one build. It had to go because a
+/// SwiftUI drag gesture claims the touch the moment it recognises, in any
+/// direction — so a finger that rested on a row and then dragged up scrolled
+/// nothing at all (user report, 2026-08-23). Two scroll views sort that out in
+/// UIKit for free: this one only pans sideways and hands a vertical pan
+/// straight back to the page.
 ///
 /// Opening a row publishes its id through `openRowID`, so the siblings that see
 /// someone else's id close themselves, as rows in a List do.
@@ -256,97 +257,58 @@ struct SwipeToDeleteRow<Content: View>: View {
     let onDelete: () -> Void
     @ViewBuilder var content: Content
 
-    @State private var offsetX: CGFloat = 0
-    /// True while a swipe is in flight, and for a beat afterwards. The button
-    /// underneath watches it so the drag doesn't also read as a tap: a finger
-    /// sliding sideways never leaves the button's frame, so the button keeps
-    /// its press the whole way and fires on release.
-    @State private var swiping = false
-    @State private var settleSwipe: Task<Void, Never>?
-
     private let actionWidth: CGFloat = 84
-
-    private var isOpen: Bool { openRowID == rowID }
+    private var space: String { "swipeRow.\(rowID)" }
+    private let closedAnchor = "closed"
 
     var body: some View {
-        ZStack(alignment: .trailing) {
-            if isDeletable {
-                deleteButton
-                    // Never a touch target while closed — it sits under the
-                    // row, and a delete you can hit by accident is worse than
-                    // no delete at all.
-                    .allowsHitTesting(offsetX < -8)
-                    .opacity(offsetX < -2 ? 1 : 0)
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                HStack(spacing: 0) {
+                    content
+                        .containerRelativeFrame(.horizontal)
+                        .id(closedAnchor)
+                        .background(alignment: .leading) { offsetReader }
+                    if isDeletable {
+                        deleteButton
+                    }
+                }
+                .scrollTargetLayout()
             }
-
-            content
-                // Opaque, so the button underneath is revealed by the row
-                // moving rather than showing through it. Matches SurfaceCard.
-                .background(Color(.systemBackground))
-                .offset(x: offsetX)
-                .environment(\.rowSwipeActive, swiping)
-        }
-        .clipShape(Rectangle())
-        .simultaneousGesture(isDeletable ? swipe : nil)
-        .onChange(of: openRowID) { _, newValue in
-            guard newValue != rowID, offsetX != 0 else { return }
-            withAnimation(.snappy(duration: 0.25)) { offsetX = 0 }
-        }
-    }
-
-    private var swipe: some Gesture {
-        DragGesture(minimumDistance: 12)
-            .onChanged { value in
-                // Sideways only. A finger that is mostly travelling down the
-                // page is scrolling it, and this gesture is running alongside
-                // that scroll rather than instead of it.
-                guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                beginSwipe()
-                let base: CGFloat = isOpen ? -actionWidth : 0
-                // A little past open, so the pull has somewhere to go and
-                // stops dead rather than tearing the row off the card.
-                offsetX = min(0, max(-actionWidth - 24, base + value.translation.width))
+            .coordinateSpace(name: space)
+            .scrollIndicators(.hidden)
+            // Nothing to reveal on an undeletable row, so it must not budge —
+            // a row that slides back empty reads as a delete that broke.
+            .scrollDisabled(!isDeletable)
+            .scrollTargetBehavior(SwipeSnapBehavior(actionWidth: actionWidth))
+            .onPreferenceChange(SwipeOffsetKey.self) { offset in
+                // Half open counts as open: the snap animates through the
+                // middle, and the siblings should be closing by then.
+                if offset < -(actionWidth / 2) {
+                    if openRowID != rowID { openRowID = rowID }
+                } else if offset > -1, openRowID == rowID {
+                    openRowID = nil
+                }
             }
-            .onEnded { value in
-                guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                let base: CGFloat = isOpen ? -actionWidth : 0
-                // Flick counts as well as distance: a short fast swipe opens.
-                let projected = base + value.predictedEndTranslation.width
-                setOpen(projected < -actionWidth * 0.5)
-                endSwipe()
+            .onChange(of: openRowID) { _, newValue in
+                guard newValue != rowID else { return }
+                withAnimation(.snappy) { proxy.scrollTo(closedAnchor, anchor: .leading) }
             }
-    }
-
-    private func beginSwipe() {
-        settleSwipe?.cancel()
-        if !swiping { swiping = true }
-    }
-
-    /// Held past the end of the drag: the touch that finishes a swipe is still
-    /// down, and its release would otherwise arrive at the button as a tap.
-    private func endSwipe() {
-        settleSwipe?.cancel()
-        settleSwipe = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            guard !Task.isCancelled else { return }
-            swiping = false
         }
     }
 
-    private func setOpen(_ open: Bool) {
-        withAnimation(.snappy(duration: 0.25)) {
-            offsetX = open ? -actionWidth : 0
-        }
-        if open {
-            openRowID = rowID
-        } else if isOpen {
-            openRowID = nil
+    /// How far the row has been pulled open, in the scroll view's own
+    /// coordinate space: 0 closed, `-actionWidth` fully open.
+    private var offsetReader: some View {
+        GeometryReader { geo in
+            Color.clear.preference(key: SwipeOffsetKey.self,
+                                   value: geo.frame(in: .named(space)).minX)
         }
     }
 
     private var deleteButton: some View {
         Button(role: .destructive) {
-            setOpen(false)
+            openRowID = nil
             onDelete()
         } label: {
             VStack(spacing: 4) {
@@ -359,55 +321,26 @@ struct SwipeToDeleteRow<Content: View>: View {
             .frame(width: actionWidth - 8)
             .frame(maxHeight: .infinity)
             .background(Color.red, in: RoundedRectangle(cornerRadius: 12))
+            .padding(.leading, 8)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(deleteIdentifier ?? "swipeRow.delete")
     }
 }
 
-// MARK: - Row button
+/// Snaps a swiped row to closed or fully open — never to a half-revealed
+/// button, which is what free scrolling would leave behind.
+private struct SwipeSnapBehavior: ScrollTargetBehavior {
+    let actionWidth: CGFloat
 
-/// The row button in a `SwipeToDeleteRow`. It exists for one reason: a sideways
-/// drag never leaves the button's frame, so the button keeps its press for the
-/// whole swipe and its release arrives as a tap — which opened the editor over
-/// the Delete the swipe had just revealed. It drops that release.
-struct SwipeSafeRow<Label: View>: View {
-    let onTap: () -> Void
-    @ViewBuilder var label: Label
-
-    @Environment(\.rowSwipeActive) private var isSwiping
-
-    var body: some View {
-        Button {
-            guard !isSwiping else { return }
-            onTap()
-        } label: {
-            label
-        }
-        // A custom style, not `.plain`: with `.plain` the button claims the
-        // drag and the swipe gesture around it never sees one (measured — the
-        // row simply stops swiping). This one also gives the row a pressed
-        // state, and a hit area that covers the gaps between its text.
-        .buttonStyle(RowButtonStyle())
+    func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
+        target.rect.origin.x = target.rect.minX > actionWidth * 0.4 ? actionWidth : 0
     }
 }
 
-private struct RowButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .contentShape(Rectangle())
-            .opacity(configuration.isPressed ? 0.6 : 1)
-    }
-}
-
-/// Set by a row that is being swiped, read by the button inside it.
-private struct RowSwipeActiveKey: EnvironmentKey {
-    static let defaultValue = false
-}
-
-extension EnvironmentValues {
-    var rowSwipeActive: Bool {
-        get { self[RowSwipeActiveKey.self] }
-        set { self[RowSwipeActiveKey.self] = newValue }
+private struct SwipeOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }

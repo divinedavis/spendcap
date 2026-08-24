@@ -509,9 +509,8 @@ final class SpendcapUITests: XCTestCase {
         }
         XCTAssertTrue(deleteButton.exists,
                       "swiping a budget line left should reveal Delete")
-        // And only that: the finger is still down through the whole drag and
-        // never leaves the row, so a swipe used to end as a tap and open the
-        // editor over the button it had just revealed.
+        // And only that: a swipe that also opened the editor would put it
+        // straight over the Delete it had just revealed.
         XCTAssertFalse(planned.exists,
                        "swiping should not also open the line's editor")
 
@@ -532,6 +531,21 @@ final class SpendcapUITests: XCTestCase {
         Thread.sleep(forTimeInterval: 1.5)
         XCTAssertLessThan(line.frame.minY, beforeScroll,
                           "Trends should still scroll vertically over a budget row")
+
+        // And it scrolls from a finger that was resting on a row first. A
+        // hold that turns into a vertical drag is how anyone scrolls a list
+        // they were reading, and the swipe gesture must not hold that touch
+        // hostage.
+        let restedBox = line.frame
+        let rested = app.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: restedBox.midX, dy: restedBox.midY))
+        let restedAbove = app.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: restedBox.midX, dy: max(restedBox.midY - 300, 8)))
+        let beforeHeldScroll = line.frame.minY
+        rested.press(forDuration: 1.0, thenDragTo: restedAbove)
+        Thread.sleep(forTimeInterval: 1.5)
+        XCTAssertLessThan(line.frame.minY, beforeHeldScroll,
+                          "holding a row and then dragging up should still scroll Trends")
     }
 
     /// Statements is reachable from Settings and renders one of its two valid

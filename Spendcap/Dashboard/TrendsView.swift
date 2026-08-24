@@ -484,11 +484,12 @@ struct TrendsView: View {
                         deleteIdentifier: "trends.deleteLine",
                         onDelete: { pendingDelete = row }
                     ) {
-                        SwipeSafeRow {
+                        Button {
                             editingLine = row
                         } label: {
                             CategoryLineRow(row: row, showsChevron: true)
                         }
+                        .buttonStyle(.plain)
                         .accessibilityIdentifier("trends.line")
                     }
                     if index < month.rows.count - 1 { Divider() }

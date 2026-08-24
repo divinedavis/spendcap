@@ -281,31 +281,28 @@ delete the Budget screen has had, with the same confirmation wording, because it
 is the same call (`deleteCategory`, rules cascade, transactions re-matched).
 Uncategorized does not swipe: there is no line there to delete. A **hold** to
 open the editor shipped in build 48 and was removed the same evening at the
-user's request; `HoldableRow` went with it.
+user's request, along with the caption under the rows that described the
+gestures.
 
-`SwipeToDeleteRow` (in `DashboardComponents`) reveals the button with a
-**`DragGesture` attached simultaneously**, ignored unless the finger is
-travelling sideways, so the page still scrolls under it (asserted in the UI
-test). Two things it is built around:
+`SwipeToDeleteRow` (in `DashboardComponents`) gives each row **its own
+horizontal `ScrollView`**, snapped open or closed by a `ScrollTargetBehavior`.
+The obvious build — a `DragGesture` attached simultaneously and filtered to
+sideways movement — shipped in build 49 and came back out in 50: a SwiftUI drag
+gesture claims the touch as soon as it recognises, in **any** direction, so a
+finger that rested on a row for a moment and then dragged up scrolled nothing
+at all (user report, with a screen recording). Two scroll views arbitrate that
+in UIKit for free: the row pans sideways only and hands a vertical pan back to
+the page. The UI test asserts both scrolls — a plain one, and one that starts
+from a finger already resting on a row.
 
-- The first build gave each row its own horizontal `ScrollView` with a
-  `ScrollTargetBehavior`. It snapped well, but a row that owns a scroll view is
-  one more thing between a finger and the button underneath it — and long
-  presses on it did not register at all.
-- A sideways drag **never leaves the button's frame**, so the button keeps its
-  press for the whole swipe and its release arrived as a tap: a swipe opened the
-  editor over the Delete it had just revealed. The row publishes
-  `rowSwipeActive` through the environment, held 0.35s past the end of the drag,
-  and `SwipeSafeRow` drops that release. The UI test asserts the editor stays
-  shut after a swipe.
+The drag build needed a `rowSwipeActive` environment flag so the swipe's
+release didn't also fire the button's tap; the scroll view cancels the button's
+touch itself, so that plumbing is gone with it.
 
-**In XCUITest, the first gesture on this card lands on nothing** — a press or a
-drag both need a warm-up interaction first, and the second one works. Tap the
-row and cancel the editor before asserting on a swipe. Plain taps retry
-themselves.
-
-The card carries **no instruction caption** — the line under the rows explaining
-the gestures was removed 2026-08-23 at the user's request.
+**In XCUITest, the first gesture on this card lands on nothing** — press or
+drag, it needs a warm-up interaction and the second one works. Tap the row and
+cancel the editor before asserting on a swipe. This quirk has produced at least
+two wrong conclusions about the card's gestures; suspect it before the code.
 
 If a tap there ever seems to do nothing in a UI test,
 suspect the layout rather than the control: the widget appears only once the
