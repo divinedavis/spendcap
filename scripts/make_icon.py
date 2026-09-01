@@ -34,7 +34,7 @@ import subprocess
 import sys
 import tempfile
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 APPICON = ROOT / "Spendcap/Resources/Assets.xcassets/AppIcon.appiconset/icon-1024.png"
@@ -175,6 +175,28 @@ def swift_drift() -> list[str]:
     return problems
 
 
+def differs(committed: pathlib.Path, fresh: pathlib.Path) -> bool:
+    """Has the art actually changed?
+
+    PNGs are compared by pixel, not by byte. The question this check exists to
+    ask is whether the committed raster still shows what the source geometry
+    draws — and a Pillow upgrade re-encodes an identical image into different
+    bytes, which byte comparison reports as a stale icon and blocks a ship over
+    nothing. That happened on 2026-08-31: both PNGs came back stale with every
+    pixel identical and only the encoder's output size changed.
+
+    SVGs stay byte-exact. They are generated text, so any difference there is a
+    real one.
+    """
+    if committed.suffix != ".png":
+        return committed.read_bytes() != fresh.read_bytes()
+    with Image.open(committed) as a, Image.open(fresh) as b:
+        left, right = a.convert("RGBA"), b.convert("RGBA")
+        if left.size != right.size:
+            return True
+        return ImageChops.difference(left, right).getbbox() is not None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true", help="diff against committed files")
@@ -200,7 +222,7 @@ def main() -> int:
                 (MARKETING / "logo-mono.svg", out / "marketing/logo-mono.svg"),
                 (MARKETING / "logo-1024.png", out / "marketing/logo-1024.png"),
             )
-            if not name.exists() or name.read_bytes() != fresh.read_bytes()
+            if not name.exists() or differs(name, fresh)
         ]
     for path in stale:
         print(f"stale: {path.relative_to(ROOT)} — re-run scripts/make_icon.py", file=sys.stderr)
