@@ -100,11 +100,13 @@ struct DebtView: View {
     enum Sheet: Identifiable {
         case add(groupId: UUID)
         case edit(DebtSummaryRow)
+        case charges(DebtChargesTarget)
 
         var id: String {
             switch self {
             case .add(let groupId): return "add-\(groupId)"
             case .edit(let row): return "edit-\(row.id)"
+            case .charges(let target): return "charges-\(target.id)"
             }
         }
     }
@@ -156,6 +158,10 @@ struct DebtView: View {
                     }
                 case .edit(let row):
                     DebtItemEditor(groups: model.groups, groupId: row.groupId, row: row) {
+                        await model.load()
+                    }
+                case .charges(let target):
+                    DebtChargesView(target: target, groups: model.groups) {
                         await model.load()
                     }
                 }
@@ -271,19 +277,10 @@ struct DebtView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(group.items) { row in
-                    Button {
-                        sheet = .edit(row)
-                    } label: {
-                        DebtItemRow(row: row)
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button("Edit") { sheet = .edit(row) }
-                        Button("Delete", role: .destructive) { pendingItemDelete = row }
-                    }
+                ForEach(group.vendors) { vendor in
+                    vendorRows(vendor)
 
-                    if row.id != group.items.last?.id {
+                    if vendor.id != group.vendors.last?.id {
                         Divider()
                     }
                 }
@@ -310,6 +307,47 @@ struct DebtView: View {
         // Identifiers go on the controls, never on the card: SwiftUI pushes a
         // container's identifier onto every descendant and would rename the
         // buttons inside this one.
+    }
+
+    /// A company and what it is owed. One product renders as the row it always
+    /// was; several nest under a single heading with the company's own total,
+    /// so "Google" is said once and can be read as one relationship instead of
+    /// three unrelated lines that happen to share a word.
+    @ViewBuilder
+    private func vendorRows(_ vendor: DebtVendorSummary) -> some View {
+        if vendor.isMulti {
+            Button {
+                sheet = .charges(DebtChargesTarget(vendor: vendor))
+            } label: {
+                DebtVendorHeaderRow(vendor: vendor)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("debt.vendor")
+
+            ForEach(vendor.items) { row in
+                Button {
+                    sheet = .charges(DebtChargesTarget(row: row))
+                } label: {
+                    DebtItemRow(row: row, nested: true)
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    Button("Edit") { sheet = .edit(row) }
+                    Button("Delete", role: .destructive) { pendingItemDelete = row }
+                }
+            }
+        } else if let row = vendor.items.first {
+            Button {
+                sheet = .charges(DebtChargesTarget(row: row))
+            } label: {
+                DebtItemRow(row: row)
+            }
+            .buttonStyle(.plain)
+            .contextMenu {
+                Button("Edit") { sheet = .edit(row) }
+                Button("Delete", role: .destructive) { pendingItemDelete = row }
+            }
+        }
     }
 
     private var addGroupButton: some View {
@@ -351,18 +389,62 @@ struct DebtView: View {
     }
 }
 
+/// A company with more than one obligation: its name, said once, and what it
+/// costs in total. The products are listed under it — this is a heading, not a
+/// row that can be edited, and tapping it opens every charge the company made.
+struct DebtVendorHeaderRow: View {
+    let vendor: DebtVendorSummary
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(vendor.name)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(vendor.txnCount > 0 ? Color.green : Color.secondary)
+            }
+            Spacer(minLength: 8)
+            Text(BudgetMath.dollars(vendor.plannedCents))
+                .font(.body.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(.primary)
+            Image(systemName: "chevron.right")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+    }
+
+    private var subtitle: String {
+        let plans = "\(vendor.items.count) subscriptions"
+        guard vendor.hasTrackedItems else { return plans }
+        guard vendor.txnCount > 0 else { return "\(plans) · nothing seen yet this month" }
+        let paid = BudgetMath.dollars(vendor.paidCents)
+        return "\(plans) · \(paid) paid · \(vendor.txnCount) charge\(vendor.txnCount == 1 ? "" : "s")"
+    }
+}
+
 /// One obligation: what it is, what it costs, and — when it can be seen in the
 /// linked account — what has actually posted this month.
+///
+/// Nested under a company heading the name is dropped, because the heading has
+/// just said it: "Google / Google · youtube tv" is the repetition the grouping
+/// exists to remove. The note carries the row on its own, and an item with no
+/// note falls back to the name rather than rendering nameless.
 struct DebtItemRow: View {
     let row: DebtSummaryRow
+    var nested: Bool = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(row.itemName ?? "—")
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(.primary)
-                if let note = row.note, !note.isEmpty {
+                Text(title)
+                    .font(nested ? .subheadline : .body.weight(.medium))
+                    .foregroundStyle(nested ? Color.secondary : Color.primary)
+                if !nested, let note = row.note, !note.isEmpty {
                     Text(note)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -373,12 +455,19 @@ struct DebtItemRow: View {
             }
             Spacer(minLength: 8)
             Text(BudgetMath.dollars(row.plannedCents))
-                .font(.body.weight(.semibold))
+                .font(nested ? .subheadline.weight(.medium) : .body.weight(.semibold))
                 .monospacedDigit()
                 .foregroundStyle(.primary)
         }
         .padding(.vertical, 2)
+        .padding(.leading, nested ? 12 : 0)
         .contentShape(Rectangle())
+    }
+
+    private var title: String {
+        guard nested else { return row.itemName ?? "—" }
+        if let note = row.note, !note.isEmpty { return note }
+        return row.itemName ?? "—"
     }
 
     private var statusText: String {

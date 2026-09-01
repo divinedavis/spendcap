@@ -543,6 +543,40 @@ And a row that stops charging keeps its plan forever unless someone looks — a
 tracked item with a plan and zero charges for months is the signal to check,
 not a rendering bug.
 
+### Grouped by company, and openable (0028, 2026-08-31)
+
+Two changes to the same complaint: the tab stated figures it gave no way to
+check, and said the same company's name twice in a row.
+
+**Tapping a row opens its charges** — `debt_item_transactions(items, months)`,
+the matching subquery copied verbatim from `debt_summary` so the list adds up
+to the paid figure that opened it. If those two ever drift, the drill-down
+contradicts the row above it, which is worse than not shipping it. The paid
+number is the one on the screen most likely to be wrong: a match value is a
+substring, so a row can quietly claim a charge belonging to something else, and
+that was previously unfalsifiable from inside the app.
+
+**The window is a control, not a constant.** This month is what the row
+asserts and the default. Six months answers the question a row sitting at zero
+actually raises — has this stopped charging, or has it just not billed yet —
+which the tab could not answer at all before.
+
+**Editing moved to a button.** Tapping a row used to open the editor; "what did
+I actually pay this" is asked of this screen far more often than "rename this".
+The editor is a row in the charges sheet and still on the row's context menu.
+The XCUITest goes through the sheet now, because that is the only path a user
+will find.
+
+**Rows are collected by company** — `DebtMath.vendors`, casefolded and stripped
+of punctuation, so "Digital Ocean" and "DigitalOcean" are one heading and the
+two Affirm rows stop reading as unrelated. This is presentation only: the items
+stay separate rows underneath at separate prices, because they are separate
+obligations and 0025 allows the repeated name deliberately. A company sits
+where its first item sat and its products keep their order — grouping must not
+rearrange a list someone arranged. A single-item company renders exactly as it
+did. Vendor subtotals are derived from the same rows the group total sums, so a
+card cannot show headings that add up to something other than itself.
+
 ## Trips and events (0010, shipped 2026-08-06)
 
 A fifth tab. A trip is a named budget with its own cost lines — flights, hotel,

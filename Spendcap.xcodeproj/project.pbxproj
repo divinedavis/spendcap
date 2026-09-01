@@ -45,6 +45,7 @@
 		97614B1520F832A21C0B3417 /* PushNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1096BDA0661D8CBF31FDDBDF /* PushNotificationManager.swift */; };
 		97912CF4BDF3F9A95ED1709D /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A97C47BF5E0792E242E013AF /* Models.swift */; };
 		98448722169453B7AF03607B /* SocialIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3F42AE99EE98244A7DBE45A /* SocialIdentity.swift */; };
+		A7A86ED02A8BFA98EDE5607C /* DebtChargesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 645F987030BAF00E5B7241EF /* DebtChargesView.swift */; };
 		AFD6902D44CA1BF94657C70B /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 308518FAEB40A4B6F3A60B4F /* GoogleSignIn */; };
 		B22DAD2DE65D37A1B1DD566F /* Debts.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2356F9F5871A6E3B2729C9D /* Debts.swift */; };
 		B6C2DD5373B227C420C7928E /* SupabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74AADE09BA636449F334A6FC /* SupabaseManager.swift */; };
@@ -99,6 +100,7 @@
 		5057C4A60D7494BDDA3566B4 /* SpendcapUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SpendcapUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5C9A6682EB01B3C740B61AA5 /* CategoriesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoriesView.swift; sourceTree = "<group>"; };
 		5DD146D25307F1072D6D423B /* UITestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestSupport.swift; sourceTree = "<group>"; };
+		645F987030BAF00E5B7241EF /* DebtChargesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebtChargesView.swift; sourceTree = "<group>"; };
 		695E99FE434AF2C428CC6243 /* WeekMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekMathTests.swift; sourceTree = "<group>"; };
 		7028AA17A7866F1189BBE844 /* Trips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trips.swift; sourceTree = "<group>"; };
 		7245B6B1F60EBF2B4961F02E /* StatementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatementsView.swift; sourceTree = "<group>"; };
@@ -133,7 +135,7 @@
 		F3BA7D53E4C8AEC4EC9EDB50 /* BudgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetView.swift; sourceTree = "<group>"; };
 		F8EAFF728874C211BDBECA75 /* TrendsPeriodTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendsPeriodTests.swift; sourceTree = "<group>"; };
 		FC109E672012905CC6B889E6 /* MonthMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthMathTests.swift; sourceTree = "<group>"; };
-		"TEMP_68655F1D-1A2A-4965-A9E0-327339E4E973" /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
+		"TEMP_16E706C1-2864-4768-A17E-83390E9F991F" /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -190,6 +192,7 @@
 		5EE581995DFF9DC055B63206 /* Debt */ = {
 			isa = PBXGroup;
 			children = (
+				645F987030BAF00E5B7241EF /* DebtChargesView.swift */,
 				8A0343D605024AD040871A9F /* DebtItemEditor.swift */,
 				EF847282953ACF83AAFD247A /* DebtView.swift */,
 			);
@@ -346,10 +349,10 @@
 			path = Notifications;
 			sourceTree = "<group>";
 		};
-		"TEMP_AE308CD2-605B-4F61-861C-D17DBD7AED26" /* Spendcap */ = {
+		"TEMP_E7AFE85C-94ED-41CF-99FF-7A686F9FAE17" /* Spendcap */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_68655F1D-1A2A-4965-A9E0-327339E4E973" /* Secrets.xcconfig */,
+				"TEMP_16E706C1-2864-4768-A17E-83390E9F991F" /* Secrets.xcconfig */,
 			);
 			path = Spendcap;
 			sourceTree = "<group>";
@@ -515,6 +518,7 @@
 				664C3BC5D16F43B9FDE42BDB /* BudgetView.swift in Sources */,
 				7F58296C3E6AD4F0F18F9230 /* CategoriesView.swift in Sources */,
 				E7E4B7020352C02A5B762A68 /* DashboardComponents.swift in Sources */,
+				A7A86ED02A8BFA98EDE5607C /* DebtChargesView.swift in Sources */,
 				48EB48AB2859416E5EF28CCB /* DebtItemEditor.swift in Sources */,
 				E1BDD93F505DAA61AF991CFF /* DebtView.swift in Sources */,
 				B22DAD2DE65D37A1B1DD566F /* Debts.swift in Sources */,
@@ -575,7 +579,7 @@
 		};
 		568F0089E9BF72A888B8F68D /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_68655F1D-1A2A-4965-A9E0-327339E4E973" /* Secrets.xcconfig */;
+			baseConfigurationReference = "TEMP_16E706C1-2864-4768-A17E-83390E9F991F" /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -775,7 +779,7 @@
 		};
 		A2AF47695D6DE2F5696B08C5 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_68655F1D-1A2A-4965-A9E0-327339E4E973" /* Secrets.xcconfig */;
+			baseConfigurationReference = "TEMP_16E706C1-2864-4768-A17E-83390E9F991F" /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;

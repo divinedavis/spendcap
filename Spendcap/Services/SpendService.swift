@@ -614,6 +614,23 @@ final class SpendService {
             .value
     }
 
+    /// The individual charges behind one or more debt items — what the row's
+    /// "$174.22 paid · 4 charges" is actually made of.
+    ///
+    /// Takes several items because a company's products are read together on
+    /// screen; asks the server for nothing when none of them is tracked, since
+    /// an untracked item has no match string and therefore no charges to find.
+    func debtCharges(itemIds: [UUID], window: DebtChargeWindow = .thisMonth) async throws -> [DebtCharge] {
+        guard !itemIds.isEmpty else { return [] }
+        return try await client
+            .rpc("debt_item_transactions", params: [
+                "items": AnyJSON.array(itemIds.map { .string($0.uuidString.lowercased()) }),
+                "months": AnyJSON.integer(window.rawValue),
+            ])
+            .execute()
+            .value
+    }
+
     /// Adds an item for any borrowing merchant filed into a debt-kind budget
     /// line that nothing on the Debt tab claims yet, in a "From budget" group.
     /// Returns how many were created — zero on almost every call, which is the

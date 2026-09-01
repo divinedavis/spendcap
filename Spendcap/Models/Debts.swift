@@ -93,6 +93,38 @@ struct DebtSummaryRow: Codable, Identifiable, Equatable {
     }
 }
 
+/// Every row a company owns, collected under one heading.
+///
+/// Divine's list carries "Google · youtube tv" and "Google · workspace" as
+/// separate obligations — they are separate obligations, at different prices,
+/// and 0025 deliberately allows the repeated name. But reading them as two
+/// unrelated rows twelve pixels apart is what the screenshot showed: the
+/// company said twice, and no answer anywhere to "what am I paying Google".
+/// The items stay whole; only their presentation nests.
+struct DebtVendorSummary: Identifiable, Equatable {
+    /// Case- and punctuation-insensitive, so "Digital Ocean" and
+    /// "DigitalOcean" are one company rather than two.
+    let key: String
+    /// The company as the user actually wrote it on the first of its rows.
+    let name: String
+    let items: [DebtSummaryRow]
+
+    var id: String { key }
+
+    /// One row is a company too — the nesting appears only when it earns its
+    /// keep, so a single-item vendor renders exactly as it always did.
+    var isMulti: Bool { items.count > 1 }
+
+    var plannedCents: Int { items.reduce(0) { $0 + $1.plannedCents } }
+    var paidCents: Int { items.filter(\.isTracked).reduce(0) { $0 + $1.paidCents } }
+    var txnCount: Int { items.filter(\.isTracked).reduce(0) { $0 + $1.txnCount } }
+    var hasTrackedItems: Bool { items.contains(where: \.isTracked) }
+
+    /// Which items can be asked for their charges. An untracked row has no
+    /// match string, so there is nothing to look up for it.
+    var trackedItemIds: [UUID] { items.filter(\.isTracked).compactMap(\.itemId) }
+}
+
 /// One bucket — "Subscriptions" — with its items and its own subtotals.
 struct DebtGroupSummary: Identifiable, Equatable {
     let id: UUID
@@ -112,6 +144,11 @@ struct DebtGroupSummary: Identifiable, Equatable {
     var trackedPlannedCents: Int { items.filter(\.isTracked).reduce(0) { $0 + $1.plannedCents } }
     var hasTrackedItems: Bool { items.contains(where: \.isTracked) }
     var isEmpty: Bool { items.isEmpty }
+
+    /// What the screen actually draws: the same items, collected by company.
+    /// Derived rather than stored so it cannot fall out of step with `items`,
+    /// which is what every subtotal on the card is summing.
+    var vendors: [DebtVendorSummary] { DebtMath.vendors(items) }
 }
 
 /// The whole screen: every group, plus the totals across all of them.
@@ -161,6 +198,91 @@ enum DebtMath {
         .sorted { $0.sortOrder == $1.sortOrder ? $0.name < $1.name : $0.sortOrder < $1.sortOrder }
 
         return DebtSummary(groups: groups)
+    }
+
+    /// Collect a group's items by the company they are paid to, keeping the
+    /// user's arrangement: a company sits where its first item sat, and its
+    /// products stay in the order they were listed. Grouping must never
+    /// reorder the list under someone who spent time arranging it.
+    static func vendors(_ items: [DebtSummaryRow]) -> [DebtVendorSummary] {
+        var order: [String] = []
+        var byKey: [String: [DebtSummaryRow]] = [:]
+        var labels: [String: String] = [:]
+
+        for item in items {
+            let name = item.itemName ?? "—"
+            let key = vendorKey(name, fallback: item.id)
+            if byKey[key] == nil {
+                order.append(key)
+                labels[key] = name
+            }
+            byKey[key, default: []].append(item)
+        }
+
+        return order.map { key in
+            DebtVendorSummary(key: key, name: labels[key] ?? "—", items: byKey[key] ?? [])
+        }
+    }
+
+    /// Casefolded, stripped of spaces and punctuation. A name that survives
+    /// none of that — an emoji-only row — keeps its own identity rather than
+    /// merging with every other unnameable row into one bogus company.
+    static func vendorKey(_ name: String, fallback: String) -> String {
+        let folded = name.lowercased().unicodeScalars
+            .filter { CharacterSet.alphanumerics.contains($0) }
+            .map(String.init)
+            .joined()
+        return folded.isEmpty ? "unnamed-\(fallback)" : folded
+    }
+}
+
+/// One charge behind a debt row, with the item that claimed it.
+///
+/// The item id is carried because the company sheet lists several products'
+/// charges together, and a $30 Google debit means nothing until it says which
+/// Google it was.
+struct DebtCharge: Codable, Identifiable, Equatable {
+    let itemId: UUID
+    let transaction: CategoryTransaction
+
+    var id: UUID { transaction.id }
+
+    enum CodingKeys: String, CodingKey {
+        case itemId = "item_id"
+    }
+
+    init(from decoder: Decoder) throws {
+        transaction = try CategoryTransaction(from: decoder)
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        itemId = try c.decode(UUID.self, forKey: .itemId)
+    }
+
+    init(itemId: UUID, transaction: CategoryTransaction) {
+        self.itemId = itemId
+        self.transaction = transaction
+    }
+
+    func encode(to encoder: Encoder) throws {
+        try transaction.encode(to: encoder)
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(itemId, forKey: .itemId)
+    }
+}
+
+/// How far back the charge sheet is looking. This month is the window the row
+/// that opened it describes; the longer one answers the different question a
+/// row sitting at zero raises — has this ever charged, and when did it stop.
+enum DebtChargeWindow: Int, CaseIterable, Identifiable {
+    case thisMonth = 1
+    case sixMonths = 6
+
+    var id: Int { rawValue }
+
+    var label: String {
+        switch self {
+        case .thisMonth: return "This month"
+        case .sixMonths: return "6 months"
+        }
     }
 }
 

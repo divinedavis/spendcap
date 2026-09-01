@@ -803,6 +803,20 @@ final class SpendcapUITests: XCTestCase {
         XCTAssertTrue(groupTotal.waitForExistence(timeout: 10),
                       "the group should carry a subtotal")
 
+        // Tapping a row opens its charges, not the editor: "what did I
+        // actually pay this" is the question asked of this screen a hundred
+        // times more often than "rename this". A row with no match string has
+        // no charges to show, which is the state a freshly added item is in —
+        // so what this proves is that the sheet opens and offers the way on to
+        // editing rather than stranding the user in a list of nothing.
+        let row = app.staticTexts["UITest Item"]
+        row.tap()
+
+        let openEditor = app.buttons.matching(identifier: "debtCharges.edit").firstMatch
+        XCTAssertTrue(openEditor.waitForExistence(timeout: 15),
+                      "the charges sheet should offer the way through to editing")
+        openEditor.tap()
+
         // Deleting goes through the item sheet, not the row's context menu: a
         // long press is not a thing anyone discovers, and these cards are not
         // a List so there is no swipe-to-delete either. Testing the visible
@@ -810,9 +824,6 @@ final class SpendcapUITests: XCTestCase {
         //
         // This doubles as the cleanup — the account is shared with the other
         // UI tests, and a stray row changes what the next run sees.
-        let row = app.staticTexts["UITest Item"]
-        row.tap()
-
         let deleteButton = app.buttons["debtItem.delete"]
         XCTAssertTrue(deleteButton.waitForExistence(timeout: 15),
                       "an existing item's sheet should offer a visible delete")
