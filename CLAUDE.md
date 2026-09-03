@@ -700,6 +700,11 @@ python3 scripts/attach_build.py --dry-run  # just report what is attached now
 | `register_in_asc.py` / `configure_internal_testers.py` | ASC bootstrap + tester group |
 | `asc_enable_capability.py <CAP>` | Toggle an App ID capability (`--list` to inspect) |
 | `attach_build.py` | Attach the newest build to the App Store version (drives the ASC icon) |
+| `seed_demo_account.py` | Give the review/test account a synthetic bank + 4 months of transactions |
+| `asc_metadata.py [--show]` | Write the whole App Store listing (categories, copy, age rating, review notes, price) |
+| `asc_make_screenshots.py` / `asc_upload_screenshots.py [--replace]` | Compose the 5 panels from captures; push them to the 6.7" slot |
+| `asc_push_privacy_iris.py` | App Privacy labels via Apple's private API (needs a fresh `fastlane spaceauth` cookie) |
+| `asc_submit_for_review.py [--force]` | Pre-flight every API-visible field, then submit v1.0 to App Review |
 | `apply_migration.py [--verify]` | Apply a migration via the management API, then reload PostgREST |
 | `set_plaid_keys.sh` | Push keychain Plaid creds to Supabase function secrets |
 
@@ -1066,6 +1071,41 @@ alert about.
 
 Still worth doing before this is a public feature: a retention policy and a
 privacy-policy line covering stored statement PDFs.
+
+## App Store submission (started 2026-09-03)
+
+Everything the public API accepts is written by `scripts/asc_metadata.py` and
+re-runnable; the listing is a file, not a memory of a web form. Order of the
+whole thing, and what each step depends on:
+
+1. `seed_demo_account.py` — **Plaid is in production, which has no test bank,
+   so a reviewer cannot link one.** The demo login is the XCUITest account,
+   given a `First Demo Bank` item with `status = 'demo'` (both crons select
+   `active` only, so nothing ever asks Plaid for its access token), two
+   accounts, ~100 transactions a month since May, and Debt items that match
+   them. The review notes say all of this. Re-run it before any submission so
+   the data reaches today; it wipes and rebuilds only rows whose
+   `plaid_item_id` starts with `demo-`.
+2. `capture_screenshots.sh` on an **iPhone 17 Pro Max** (1320x2868), then
+   `asc_make_screenshots.py` (1290x2796 panels — the size the `APP_IPHONE_67`
+   slot accepts) and `asc_upload_screenshots.py --replace`.
+3. `attach_build.py --build N` — the version's build, which also drives the
+   ASC header icon.
+4. `asc_metadata.py` — reads the review contact from the gitignored
+   `asc-config.env` (`ASC_CONTACT_*`) and the demo password from the keychain.
+5. **App Privacy is not in the public API** (every `appDataUsages` path 404s).
+   `asc_push_privacy_iris.py` posts to the same private endpoint the dashboard
+   uses, authenticated by fastlane's cookie jar at
+   `~/.fastlane/spaceship/<email>/cookie`, which only a fresh
+   `fastlane spaceauth -u <email>` (2FA code typed by a human) can mint. This
+   is the one step that cannot run unattended. `asc_push_privacy_labels.py`
+   is the Playwright fallback that drives the web form.
+6. `asc_submit_for_review.py` — refuses unless every field it can see is set;
+   `--force` once App Privacy is confirmed in the dashboard.
+
+Privacy policy and support pages live in the Personal-Website repo under
+`spendcap/privacy/` and `spendcap/support/` and are deployed by `scp` to
+`/var/www/divinedavis/spendcap/` on 159.203.110.79.
 
 ## Known quirks
 
