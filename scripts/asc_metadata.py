@@ -225,7 +225,10 @@ def apply(asc: ASC, cfg: dict) -> None:
 
     # Free, USA as the base territory. An existing schedule is left alone —
     # replacing it would reset any scheduled price change.
-    existing = asc.s.get(f"{API}/apps/{app_id}/appPriceSchedule", timeout=30)
+    # A schedule object can exist with a base territory and NO prices (this
+    # app had exactly that, and Apple refused the submission with
+    # APP_PRICING_REQUIRED), so check the prices, not the schedule.
+    existing = asc.s.get(f"{API}/appPriceSchedules/{app_id}/manualPrices", timeout=30)
     if existing.status_code == 200 and existing.json().get("data"):
         print("    price schedule already set — left alone")
         return
