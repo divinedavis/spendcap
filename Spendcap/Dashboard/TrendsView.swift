@@ -534,7 +534,7 @@ struct TrendsView: View {
                                 .foregroundStyle(item.isOverdue ? Color.orange : Color.secondary)
                                 .frame(width: 52, alignment: .leading)
                             VStack(alignment: .leading, spacing: 1) {
-                                // Two lines: a bank descriptor ("JPMORGAN CHASE
+                                // Two lines: a bank descriptor ("ACME CORP
                                 // B PAYROLL DD") is the honest name and
                                 // truncating it hides which regular this is.
                                 Text(item.who)
