@@ -175,7 +175,7 @@ final class SpendcapUITests: XCTestCase {
                           "month spend should survive switching to \(label)")
         }
 
-        // The Forecast card sits under the chart. The demo bank gives the test
+        // The Forecast card sits under the category widget. The demo bank gives the test
         // account four complete months, a checking balance and a twice-monthly
         // payroll, so the card must render and its expected list must open
         // with rows in it — an empty forecast on that data is a broken read.
@@ -184,26 +184,57 @@ final class SpendcapUITests: XCTestCase {
                       "Trends should forecast the month-end checking balance")
         let toggle = app.buttons["trends.forecastToggle"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 5), "the expected-transactions toggle should exist")
-        // The toggle sits at the bottom of the card, below the fold on every
-        // phone — it exists in the tree (the stack is not lazy) but a tap on
-        // an off-screen point lands nowhere. Scroll it on screen first.
-        for _ in 0..<6 where !toggle.isHittable {
-            app.scrollViews.firstMatch.swipeUp(velocity: .slow)
+        // The card is the last thing on the page, well below the fold — the
+        // toggle exists in the tree (the stack is not lazy) but a tap on an
+        // off-screen point lands nowhere. Walk it into the middle of the
+        // screen by its frame, not `isHittable`: on iOS 26 that can stay
+        // false indefinitely for visible scroll-view content (see the
+        // category card's notes), so a loop on it never terminates and a
+        // check on it fails a card that is plainly on screen.
+        let window = app.windows.firstMatch.frame
+        let scroll = app.scrollViews.firstMatch
+        var settled = false
+        for _ in 0..<14 where !settled {
+            let y = toggle.frame.midY
+            if y > window.maxY - 200 {
+                scroll.swipeUp(velocity: .slow)
+            } else if y < window.minY + 160 {
+                scroll.swipeDown(velocity: .slow)
+            } else {
+                settled = true
+            }
         }
-        XCTAssertTrue(toggle.isHittable, "the forecast toggle should scroll into view")
+        XCTAssertTrue(settled, "the forecast toggle should scroll into view, frame \(toggle.frame)")
         // A combined row's element type is unpredictable, so query any type.
-        // Two attempts, like the category card below it: the first gesture on
+        // Two attempts, like the category card above it: the first gesture on
         // a card that is still settling can land on nothing.
         let row = app.descendants(matching: .any).matching(identifier: "trends.forecastRow").firstMatch
+        // The card is the page's last element, so the final swipe usually
+        // overshoots into the rubber band and the content bounces back — a
+        // frame read mid-bounce aims the tap where the toggle *was*. Same
+        // remedy as the category card: three consecutive stable reads.
+        var frame = toggle.frame
+        var stable = 0
+        for _ in 0..<15 {
+            Thread.sleep(forTimeInterval: 0.4)
+            let next = toggle.frame
+            stable = (next == frame) ? stable + 1 : 0
+            frame = next
+            if stable >= 3 { break }
+        }
         var opened = false
-        for _ in 0..<2 where !opened {
+        for _ in 0..<3 where !opened {
             let box = toggle.frame
             app.coordinate(withNormalizedOffset: .zero)
                 .withOffset(CGVector(dx: box.midX, dy: box.midY))
                 .tap()
-            opened = row.waitForExistence(timeout: 5)
+            opened = row.waitForExistence(timeout: 4)
         }
         XCTAssertTrue(opened, "opening the forecast should list the expected transactions")
+        // iOS 26 collapses the floating tab bar while the page is scrolled
+        // down, and a collapsed bar does not take the tab tap below. Back to
+        // the top before switching tabs.
+        for _ in 0..<4 { scroll.swipeDown(velocity: .fast) }
 
         // Activity replaced the Trends slot: the month, transaction by
         // transaction. The test account has no bank, so the total tile is the

@@ -398,7 +398,8 @@ Two rules that shaped that screen and are easy to undo by accident:
 
 ## Forecast card (0029, 2026-09-08)
 
-On Trends, under the chart, current month only: **where the checking balance
+On Trends, below the By-category widget (moved there from under the chart the
+same day, user request), current month only: **where the checking balance
 lands on the last day of the month**, and the four numbers that get it there —
 what is in checking today (less pending), the regular money still to come in,
 the bills and regulars still to go out, and everyday spending at the run-rate

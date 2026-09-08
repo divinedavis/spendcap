@@ -219,10 +219,12 @@ struct TrendsView: View {
                         chips
                         modePicker
                         chartCard
+                        categoryBudgetCard
+                        // Below the budget lines (user request, 2026-09-08):
+                        // the month's plan first, the balance it leads to after.
                         if period.isCurrent, let forecast = model.forecast {
                             forecastCard(forecast)
                         }
-                        categoryBudgetCard
                     }
                     .padding(.horizontal, 16)
                     // The chips row used to sit flush against the navigation
