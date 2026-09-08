@@ -93,6 +93,28 @@ final class SpendService {
             .value
     }
 
+    // MARK: - Forecast
+
+    /// Every stable name that recurred in at least two of the last `monthsBack`
+    /// complete months on the checking accounts, with the shape of its typical
+    /// month (0029). Which of them count as regulars is `ForecastMath`'s call.
+    func forecastRecurring(monthsBack: Int = 3) async throws -> [ForecastRecurringRow] {
+        try await client
+            .rpc("forecast_recurring", params: ["months_back": monthsBack])
+            .execute()
+            .value
+    }
+
+    /// Checking totals per month for the window plus the month in progress,
+    /// with the balance now and the pending rows against it. Empty when no
+    /// checking account has a balance on record, which hides the card.
+    func forecastFlows(monthsBack: Int = 3) async throws -> [ForecastFlowRow] {
+        try await client
+            .rpc("forecast_flows", params: ["months_back": monthsBack])
+            .execute()
+            .value
+    }
+
     // MARK: - Category budgets
 
     /// Planned vs actual per category for the last `monthsBack` months, newest

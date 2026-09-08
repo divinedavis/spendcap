@@ -18,6 +18,11 @@ struct TrendsSnapshot: Codable, Equatable {
     /// older file restores the chart and simply carries no weekly figure until
     /// the network answers, which is the state the card already handles.
     var dailyDiscretionary: [DiscretionaryDay]?
+    /// The forecast's inputs, so the card is on the first frame too. Optional
+    /// for the same reason as the daily rows: a snapshot from before the card
+    /// shipped restores without one, and the card waits for the network.
+    var forecastRecurring: [ForecastRecurringRow]?
+    var forecastFlows: [ForecastFlowRow]?
 
     /// Usable only for the same signed-in user in the same calendar month.
     /// Last month's rows would rebuild into an empty chart — worse than the

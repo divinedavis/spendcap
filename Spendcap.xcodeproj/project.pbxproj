@@ -56,6 +56,8 @@
 		CD6F6F99FD07F78F2F9E8F75 /* BalanceMathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47B0773162FC5CFAE387D841 /* BalanceMathTests.swift */; };
 		CE06C0725FE2D69CC2D4A82F /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B2DC984C8DD235B85ADE4C /* AuthView.swift */; };
 		CE730A22441F9DDE1C1AABF6 /* TrendsSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2269542956A379A64CA9BC87 /* TrendsSnapshotTests.swift */; };
+		D062388ABEEA26D19C7C3465 /* ForecastMathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 159B1F84B0E8F1BCEA412A98 /* ForecastMathTests.swift */; };
+		D9AB203C044055D3E633A18A /* Forecast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C0247BA69C4C8655C5BC6DE /* Forecast.swift */; };
 		E1BDD93F505DAA61AF991CFF /* DebtView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF847282953ACF83AAFD247A /* DebtView.swift */; };
 		E373FF5521F5A6F0D564B865 /* BudgetMathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B70F26F0CECBC013339E8E2 /* BudgetMathTests.swift */; };
 		E7E4B7020352C02A5B762A68 /* DashboardComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2718EA432660E25E2181D3D6 /* DashboardComponents.swift */; };
@@ -84,6 +86,7 @@
 		1096BDA0661D8CBF31FDDBDF /* PushNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotificationManager.swift; sourceTree = "<group>"; };
 		11C1CDBF21375608A48714E0 /* SpendcapTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SpendcapTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		139B1CA566FE2AF550BAF3D1 /* SpendcapMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendcapMark.swift; sourceTree = "<group>"; };
+		159B1F84B0E8F1BCEA412A98 /* ForecastMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForecastMathTests.swift; sourceTree = "<group>"; };
 		19627D9E00D44D10838E8B89 /* CategoryMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryMathTests.swift; sourceTree = "<group>"; };
 		1C7C8FFC9C7F1E90266B651F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2269542956A379A64CA9BC87 /* TrendsSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendsSnapshotTests.swift; sourceTree = "<group>"; };
@@ -108,6 +111,7 @@
 		804E3D79A9CCE91D6F440BF2 /* YearMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YearMathTests.swift; sourceTree = "<group>"; };
 		89AF577961D365388D0E24F1 /* BankStatementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankStatementTests.swift; sourceTree = "<group>"; };
 		8A0343D605024AD040871A9F /* DebtItemEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebtItemEditor.swift; sourceTree = "<group>"; };
+		8C0247BA69C4C8655C5BC6DE /* Forecast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Forecast.swift; sourceTree = "<group>"; };
 		8DAC4FA3E421D906C40BA624 /* PlaidLinkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaidLinkView.swift; sourceTree = "<group>"; };
 		8E4129B6A7A7F8E3A407BCFE /* TransactionNamingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionNamingTests.swift; sourceTree = "<group>"; };
 		A1DCF84E488E521BD1797F14 /* SocialIdentityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialIdentityTests.swift; sourceTree = "<group>"; };
@@ -135,7 +139,7 @@
 		F3BA7D53E4C8AEC4EC9EDB50 /* BudgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetView.swift; sourceTree = "<group>"; };
 		F8EAFF728874C211BDBECA75 /* TrendsPeriodTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendsPeriodTests.swift; sourceTree = "<group>"; };
 		FC109E672012905CC6B889E6 /* MonthMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthMathTests.swift; sourceTree = "<group>"; };
-		"TEMP_4D151341-D997-4339-9C76-449F055880DB" /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
+		"TEMP_AFBA1E91-C04D-4C3F-BE97-A6069E4BCF92" /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -220,6 +224,7 @@
 				0B70F26F0CECBC013339E8E2 /* BudgetMathTests.swift */,
 				19627D9E00D44D10838E8B89 /* CategoryMathTests.swift */,
 				F10F5935BE4CC9047AAA44B8 /* DebtMathTests.swift */,
+				159B1F84B0E8F1BCEA412A98 /* ForecastMathTests.swift */,
 				FC109E672012905CC6B889E6 /* MonthMathTests.swift */,
 				4FFBE392C6B89ACC42DF1937 /* PendingBackfillTests.swift */,
 				B4087935D49D831BDA9CFAE0 /* PlaidLinkStoreTests.swift */,
@@ -266,6 +271,7 @@
 			isa = PBXGroup;
 			children = (
 				C2356F9F5871A6E3B2729C9D /* Debts.swift */,
+				8C0247BA69C4C8655C5BC6DE /* Forecast.swift */,
 				A97C47BF5E0792E242E013AF /* Models.swift */,
 				7028AA17A7866F1189BBE844 /* Trips.swift */,
 				4BACCBC746E8B470179CABAB /* WeekMath.swift */,
@@ -349,10 +355,10 @@
 			path = Notifications;
 			sourceTree = "<group>";
 		};
-		"TEMP_08F435C0-F299-4F4B-BBBF-CD6EDEEE778B" /* Spendcap */ = {
+		"TEMP_BC9E4BE9-0F9A-4858-B355-78B3276147E6" /* Spendcap */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_4D151341-D997-4339-9C76-449F055880DB" /* Secrets.xcconfig */,
+				"TEMP_AFBA1E91-C04D-4C3F-BE97-A6069E4BCF92" /* Secrets.xcconfig */,
 			);
 			path = Spendcap;
 			sourceTree = "<group>";
@@ -494,6 +500,7 @@
 				E373FF5521F5A6F0D564B865 /* BudgetMathTests.swift in Sources */,
 				30B0E5E915EA7D06434A7433 /* CategoryMathTests.swift in Sources */,
 				07B55808F5291FD47D33B88A /* DebtMathTests.swift in Sources */,
+				D062388ABEEA26D19C7C3465 /* ForecastMathTests.swift in Sources */,
 				50F9FE7FADA4A0F67EEB6A26 /* MonthMathTests.swift in Sources */,
 				826AE9A0ADDD9E290FB80179 /* PendingBackfillTests.swift in Sources */,
 				C00C3E7B2BA9AD1E46CD75F5 /* PlaidLinkStoreTests.swift in Sources */,
@@ -522,6 +529,7 @@
 				48EB48AB2859416E5EF28CCB /* DebtItemEditor.swift in Sources */,
 				E1BDD93F505DAA61AF991CFF /* DebtView.swift in Sources */,
 				B22DAD2DE65D37A1B1DD566F /* Debts.swift in Sources */,
+				D9AB203C044055D3E633A18A /* Forecast.swift in Sources */,
 				2E0273878847B37F063CF69A /* GoogleSignInService.swift in Sources */,
 				97912CF4BDF3F9A95ED1709D /* Models.swift in Sources */,
 				04891E5B0EE0A19FA47D30C2 /* MonthsView.swift in Sources */,
@@ -579,7 +587,7 @@
 		};
 		568F0089E9BF72A888B8F68D /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_4D151341-D997-4339-9C76-449F055880DB" /* Secrets.xcconfig */;
+			baseConfigurationReference = "TEMP_AFBA1E91-C04D-4C3F-BE97-A6069E4BCF92" /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -779,7 +787,7 @@
 		};
 		A2AF47695D6DE2F5696B08C5 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_4D151341-D997-4339-9C76-449F055880DB" /* Secrets.xcconfig */;
+			baseConfigurationReference = "TEMP_AFBA1E91-C04D-4C3F-BE97-A6069E4BCF92" /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;

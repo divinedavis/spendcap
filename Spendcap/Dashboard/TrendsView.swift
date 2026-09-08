@@ -38,6 +38,10 @@ final class TrendsViewModel: ObservableObject {
     /// uses, shown under the chart. Moved here from Months 2026-08-12.
     @Published var categoryMonths: [CategoryMonth] = []
     @Published var selectedCategoryPeriod: Date?
+    /// Where the checking balance lands at month end. Nil until both forecast
+    /// reads have answered and there are two complete months to read from;
+    /// the card hides itself rather than forecast from one month.
+    @Published var forecast: ForecastStats?
     @Published var isLoading = false
     @Published var errorMessage: String?
     /// Failures the user caused, kept apart from `errorMessage`: a load that
@@ -69,6 +73,9 @@ final class TrendsViewModel: ObservableObject {
         apply(categoryRows: snapshot.categoryRows,
               daily: snapshot.dailyDiscretionary,
               wireDiscretionary: true)
+        if let recurring = snapshot.forecastRecurring, let flows = snapshot.forecastFlows {
+            forecast = ForecastMath.stats(recurring: recurring, flows: flows)
+        }
     }
 
     /// Deleting a line cascades its rules, so the transactions it claimed fall
@@ -113,22 +120,38 @@ final class TrendsViewModel: ObservableObject {
         async let dailyTask = period.isCurrent
             ? try? await SpendService.shared.discretionaryDaily()
             : nil
-        let (rows, daily) = await (rowsTask, dailyTask)
+        // The forecast only means anything for the month still in progress,
+        // and both halves are needed: the regulars without the balance is a
+        // list with nothing to subtract from.
+        async let recurringTask = period.isCurrent
+            ? try? await SpendService.shared.forecastRecurring()
+            : nil
+        async let flowsTask = period.isCurrent
+            ? try? await SpendService.shared.forecastFlows()
+            : nil
+        let (rows, daily, recurring, flows) = await (rowsTask, dailyTask, recurringTask, flowsTask)
         if let rows {
             apply(categoryRows: rows, daily: daily, wireDiscretionary: period.isCurrent)
+        }
+        if let recurring, let flows {
+            forecast = ForecastMath.stats(recurring: recurring, flows: flows)
         }
 
         // Persist what the next cold launch should open on: the current
         // month, fully loaded. A partial load must not overwrite a complete
         // snapshot from an earlier visit — and the daily rows are part of
         // "complete" now, or the restored frame would open with no weekly
-        // figure and pop one in when the network answered.
+        // figure and pop one in when the network answered. The forecast rows
+        // ride along for the same reason, but are not part of "complete":
+        // an account with no checking balance has none to save, and that must
+        // not stop the chart from being remembered.
         if period.isCurrent, let loaded, let rows, let daily,
            let userId = SpendService.shared.currentUserId {
             TrendsSnapshotStore.save(TrendsSnapshot(
                 userId: userId, savedAt: Date(),
                 transactions: loaded.transactions, budget: loaded.budget,
-                categoryRows: rows, dailyDiscretionary: daily))
+                categoryRows: rows, dailyDiscretionary: daily,
+                forecastRecurring: recurring, forecastFlows: flows))
         }
     }
 
@@ -179,6 +202,9 @@ struct TrendsView: View {
     /// Which budget line is currently swiped open, so opening one closes the
     /// rest — the behaviour a List gives for free.
     @State private var openSwipeRow: String?
+    /// The forecast card's list of expected transactions, folded by default —
+    /// the number is the point, the list is how to argue with it.
+    @State private var showsPredicted = false
 
     private var monthLabel: String {
         period.monthName()
@@ -193,6 +219,9 @@ struct TrendsView: View {
                         chips
                         modePicker
                         chartCard
+                        if period.isCurrent, let forecast = model.forecast {
+                            forecastCard(forecast)
+                        }
                         categoryBudgetCard
                     }
                     .padding(.horizontal, 16)
@@ -398,6 +427,143 @@ struct TrendsView: View {
                 .cornerRadius(3)
             }
             .chartYAxis { AxisMarks(position: .trailing) }
+        }
+    }
+
+    // MARK: - Forecast
+
+    /// Where the checking balance lands at month end, and what gets it there:
+    /// the balance now less pending charges, the regulars still to come in and
+    /// out, and the everyday run-rate over the days left. Current month only —
+    /// a finished month has nothing left to forecast.
+    private func forecastCard(_ forecast: ForecastStats) -> some View {
+        let projected = forecast.projectedCents
+        let negative = projected < 0
+
+        return SurfaceCard {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Forecast")
+                        .font(.title3.weight(.bold))
+                    Text("Checking on \(forecast.monthEndLabel)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text((negative ? "\u{2212}" : "") + BudgetMath.dollars(abs(projected)))
+                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .foregroundStyle(negative ? Color.red : Color.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .accessibilityIdentifier("trends.forecastBalance")
+                    Text(negative ? "short at month end" : "left at month end")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            DashboardRow(
+                icon: "building.columns.fill",
+                tint: .blue,
+                title: "In checking today",
+                subtitle: forecast.pendingOutCents > 0
+                    ? "After \(BudgetMath.dollars(forecast.pendingOutCents)) still pending"
+                    : "As your bank last reported it",
+                value: (forecast.availableCents < 0 ? "\u{2212}" : "")
+                    + BudgetMath.dollars(abs(forecast.availableCents)),
+                valueColor: forecast.availableCents < 0 ? .red : .primary
+            )
+            Divider()
+            DashboardRow(
+                icon: "arrow.down.left.circle.fill",
+                tint: .green,
+                title: "Regular money in",
+                subtitle: forecast.predictedInCount == 0
+                    ? "Nothing more expected this month"
+                    : "\(forecast.predictedInCount) expected",
+                value: "+" + BudgetMath.dollars(forecast.predictedInCents),
+                valueColor: .green
+            )
+            Divider()
+            DashboardRow(
+                icon: "calendar.badge.clock",
+                tint: .orange,
+                title: "Bills & regulars",
+                subtitle: forecast.predictedOutCount == 0
+                    ? "Nothing more expected this month"
+                    : "\(forecast.predictedOutCount) still to come",
+                value: "\u{2212}" + BudgetMath.dollars(forecast.predictedOutCents),
+                valueColor: .red
+            )
+            Divider()
+            DashboardRow(
+                icon: "cart.fill",
+                tint: .purple,
+                title: "Everyday spending",
+                subtitle: "\(forecast.daysLeft) day\(forecast.daysLeft == 1 ? "" : "s") \u{00D7} \(BudgetMath.dollars(forecast.everydayPerDayCents)) a day",
+                value: "\u{2212}" + BudgetMath.dollars(forecast.everydayCents),
+                valueColor: .red
+            )
+
+            if !forecast.predicted.isEmpty {
+                Divider()
+                Button {
+                    withAnimation(.snappy) { showsPredicted.toggle() }
+                } label: {
+                    HStack {
+                        Text(showsPredicted
+                             ? "Hide the expected transactions"
+                             : "Show the \(forecast.predicted.count) expected transaction\(forecast.predicted.count == 1 ? "" : "s")")
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Image(systemName: showsPredicted ? "chevron.up" : "chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("trends.forecastToggle")
+
+                if showsPredicted {
+                    ForEach(forecast.predicted) { item in
+                        HStack(spacing: 12) {
+                            Text(item.dateLabel)
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(item.isOverdue ? Color.orange : Color.secondary)
+                                .frame(width: 52, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 1) {
+                                // Two lines: a bank descriptor ("JPMORGAN CHASE
+                                // B PAYROLL DD") is the honest name and
+                                // truncating it hides which regular this is.
+                                Text(item.who)
+                                    .font(.subheadline)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                if item.isOverdue {
+                                    Text("Usually by now \u{00B7} any day")
+                                        .font(.caption2)
+                                        .foregroundStyle(.orange)
+                                }
+                            }
+                            Spacer(minLength: 8)
+                            Text((item.isInflow ? "+" : "\u{2212}") + BudgetMath.dollars(item.amountCents))
+                                .font(.subheadline.weight(.semibold).monospacedDigit())
+                                .foregroundStyle(item.isInflow ? Color.green : Color.primary)
+                        }
+                        .padding(.vertical, 3)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("trends.forecastRow")
+                    }
+                }
+            }
+
+            Text("From \(forecast.windowLabel): a regular is anything that came in or went out most months, up to three times a month, on about the same day. Everything else is averaged into everyday spending. Money in only counts when it is regular.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 2)
         }
     }
 

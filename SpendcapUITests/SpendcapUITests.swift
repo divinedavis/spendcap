@@ -175,6 +175,36 @@ final class SpendcapUITests: XCTestCase {
                           "month spend should survive switching to \(label)")
         }
 
+        // The Forecast card sits under the chart. The demo bank gives the test
+        // account four complete months, a checking balance and a twice-monthly
+        // payroll, so the card must render and its expected list must open
+        // with rows in it — an empty forecast on that data is a broken read.
+        let forecast = app.staticTexts["trends.forecastBalance"]
+        XCTAssertTrue(forecast.waitForExistence(timeout: 20),
+                      "Trends should forecast the month-end checking balance")
+        let toggle = app.buttons["trends.forecastToggle"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5), "the expected-transactions toggle should exist")
+        // The toggle sits at the bottom of the card, below the fold on every
+        // phone — it exists in the tree (the stack is not lazy) but a tap on
+        // an off-screen point lands nowhere. Scroll it on screen first.
+        for _ in 0..<6 where !toggle.isHittable {
+            app.scrollViews.firstMatch.swipeUp(velocity: .slow)
+        }
+        XCTAssertTrue(toggle.isHittable, "the forecast toggle should scroll into view")
+        // A combined row's element type is unpredictable, so query any type.
+        // Two attempts, like the category card below it: the first gesture on
+        // a card that is still settling can land on nothing.
+        let row = app.descendants(matching: .any).matching(identifier: "trends.forecastRow").firstMatch
+        var opened = false
+        for _ in 0..<2 where !opened {
+            let box = toggle.frame
+            app.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: box.midX, dy: box.midY))
+                .tap()
+            opened = row.waitForExistence(timeout: 5)
+        }
+        XCTAssertTrue(opened, "opening the forecast should list the expected transactions")
+
         // Activity replaced the Trends slot: the month, transaction by
         // transaction. The test account has no bank, so the total tile is the
         // assertion that holds in both states.

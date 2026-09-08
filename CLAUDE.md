@@ -396,6 +396,65 @@ Two rules that shaped that screen and are easy to undo by accident:
   to its PDF, but fetching statements stays on the Statements screen, where the
   per-request Plaid billing is behind a deliberate tap.
 
+## Forecast card (0029, 2026-09-08)
+
+On Trends, under the chart, current month only: **where the checking balance
+lands on the last day of the month**, and the four numbers that get it there —
+what is in checking today (less pending), the regular money still to come in,
+the bills and regulars still to go out, and everyday spending at the run-rate
+over the days left. A fold-out lists every expected transaction with its day.
+Built at Divine's request: "predict what transactions will happen and how much
+I'll have left based on what I have in my account currently."
+
+**Server says what recurred; the client decides what a regular is.**
+`forecast_recurring(months_back)` returns one row per stable name seen in at
+least two of the last N complete months on the **checking** accounts, with a
+*rank* description of its typical month: `rank_months[r]` = how many window
+months had at least r occurrences, `rank_day[r]` / `rank_cents[r]` = the median
+day and amount of the r-th one. Twice-monthly payroll is `{3,3}` on days
+`{15,31}`; a monthly bill is `{3}`; Lyft runs out of ranks at the cap of six.
+`forecast_flows(months_back)` gives the per-month totals, the checking balance
+now (sync.ts's refreshed `current_balance_cents`, posted money) and this
+month's pending rows. `ForecastMath` (unit-tested) does the rest:
+
+- **A regular is a name seen in most window months (2 of 3), up to three
+  times a month.** Three leaves room for a semi-monthly paycheck and a bill
+  with an add-on; the fourth Lyft of a month is not a scheduled event. Names
+  past that go to everyday spending. Consequence Divine will see: lunch spots
+  that recur two or three times a month *are* listed — that is the data.
+- **Ranks, not gaps.** "The 15th and the last day" is not "every 15 days", and
+  Wells Fargo shifts a weekend bill to Monday, which a gap-stepping model would
+  carry forward as drift. Day 31 clamps to the month's length.
+- **What has posted this month is done.** The first `this_month_count`
+  ranks are ticked off; the rest are expected. A rank whose usual day has
+  passed is **overdue, still counted, placed on today** — a late bill is not
+  a cancelled one, and a date in the past in a list of things to come reads as
+  a bug.
+- **Everyday = window outflow − regulars' window outflow, per window day.**
+  Days left count today: bank data lags a day or two.
+- **Money in only counts when it is regular.** Refunds and loan disbursements
+  are not income to project.
+- **Bank fees are never regulars** (excluded in SQL) but stay in the run-rate.
+  Three overdraft fees a month is true history, but a forecast that budgets
+  for them presents a consequence of running dry as a fixed cost.
+- **No forecast on fewer than two complete months**, or with no checking
+  account on record — the card hides rather than guess.
+
+**`txn_stable_name()` is the server-side twin of
+`TransactionNaming.stableMatchValue`.** Grouping on the display name alone saw
+eight different payrolls (`… PAYROLL DD <date> <ref> …`); the stable form is
+what makes recurrence visible at all. The two implementations must agree; the
+migration's vectors are the ones in `TransactionNamingTests`. Known loss: a
+descriptor the bank truncates (`PYPL PAYMTHL` vs `PYPL PAYMTHLY`) groups apart.
+
+The forecast rows ride in `TrendsSnapshot` (optional fields) so the card is on
+the first frame; they are not part of "complete" — an account with no checking
+balance has none, and that must not stop the chart being remembered.
+
+Harness note: `run_tests.sh` and `ship.sh` call bare `python3`, which after the
+Homebrew 3.14 upgrade has no Pillow/requests. Run them with
+`PATH=~/.venvs/spendcap/bin:$PATH`.
+
 ## Working rules — READ THESE
 
 1. **Push to GitHub after every change.** Build first
