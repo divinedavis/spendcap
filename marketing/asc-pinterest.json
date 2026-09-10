@@ -1,0 +1,14 @@
+{
+  "name": "Spendcap",
+  "icon": "/Users/divinedavis/projects/Spendcap/Spendcap/Resources/Assets.xcassets/AppIcon.appiconset/icon-1024.png",
+  "raw_dir": "/Users/divinedavis/projects/Spendcap/marketing/raw",
+  "out_dir": "/Users/divinedavis/projects/Spendcap/marketing/asc-screenshots-pinterest",
+  "masonry": ["01-months-cap.png", "02-trends.png", "04-debt.png", "05-cap-alerts.png"],
+  "panels": [
+    ["01-months-cap.png", "Stay under your cap"],
+    ["02-trends.png", "See where it goes"],
+    ["04-debt.png", "Plan for what's due"],
+    ["05-cap-alerts.png", "Get warned before you overspend"]
+  ],
+  "stickers": ["💸", "🎯", "📉", "✨"]
+}
