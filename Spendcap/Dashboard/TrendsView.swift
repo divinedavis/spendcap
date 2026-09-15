@@ -1,39 +1,13 @@
 import SwiftUI
 import Charts
 
-// Trends template, modelled on Monzo's Trends screen:
-//   account chip + period chip → segmented modes → chart card → prompt → Breakdown
-//
-// Label mapping (first pass — adjust freely):
-//   Monzo "Balance/Spending" -> Spending / Daily
-//   Monzo "Today's Balance"  -> month-to-date spend
-//   Monzo balance line       -> cumulative spend
-//   Monzo "Breakdown"        -> month cap, spent, left, average, days over
-//
-// A third "Target" mode (cumulative spend against a straight cap-pace line) was
-// removed 2026-08-08. It drew the daily cap × day index, which stopped being the
-// yardstick this screen is judged by once the monthly cap arrived in 0006 — the
-// pace line and the Breakdown's "Cap for <month>" could disagree on the same
-// card. Spending already shows the same cumulative curve.
-
-enum TrendsMode: String, CaseIterable, Identifiable {
-    case spending = "Spending"
-    case daily = "Daily"
-
-    var id: String { rawValue }
-
-    var systemImage: String {
-        switch self {
-        case .spending: return "chart.line.uptrend.xyaxis"
-        case .daily: return "chart.bar.fill"
-        }
-    }
-}
+// Cumulative spending, with the previous month behind the current month.
 
 @MainActor
 final class TrendsViewModel: ObservableObject {
     @Published var stats = MonthStats(series: [], spentCents: 0, daysElapsed: 0,
                                       daysInMonth: 0, dailyLimitCents: 5000)
+    @Published var previousMonthStats: MonthStats?
     /// This month and last, by budget line — the same rollup the Budget screen
     /// uses, shown under the chart. Moved here from Months 2026-08-12.
     @Published var categoryMonths: [CategoryMonth] = []
@@ -70,6 +44,8 @@ final class TrendsViewModel: ObservableObject {
         else { return }
         apply(transactions: snapshot.transactions, budget: snapshot.budget,
               reference: Date())
+        applyPreviousMonth(transactions: snapshot.previousMonthTransactions,
+                           budget: snapshot.budget, reference: Date())
         apply(categoryRows: snapshot.categoryRows,
               daily: snapshot.dailyDiscretionary,
               wireDiscretionary: true)
@@ -97,16 +73,22 @@ final class TrendsViewModel: ObservableObject {
         errorMessage = nil
         defer { isLoading = false }
 
-        var loaded: (transactions: [BankTransaction], budget: Budget)?
+        var loaded: (transactions: [BankTransaction], budget: Budget, previous: [BankTransaction]?)?
         do {
             // One reference date drives the fetch and the math, so the rows
             // pulled and the days charted can never describe different months.
             let reference = period.referenceDate()
             async let txns = SpendService.shared.monthTransactions(now: reference)
+            async let previous = period.isCurrent
+                ? try? await SpendService.shared.monthTransactions(
+                    now: TrendsPeriod.lastMonth.referenceDate(now: reference))
+                : nil
             async let budg = SpendService.shared.budget()
             let (t, b) = try await (txns, budg)
             apply(transactions: t, budget: b, reference: reference)
-            loaded = (t, b)
+            let previousTransactions = await previous
+            applyPreviousMonth(transactions: previousTransactions, budget: b, reference: reference)
+            loaded = (t, b, previousTransactions)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -151,13 +133,23 @@ final class TrendsViewModel: ObservableObject {
                 userId: userId, savedAt: Date(),
                 transactions: loaded.transactions, budget: loaded.budget,
                 categoryRows: rows, dailyDiscretionary: daily,
-                forecastRecurring: recurring, forecastFlows: flows))
+                forecastRecurring: recurring, forecastFlows: flows,
+                previousMonthTransactions: loaded.previous))
         }
     }
 
-    /// Both caps: the daily one colours the per-day bars, the monthly one
-    /// (when set) is what the month is judged against — Months uses the same
-    /// resolution, and the two screens must not disagree.
+    private func applyPreviousMonth(transactions: [BankTransaction]?, budget: Budget,
+                                    reference: Date) {
+        previousMonthStats = transactions.map {
+            MonthMath.stats(
+                transactions: $0,
+                dailyLimitCents: budget.dailyLimitCents,
+                monthlyLimitCents: budget.monthlyLimitCents,
+                now: TrendsPeriod.lastMonth.referenceDate(now: reference))
+        }
+    }
+
+    /// Resolve the same spending and caps as the Months screen.
     private func apply(transactions: [BankTransaction], budget: Budget, reference: Date) {
         stats = MonthMath.stats(
             transactions: transactions,
@@ -195,7 +187,6 @@ final class TrendsViewModel: ObservableObject {
 
 struct TrendsView: View {
     @StateObject private var model = TrendsViewModel()
-    @State private var mode: TrendsMode = .spending
     @State private var period: TrendsPeriod = .thisMonth
     @State private var editingLine: CategorySpendRow?
     @State private var pendingDelete: CategorySpendRow?
@@ -217,7 +208,6 @@ struct TrendsView: View {
                 ScrollView {
                     VStack(spacing: 14) {
                         chips
-                        modePicker
                         chartCard
                         categoryBudgetCard
                         // Below the budget lines (user request, 2026-09-08):
@@ -237,6 +227,7 @@ struct TrendsView: View {
                     .padding(.top, 24)
                     .padding(.bottom, 24)
                 }
+                .accessibilityIdentifier("trends.scroll")
             }
             .navigationTitle("Trends")
             .navigationBarTitleDisplayMode(.inline)
@@ -325,16 +316,6 @@ struct TrendsView: View {
         }
     }
 
-    private var modePicker: some View {
-        Picker("View", selection: $mode) {
-            ForEach(TrendsMode.allCases) { m in
-                Text(m.rawValue).tag(m)
-            }
-        }
-        .pickerStyle(.segmented)
-        .accessibilityIdentifier("trends.mode")
-    }
-
     // MARK: - Chart
 
     private var chartCard: some View {
@@ -381,27 +362,61 @@ struct TrendsView: View {
             } else {
                 chart
                     .frame(height: 170)
-                HStack {
-                    Text(model.stats.series.first?.date.formatted(.dateTime.day().month(.abbreviated)) ?? "")
-                    Spacer()
-                    // Month end, formatted like the left edge rather than
-                    // pasted together from a name and a day count — with a
-                    // year in the name that read "November 2025 30".
-                    Text(period.lastDayOfMonth().formatted(.dateTime.day().month(.abbreviated)))
+                if comparisonStats != nil {
+                    HStack(spacing: 18) {
+                        chartLegend("This month", color: .accentColor)
+                        chartLegend("Last month", color: .secondary, dash: [4, 3])
+                            .accessibilityIdentifier("trends.previousMonthLegend")
+                    }
+                    .font(.caption)
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
             }
         }
     }
 
-    @ViewBuilder
+    private var comparisonStats: MonthStats? {
+        period.isCurrent ? model.previousMonthStats : nil
+    }
+
+    private var chartDayCount: Int {
+        max(model.stats.daysInMonth, comparisonStats?.daysInMonth ?? 0, 2)
+    }
+
+    private func chartLegend(_ title: String, color: Color, dash: [CGFloat] = []) -> some View {
+        HStack(spacing: 6) {
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: 1))
+                path.addLine(to: CGPoint(x: 20, y: 1))
+            }
+            .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: dash))
+            .frame(width: 20, height: 2)
+            .accessibilityHidden(true)
+            Text(title)
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
     private var chart: some View {
-        switch mode {
-        case .spending:
-            Chart(model.stats.series) { day in
+        Chart {
+            // Separate series prevent Charts from joining the two months.
+            // Day indices retain every day even when the months differ in length.
+            if let previous = comparisonStats {
+                ForEach(Array(previous.series.enumerated()), id: \.element.id) { index, day in
+                    LineMark(
+                        x: .value("Day of month", index + 1),
+                        y: .value("Spent", Double(day.cumulativeCents) / 100.0),
+                        series: .value("Month", "Last month")
+                    )
+                    .foregroundStyle(Color.secondary.opacity(0.65))
+                    .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, dash: [5, 4]))
+                    .accessibilityLabel("Last month, day \(index + 1)")
+                    .accessibilityValue(BudgetMath.dollars(day.cumulativeCents))
+                }
+            }
+            ForEach(Array(model.stats.series.enumerated()), id: \.element.id) { index, day in
                 AreaMark(
-                    x: .value("Day", day.date),
+                    x: .value("Day of month", index + 1),
                     y: .value("Spent", Double(day.cumulativeCents) / 100.0)
                 )
                 .foregroundStyle(
@@ -410,26 +425,31 @@ struct TrendsView: View {
                         startPoint: .top, endPoint: .bottom
                     )
                 )
+                .accessibilityHidden(true)
                 LineMark(
-                    x: .value("Day", day.date),
-                    y: .value("Spent", Double(day.cumulativeCents) / 100.0)
+                    x: .value("Day of month", index + 1),
+                    y: .value("Spent", Double(day.cumulativeCents) / 100.0),
+                    series: .value("Month", "Selected month")
                 )
                 .foregroundStyle(Color.accentColor)
                 .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                .accessibilityLabel("\(period.label()), day \(index + 1)")
+                .accessibilityValue(BudgetMath.dollars(day.cumulativeCents))
             }
-            .chartYAxis { AxisMarks(position: .trailing) }
-
-        case .daily:
-            Chart(model.stats.series) { day in
-                BarMark(
-                    x: .value("Day", day.date, unit: .day),
-                    y: .value("Spent", Double(day.spentCents) / 100.0)
-                )
-                .foregroundStyle(day.spentCents > model.stats.dailyLimitCents ? Color.red : Color.accentColor)
-                .cornerRadius(3)
-            }
-            .chartYAxis { AxisMarks(position: .trailing) }
         }
+        .chartXScale(domain: 1...chartDayCount)
+        .chartXAxis {
+            AxisMarks(values: [1, 7, 14, 21, chartDayCount]) { value in
+                AxisGridLine()
+                AxisValueLabel(anchor: value.as(Int.self) == chartDayCount ? .topTrailing : .topLeading) {
+                    if let day = value.as(Int.self) {
+                        Text("Day \(day)")
+                    }
+                }
+            }
+        }
+        .chartYAxis { AxisMarks(position: .trailing) }
+        .accessibilityIdentifier("trends.spendingChart")
     }
 
     // MARK: - Forecast

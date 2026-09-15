@@ -75,6 +75,16 @@ stop the series mid-month and report a July that ended on the 5th. The month
 walk steps back a day at a time rather than adding `-1 month`, which has to
 clamp on the 31st.
 
+**Spending comparison, 2026-09-14 (user request):** Trends opens directly on
+its cumulative spending chart; the Spending/Daily segmented control and daily
+bars are removed. The current month has a muted dashed previous-month curve
+behind the green current-month curve, with a matching legend. Both use day
+numbers on the same axis, through the longer month's final day; the current
+month stops today and the previous month includes its full history. Historical
+periods show their selected month alone. The previous-month read is optional,
+so its failure does not blank current spending. Its raw transactions are also
+cached in `TrendsSnapshot`, with an optional field for older snapshots.
+
 **Widget swap, 2026-08-12 (user request):** the **"By category" card lives on
 Trends**, directly under the chart card, and the month **Breakdown card moved
 to the bottom of Months**, always showing the current month (Months' own

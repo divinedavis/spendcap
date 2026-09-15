@@ -57,6 +57,8 @@ extension XCTestCase {
     func dismissSavePasswordPromptIfPresent(timeout: TimeInterval = 0) -> Bool {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let candidates = [
+            // Newer iOS runtimes host the password sheet in the app process.
+            XCUIApplication().buttons["Not Now"],
             springboard.buttons["Not Now"],
             springboard.alerts.buttons["Not Now"],
             springboard.sheets.buttons["Not Now"],

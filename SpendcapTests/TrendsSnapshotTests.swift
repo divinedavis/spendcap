@@ -64,4 +64,32 @@ final class TrendsSnapshotTests: XCTestCase {
             TrendsSnapshot.self, from: JSONEncoder().encode(original))
         XCTAssertEqual(decoded, original)
     }
+    func testComparisonTransactionsSurviveColdLaunch() throws {
+        var original = snapshot(savedAt: "2026-08-10")
+        original.previousMonthTransactions = [BankTransaction(
+            id: UUID(), date: "2026-07-31", name: "Month-end purchase",
+            amountCents: 12_345)]
+        let decoded = try JSONDecoder().decode(
+            TrendsSnapshot.self, from: JSONEncoder().encode(original))
+        XCTAssertEqual(decoded, original)
+        let previous = MonthMath.stats(
+            transactions: try XCTUnwrap(decoded.previousMonthTransactions),
+            dailyLimitCents: decoded.budget.dailyLimitCents,
+            now: TrendsPeriod.lastMonth.referenceDate(now: date("2026-08-10"), timeZone: utc),
+            timeZone: utc)
+        XCTAssertEqual(previous.series.count, 31)
+        XCTAssertEqual(previous.series.last?.cumulativeCents, 12_345)
+    }
+
+    func testSnapshotWithoutComparisonStillDecodes() throws {
+        let original = snapshot(savedAt: "2026-08-10")
+        let data = try JSONEncoder().encode(original)
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        json.removeValue(forKey: "previousMonthTransactions")
+        let decoded = try JSONDecoder().decode(
+            TrendsSnapshot.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertNil(decoded.previousMonthTransactions)
+        XCTAssertEqual(decoded.transactions, original.transactions)
+    }
+
 }

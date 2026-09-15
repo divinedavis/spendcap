@@ -147,7 +147,7 @@ final class SpendcapUITests: XCTestCase {
                       "should return to auth screen after sign-out")
     }
 
-    /// Trends renders with live data and every chart mode is reachable, and
+    /// Trends renders both months with live data, and
     /// Activity lists the month. Skipped when creds are absent.
     func testTrendsAndActivityTabs() throws {
         guard let email = ProcessInfo.processInfo.environment["SPENDCAP_TEST_EMAIL"],
@@ -159,21 +159,22 @@ final class SpendcapUITests: XCTestCase {
         let app = launch()
         signIn(app, email: email, password: password)
 
-        // Trends is the landing tab: month total plus both chart modes.
+        // Trends shows both months together without a chart-mode picker.
         XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20),
                       "Trends should show month-to-date spend")
-
-        for label in ["Daily", "Spending"] {
-            let segment = app.buttons[label]
-            XCTAssertTrue(segment.waitForExistence(timeout: 5), "\(label) segment should exist")
-            // Always a coordinate tap. Trends is the landing tab now, so its
-            // chart is still laying out as the first tap lands, and isHittable
-            // flips between being read and being acted on — checking it first
-            // does not help.
-            segment.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-            XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 10),
-                          "month spend should survive switching to \(label)")
+        XCTAssertFalse(app.segmentedControls["trends.mode"].exists)
+        XCTAssertFalse(app.buttons["Daily"].exists)
+        XCTAssertTrue(app.staticTexts["trends.previousMonthLegend"].waitForExistence(timeout: 20),
+                      "The previous month's comparison should load")
+        // The password prompt can arrive after sign-in has returned and cover
+        // the chart, swallowing every scroll toward the forecast below it.
+        if dismissSavePasswordPromptIfPresent(timeout: 2) {
+            Thread.sleep(forTimeInterval: 1.0)
         }
+        let comparisonScreenshot = XCTAttachment(screenshot: app.screenshot())
+        comparisonScreenshot.name = "Trends month comparison"
+        comparisonScreenshot.lifetime = .keepAlways
+        add(comparisonScreenshot)
 
         // The Forecast card sits under the category widget. The demo bank gives the test
         // account four complete months, a checking balance and a twice-monthly
@@ -192,7 +193,7 @@ final class SpendcapUITests: XCTestCase {
         // category card's notes), so a loop on it never terminates and a
         // check on it fails a card that is plainly on screen.
         let window = app.windows.firstMatch.frame
-        let scroll = app.scrollViews.firstMatch
+        let scroll = app.scrollViews["trends.scroll"]
         var settled = false
         for _ in 0..<14 where !settled {
             let y = toggle.frame.midY
@@ -317,7 +318,7 @@ final class SpendcapUITests: XCTestCase {
             }
             if option.waitForExistence(timeout: 3) { break }
             if attempt % 2 == 1 {
-                app.scrollViews.firstMatch.swipeDown()
+                app.scrollViews["trends.scroll"].swipeDown()
                 Thread.sleep(forTimeInterval: 0.5)
             }
         }
@@ -588,7 +589,7 @@ final class SpendcapUITests: XCTestCase {
         // itself — `app.swipeUp()` starts from the middle of the screen and
         // would prove nothing about this card.
         let beforeScroll = line.frame.minY
-        app.scrollViews.firstMatch.swipeUp(velocity: .slow)
+        app.scrollViews["trends.scroll"].swipeUp(velocity: .slow)
         Thread.sleep(forTimeInterval: 1.5)
         XCTAssertLessThan(line.frame.minY, beforeScroll,
                           "Trends should still scroll vertically over a budget row")
@@ -597,6 +598,13 @@ final class SpendcapUITests: XCTestCase {
         // hold that turns into a vertical drag is how anyone scrolls a list
         // they were reading, and the swipe gesture must not hold that touch
         // hostage.
+        // Removing the chart-mode picker leaves this row under the navigation
+        // bar after the preceding swipe. Bring it back into the scrollable
+        // viewport before starting a gesture on the row itself.
+        for _ in 0..<4 where line.frame.midY < app.windows.firstMatch.frame.midY {
+            app.scrollViews["trends.scroll"].swipeDown(velocity: .slow)
+        }
+        Thread.sleep(forTimeInterval: 1.5)
         let restedBox = line.frame
         let rested = app.coordinate(withNormalizedOffset: .zero)
             .withOffset(CGVector(dx: restedBox.midX, dy: restedBox.midY))

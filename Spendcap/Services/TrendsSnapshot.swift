@@ -24,6 +24,9 @@ struct TrendsSnapshot: Codable, Equatable {
     var forecastRecurring: [ForecastRecurringRow]?
     var forecastFlows: [ForecastFlowRow]?
 
+    /// Optional for snapshots saved before the comparison line was added.
+    var previousMonthTransactions: [BankTransaction]?
+
     /// Usable only for the same signed-in user in the same calendar month.
     /// Last month's rows would rebuild into an empty chart — worse than the
     /// loading state the snapshot exists to replace.

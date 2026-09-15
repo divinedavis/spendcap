@@ -50,29 +50,8 @@ final class MarketingScreenshots: XCTestCase {
                       "Trends should appear after sign-in")
         save(app, "02-trends")
 
-        if true {
-            if app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20) {
-                save(app, "03-trends-spending")
-                // Capture the other chart mode from the segmented control.
-                //
-                // Existence is not enough here: the segments exist while the
-                // chart is still laying out, and tapping one then fails as
-                // "not hittable" — which aborted the whole capture run before
-                // it reached the later tabs. Wait for hittability, and treat a
-                // segment that never settles as a missing screenshot rather
-                // than a failed run. This is a capture, not an assertion suite.
-                for (index, label) in ["Daily"].enumerated() {
-                    let segment = app.buttons[label]
-                    guard segment.waitForExistence(timeout: 5) else { continue }
-                    let deadline = Date().addingTimeInterval(10)
-                    while !segment.isHittable && Date() < deadline {
-                        Thread.sleep(forTimeInterval: 0.25)
-                    }
-                    guard segment.isHittable else { continue }
-                    segment.tap()
-                    save(app, "0\(4 + index)-trends-\(label.lowercased())")
-                }
-            }
+        if app.staticTexts["trends.previousMonthLegend"].waitForExistence(timeout: 20) {
+            save(app, "03-trends-spending")
         }
 
         app.tapTab("Activity", in: self)
