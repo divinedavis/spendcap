@@ -304,3 +304,13 @@ revoke execute on function public.seed_starter_budget() from public, anon;
 grant execute on function public.seed_starter_budget() to authenticated;
 
 notify pgrst, 'reload schema';
+
+-- Explicit Data API grants (Supabase stops auto-granting new public tables
+-- on 2026-10-30). Mirrors the grants live in production, so a rebuild from
+-- these migrations exposes exactly what prod exposes. RLS still gates rows.
+grant select on public.budget_categories to anon;
+grant select, insert, update, delete on public.budget_categories to authenticated;
+grant select, insert, update, delete on public.budget_categories to service_role;
+grant select on public.category_rules to anon;
+grant select, insert, update, delete on public.category_rules to authenticated;
+grant select, insert, update, delete on public.category_rules to service_role;

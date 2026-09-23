@@ -368,3 +368,16 @@ $$;
 revoke execute on function public.overspend_status() from public, anon, authenticated;
 
 notify pgrst, 'reload schema';
+
+-- Explicit Data API grants (Supabase stops auto-granting new public tables
+-- on 2026-10-30). Mirrors the grants live in production, so a rebuild from
+-- these migrations exposes exactly what prod exposes. RLS still gates rows.
+grant select on public.trips to anon;
+grant select, insert, update, delete on public.trips to authenticated;
+grant select, insert, update, delete on public.trips to service_role;
+grant select on public.trip_lines to anon;
+grant select, insert, update, delete on public.trip_lines to authenticated;
+grant select, insert, update, delete on public.trip_lines to service_role;
+grant select on public.trip_transactions to anon;
+grant select, insert, update, delete on public.trip_transactions to authenticated;
+grant select, insert, update, delete on public.trip_transactions to service_role;
