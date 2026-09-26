@@ -20,3 +20,8 @@ supabase/.temp/
 
 # Marketing screenshot captures (regenerate with scripts/capture_screenshots.sh)
 screenshots/
+
+# Environment files (secrets)
+.env
+.env.*
+!.env.example
