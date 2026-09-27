@@ -303,14 +303,40 @@ final class SpendService {
             .execute()
     }
 
-    /// Disconnecting deletes the item row; plaid_item_secrets, accounts, and
-    /// transactions all cascade server-side.
+    /// Disconnecting ends the connection at Plaid (`/item/remove`) and then
+    /// deletes the item row, server-side in the `plaid_remove_item` edge
+    /// function — the access token never leaves the server, so the client
+    /// cannot call Plaid itself. plaid_item_secrets, accounts and transactions
+    /// cascade from the row. A plain row delete (what this did until 0030)
+    /// left the Item live at Plaid with nobody holding its token.
     func disconnectItem(_ id: UUID) async throws {
-        try await client
-            .from("plaid_items")
-            .delete()
-            .eq("id", value: id.uuidString.lowercased())
-            .execute()
+        _ = try await client.functions.invoke(
+            "plaid_remove_item",
+            options: FunctionInvokeOptions(body: RemoveItemRequest(itemId: id.uuidString.lowercased(), all: nil))
+        ) as RemoveItemAck
+    }
+
+    /// Account deletion's first step: end every bank connection at Plaid
+    /// before `delete_account()` cascades the rows (and the tokens) away.
+    func removeAllItems() async throws {
+        _ = try await client.functions.invoke(
+            "plaid_remove_item",
+            options: FunctionInvokeOptions(body: RemoveItemRequest(itemId: nil, all: true))
+        ) as RemoveItemAck
+    }
+
+    struct RemoveItemRequest: Encodable {
+        let itemId: String?
+        let all: Bool?
+        enum CodingKeys: String, CodingKey {
+            case itemId = "item_id"
+            case all
+        }
+    }
+
+    struct RemoveItemAck: Decodable {
+        let ok: Bool
+        let deleted: Int?
     }
 
     // MARK: - Plaid edge functions

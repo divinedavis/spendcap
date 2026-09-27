@@ -257,7 +257,8 @@ final class AuthViewModel: ObservableObject {
         identities = []
     }
 
-    /// App Store 5.1.1(v): remove the statement PDFs, then delete the account
+    /// App Store 5.1.1(v): end every bank connection at Plaid, remove the
+    /// statement PDFs, then delete the account
     /// server-side via the delete_account RPC (which cascades every public
     /// table), then sign out locally.
     ///
@@ -275,6 +276,9 @@ final class AuthViewModel: ObservableObject {
         await run {
             await PushNotificationManager.shared.unregisterCurrentToken()
             TrendsSnapshotStore.clear()
+            // Bank connections end at Plaid first, while the session that
+            // authorises plaid_remove_item still exists (0030).
+            try await SpendService.shared.removeAllItems()
             try await SpendService.shared.deleteStoredStatements()
             try await self.client.rpc("delete_account").execute()
             try? await self.client.auth.signOut()

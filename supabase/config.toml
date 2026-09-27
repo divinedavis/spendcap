@@ -14,3 +14,9 @@ verify_jwt = false
 
 [functions.check_overspend]
 verify_jwt = false
+
+[functions.plaid_remove_item]
+verify_jwt = true
+
+[functions.plaid_removal_cron]
+verify_jwt = false
