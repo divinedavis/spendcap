@@ -84,7 +84,11 @@ crash_seen() { [[ -e "${CRASH_GLOB[0]}" ]] && \
 
 alive=0
 for _ in $(seq 1 12); do   # up to ~24s
-    if xcrun simctl spawn "$SIMULATOR_ID" launchctl list 2>/dev/null | grep -q "$BUNDLE_ID"; then
+    # Capture first, then match: under pipefail, `list | grep -q` fails when
+    # grep exits on the first match and launchctl dies of SIGPIPE, which
+    # reads as "not running" for an app that is alive.
+    services=$(xcrun simctl spawn "$SIMULATOR_ID" launchctl list 2>/dev/null || true)
+    if [[ "$services" == *"$BUNDLE_ID"* ]]; then
         alive=1
         break
     fi
