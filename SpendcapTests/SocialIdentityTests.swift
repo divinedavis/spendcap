@@ -163,4 +163,22 @@ final class SocialIdentityTests: XCTestCase {
         XCTAssertEqual(digest.count, 64)
         XCTAssertNil(digest.rangeOfCharacter(from: CharacterSet(charactersIn: "0123456789abcdef").inverted))
     }
+
+    // MARK: - Link failures
+
+    /// App Review 2026-09-24: linking an Apple ID that already owns another
+    /// account showed GoTrue's raw text and was read as a broken sign-in.
+    func testAlreadyLinkedElsewhereGetsAPlainMessage() {
+        let message = IdentityRules.linkFailureMessage(
+            errorCode: "identity_already_exists", provider: .apple
+        )
+        XCTAssertNotNil(message)
+        XCTAssertTrue(message!.contains("Apple ID already has its own Spendcap account"))
+        XCTAssertTrue(message!.contains("sign in with Apple"))
+    }
+
+    func testOtherLinkErrorsKeepTheServerMessage() {
+        XCTAssertNil(IdentityRules.linkFailureMessage(errorCode: "manual_linking_disabled", provider: .apple))
+        XCTAssertNil(IdentityRules.linkFailureMessage(errorCode: "", provider: .google))
+    }
 }

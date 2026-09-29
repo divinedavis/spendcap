@@ -65,6 +65,24 @@ enum IdentityRules {
             identity.socialProvider?.displayName ?? identity.provider.capitalized
         }.joined(separator: ", ")
     }
+
+    /// What to tell someone whose link attempt came back
+    /// `identity_already_exists`: that Apple or Google ID already signs into a
+    /// *different* Spendcap account, so it can't be attached to this one.
+    ///
+    /// GoTrue's own text ("Identity is already linked to another user") reads
+    /// as a crash. App Review hit exactly this on 2026-09-24: their Apple ID
+    /// had made its own account on 9/16, they then signed into the demo
+    /// account and tried to link it, and the rejection called Sign in with
+    /// Apple broken. Nil for any other code, which keeps the server's message.
+    static func linkFailureMessage(errorCode: String, provider: SocialProvider) -> String? {
+        guard errorCode == "identity_already_exists" else { return nil }
+        return """
+            This \(provider.displayName) ID already has its own Spendcap account, \
+            so it can't be added to this one. To open that account, sign out \
+            and sign in with \(provider.displayName).
+            """
+    }
 }
 
 /// Reads claims out of an ID token *without* verifying it.

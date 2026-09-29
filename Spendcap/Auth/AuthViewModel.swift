@@ -230,6 +230,10 @@ final class AuthViewModel: ObservableObject {
             }
             await self.loadIdentities()
         }
+        if let code = lastErrorCode,
+           let message = IdentityRules.linkFailureMessage(errorCode: code, provider: provider) {
+            errorMessage = message
+        }
     }
 
     /// Detaches a provider. Refuses to remove the last one — that would leave
@@ -300,14 +304,22 @@ final class AuthViewModel: ObservableObject {
         }
     }
 
+    /// GoTrue's error code from the last failed `run`, so a caller can swap
+    /// a raw server message for a useful one (see `link`).
+    private var lastErrorCode: String?
+
     private func run(_ block: @escaping () async throws -> Void) async {
         isLoading = true
         errorMessage = nil
         noticeMessage = nil
+        lastErrorCode = nil
         defer { isLoading = false }
         do {
             try await block()
         } catch {
+            if case let AuthError.api(_, code, _, _) = error {
+                lastErrorCode = code.rawValue
+            }
             errorMessage = error.localizedDescription
         }
     }

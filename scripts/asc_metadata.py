@@ -82,6 +82,9 @@ Plaid is running in PRODUCTION mode, which has no test institutions, so a review
 
 Sign in with "Continue with email" on the first screen using the demo credentials. Sign in with Apple and Google also work but would create a fresh, empty account.
 
+SIGN IN WITH APPLE (re: Guideline 2.1(a), 2026-09-24)
+Sign in with Apple is on the first screen. In the previous review, your Apple ID made its own Spendcap account on 9/16. Then on 9/24 it was linked to the demo account from Settings > Account, and the server refused, because one Apple ID can belong to only one Spendcap account. That showed an unhelpful raw error. We have removed the 9/16 account, so your Apple ID is free again: it can be linked to the demo account from Settings > Account > Link Apple, or used on the first screen to create a new, empty account. If an Apple ID already belongs to another account, the app now explains that in plain language.
+
 Settings > "Connect a bank" opens the real Plaid Link flow; without real bank credentials it cannot complete, which is expected. The demo account already has its bank connected.
 
 NOTIFICATIONS
