@@ -36,7 +36,7 @@ struct PlaidLinkFlow: View {
                 VStack(spacing: 12) {
                     ProgressView()
                     Text(mode == .connect ? "Connecting your bank…" : "Downloading your statements…")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                 }
             } else if let token = linkToken {
                 PlaidLinkController(

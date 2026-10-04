@@ -80,7 +80,7 @@ struct AuthView: View {
                 SpendcapMark()
                     .frame(width: stage >= .sheet ? 30 : 40)
                 Text("SPENDCAP")
-                    .font(.system(size: stage >= .sheet ? 24 : 30, weight: .semibold))
+                    .font(.system(stage >= .sheet ? .title2 : .title, weight: .semibold))
                     .tracking(6)
                     .foregroundStyle(.white)
             }
@@ -160,6 +160,7 @@ struct AuthView: View {
                     } label: {
                         Label("Continue with Google", systemImage: "g.circle.fill")
                             .font(.body.weight(.medium))
+                            .foregroundStyle(Color.primary)
                             .frame(maxWidth: .infinity, minHeight: 48)
                     }
                     .buttonStyle(.bordered)
@@ -174,7 +175,7 @@ struct AuthView: View {
                 VStack { Divider() }
                 Text("or")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
                 VStack { Divider() }
             }
             .reveal(order: 2, reduceMotion: reduceMotion)
@@ -244,6 +245,7 @@ struct AuthView: View {
                     auth.noticeMessage = nil
                 }
                 .font(.footnote)
+                .frame(minHeight: 44)
                 .accessibilityIdentifier("auth.toggleMode")
             }
             .frame(maxWidth: .infinity)

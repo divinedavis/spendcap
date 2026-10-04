@@ -32,6 +32,7 @@ final class MarketingScreenshots: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-UITestMode", "-UITestForceSignOut"]
         app.launch()
+        acceptNotificationPromptIfPresent()
 
         let emailField = app.textFields["auth.email"]
         XCTAssertTrue(emailField.waitForExistence(timeout: 15))

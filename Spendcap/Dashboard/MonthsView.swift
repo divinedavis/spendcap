@@ -209,7 +209,7 @@ struct MonthsView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(month?.label ?? "This month")
                     .font(.headline)
-                    .foregroundStyle(.white.opacity(0.9))
+                    .foregroundStyle(.white)
                 Spacer()
                 Button {
                     sheet = .caps
@@ -218,8 +218,12 @@ struct MonthsView: View {
                         .font(.footnote.weight(.bold))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Color.white.opacity(0.22), in: Capsule())
+                        // Darkened, not lightened: white text on a lighter
+                        // pill over the card failed the contrast audit.
+                        .background(Color.black.opacity(0.22), in: Capsule())
                         .foregroundStyle(.white)
+                        // No 44pt frame here: it pushed the button up into the
+                        // nav bar's scroll-edge strip, which eats touches.
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("months.setCap")
@@ -227,7 +231,7 @@ struct MonthsView: View {
 
             if let month, let remaining {
                 Text(BudgetMath.wholeDollars(abs(remaining)))
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
@@ -237,21 +241,24 @@ struct MonthsView: View {
                      ? "over your \(BudgetMath.wholeDollars(month.capCents)) cap for \(month.shortLabel)"
                      : "left of your \(BudgetMath.wholeDollars(month.capCents)) cap for \(month.shortLabel)")
                     .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.9))
+                    .foregroundStyle(.white)
                     .fixedSize(horizontal: false, vertical: true)
 
+                // The line above says the same thing in words, so the bar is
+                // hidden from VoiceOver rather than read as a 4pt control.
                 ProgressView(value: model.stats.currentCapProgress)
                     .tint(.white)
                     .background(Color.white.opacity(0.25), in: Capsule())
+                    .accessibilityHidden(true)
 
                 Text(capSourceLabel)
                     .font(.caption)
-                    .foregroundStyle(.white.opacity(0.8))
+                    .foregroundStyle(.white)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text("No spending on record for this month yet.")
                     .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.9))
+                    .foregroundStyle(.white)
             }
         }
         .padding(18)
@@ -260,14 +267,16 @@ struct MonthsView: View {
         .animation(.easeOut(duration: 0.3), value: model.stats.currentCapProgress)
     }
 
+    /// Deep enough that white text clears 4.5:1 on each (accessibility audit,
+    /// 2026-10-04): the old green, amber and red read 3.3, 2.6 and 4.1.
     private var capColor: Color {
         let progress = model.stats.currentCapProgress
         guard model.stats.currentMonth != nil else {
             return Color(red: 0.30, green: 0.33, blue: 0.38)
         }
-        if progress >= 1.0 { return Color(red: 0.89, green: 0.26, blue: 0.20) }
-        if progress >= 0.8 { return Color(red: 0.90, green: 0.55, blue: 0.09) }
-        return Color(red: 0.13, green: 0.63, blue: 0.36)
+        if progress >= 1.0 { return Color(red: 0xB3 / 255, green: 0x26 / 255, blue: 0x1E / 255) }   // 6.5:1
+        if progress >= 0.8 { return Color(red: 0x9A / 255, green: 0x54 / 255, blue: 0x00 / 255) }   // 5.8:1
+        return Color(red: 0x15 / 255, green: 0x70 / 255, blue: 0x3D / 255)                         // 6.2:1
     }
 
     /// Says out loud where the cap came from. A derived cap that nobody chose
@@ -293,7 +302,7 @@ struct MonthsView: View {
                     // with the title on a narrow phone, so it scales instead of
                     // wrapping mid-number.
                     Text(BudgetMath.wholeDollars(model.stats.totalCents))
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .font(.system(.title, design: .rounded, weight: .bold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
                         .accessibilityIdentifier("months.total")
@@ -301,11 +310,11 @@ struct MonthsView: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text(model.stats.coverageSubtitle)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                     Spacer(minLength: 12)
                     Text("Total spent")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                 }
             }
 
@@ -314,7 +323,7 @@ struct MonthsView: View {
                      ? "Loading\u{2026}"
                      : "No monthly history yet. Connect a bank on Home and your past months will fill in here.")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
                     .frame(maxWidth: .infinity, minHeight: 170, alignment: .center)
                     .multilineTextAlignment(.center)
             } else {
@@ -327,7 +336,7 @@ struct MonthsView: View {
                     Spacer()
                 }
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondaryText)
             }
 
             if let errorMessage = model.errorMessage {
@@ -368,7 +377,7 @@ struct MonthsView: View {
                     .annotation(position: .top, alignment: .leading) {
                         Text("Avg \(BudgetMath.wholeDollars(model.stats.averageCents))")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.secondaryText)
                     }
             }
         }
@@ -458,7 +467,7 @@ struct MonthsView: View {
             if rows.isEmpty {
                 Text("Once a bank is connected, every month it shares shows up here with its statement.")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
                     .padding(.vertical, 6)
             } else {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, month in
@@ -493,7 +502,7 @@ struct MonthsView: View {
                         .foregroundStyle(.primary)
                     Text(subtitle(for: month, statements: statements))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 8)
@@ -504,11 +513,11 @@ struct MonthsView: View {
                     if let changeLabel = month.changeLabel {
                         Text(changeLabel)
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.secondaryText)
                     } else if month.isCurrent {
                         Text("so far")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.secondaryText)
                     }
                 }
                 if !statements.isEmpty {
@@ -556,7 +565,7 @@ struct MonthsView: View {
 
             Text("Start of the 1st to end of the last day, from your balance and posted transactions.")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 2)
         }
@@ -575,7 +584,7 @@ struct MonthsView: View {
                     .foregroundStyle(.primary)
                 Text("\(BudgetMath.dollars(month.startCents)) \u{2192} \(BudgetMath.dollars(month.endCents))\(month.isCurrent ? " today" : "")")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -587,7 +596,7 @@ struct MonthsView: View {
                 if month.isCurrent {
                     Text("so far")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                 }
             }
         }

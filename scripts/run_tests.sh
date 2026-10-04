@@ -7,6 +7,12 @@
 #   ./scripts/run_tests.sh ui                    # XCUITest sweep only
 #   ./scripts/run_tests.sh unit MonthMathTests                       # one class
 #   ./scripts/run_tests.sh ui SpendcapUITests/testHomeAndTrendsTabs  # one test
+#   ./scripts/run_tests.sh ship <bundle.xcresult>  # ship gate: unit + UI in one
+#                                     run, code coverage on, a failure retried once
+#   ./scripts/run_tests.sh perf <bundle.xcresult>  # PerformanceTests only
+#
+# PerformanceTests are left out of unit/ui/all (they take minutes and are
+# judged by scripts/perf_gate.py, not by pass/fail); ship.sh runs them in perf.
 #
 # Memory rule: this must pass before each TestFlight ship.
 
@@ -77,16 +83,22 @@ fi
 
 run_xcodebuild_test() {
     local only_target="$1"
+    shift
     local args=(
         -project "$PROJECT"
         -scheme "$SCHEME"
         -destination "platform=iOS Simulator,id=$SIMULATOR_ID"
         -derivedDataPath "$DERIVED_DATA"
         -skipPackagePluginValidation
+        "$@"
         test
     )
+    # Skipped unless named: by the perf mode, or as an explicit filter.
+    if [[ "$MODE" != "perf" && ( -z "$ONLY" || "$MODE" == "ship" ) ]]; then
+        args+=(-skip-testing:"$UI_TARGET/PerformanceTests")
+    fi
     if [[ -n "$only_target" ]]; then
-        if [[ -n "$ONLY" ]]; then
+        if [[ -n "$ONLY" && "$MODE" != "ship" && "$MODE" != "perf" ]]; then
             # "Class" runs a whole class; "Class/testName" runs one test.
             args+=(-only-testing:"$only_target/$ONLY")
         else
@@ -97,6 +109,24 @@ run_xcodebuild_test() {
 }
 
 case "$MODE" in
+    ship)
+        # One run so one result bundle holds the Swift Testing count, the
+        # audit and the coverage the gates read. A test that fails once is
+        # retried once: the suite flakes on a shared Mac (two different
+        # post-sign-in tests failed in the 2026-10-04 sweep, each passing
+        # alone). A test that is actually broken fails twice.
+        bundle="${ONLY:?usage: run_tests.sh ship <bundle.xcresult>}"
+        rm -rf "$bundle"
+        echo "==> running unit + UI tests (ship gate)"
+        run_xcodebuild_test "" -enableCodeCoverage YES -resultBundlePath "$bundle" \
+            -retry-tests-on-failure -test-iterations 2
+        ;;
+    perf)
+        bundle="${ONLY:?usage: run_tests.sh perf <bundle.xcresult>}"
+        rm -rf "$bundle"
+        echo "==> running PerformanceTests"
+        run_xcodebuild_test "$UI_TARGET/PerformanceTests" -resultBundlePath "$bundle"
+        ;;
     unit)
         echo "==> running unit tests"
         run_xcodebuild_test "$UNIT_TARGET"

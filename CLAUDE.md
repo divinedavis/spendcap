@@ -471,10 +471,12 @@ Homebrew 3.14 upgrade has no Pillow/requests. Run them with
 1. **Push to GitHub after every change.** Build first
    (`xcodebuild ... CODE_SIGNING_ALLOWED=NO`), commit only if green, `git add`
    specific files (never `-A` blindly), verify no secret files staged, push.
-2. **Ship TestFlight after every app-code change** — `./scripts/ship.sh`
-   (`SHIP_RUN_UI=1` to gate on UI tests too). ship.sh now runs
-   `./scripts/smoke_test.sh` itself, so the launch gate is automatic
-   (`SHIP_SKIP_SMOKE=1` to escape it when no simulator is free).
+2. **Ship TestFlight after every app-code change** — `./scripts/ship.sh`.
+   It runs the quality gates below (the whole UI suite included — it is no
+   longer opt-in) and `./scripts/smoke_test.sh` before anything is uploaded
+   (`SHIP_SKIP_SMOKE=1` to escape the smoke launch when no simulator is free).
+   Pass `SIMULATOR_ID=<udid>` to keep it off a simulator another session is
+   driving.
 3. **Run `./scripts/run_tests.sh` before shipping.** Review whether each UI
    change needs a new XCUITest; note the decision in the commit message.
    Filters: `run_tests.sh unit MonthMathTests`,
@@ -753,6 +755,47 @@ python3 scripts/attach_build.py            # newest VALID build -> version 1.0
 python3 scripts/attach_build.py --dry-run  # just report what is attached now
 ```
 
+## Quality gates (2026-10-04)
+
+Apple's four checks, required before every TestFlight push for every iOS app
+(owner, 2026-10-02), all run by `ship.sh` and all following the app as screens
+come and go:
+
+| Gate | Where | Fails the ship when |
+|---|---|---|
+| Swift Testing | `SpendcapTests/SpendcapInvariantTests.swift` (parameterized `@Test` suites) | no Swift Testing case passed (counted from the result bundle) |
+| XCUITest + accessibility audit | `SpendcapUITests/AccessibilityAuditTests.swift` | any test fails twice, or the audit did not run |
+| XCTMetric performance | `SpendcapUITests/PerformanceTests.swift` + `scripts/perf_gate.py` | a metric's median is >1.5x the median of the last 5 passing ships (`scripts/perf_baseline.json`) |
+| MetricKit | `Spendcap/Services/MetricsReporter.swift`, started in `AppDelegate` | the subscriber is no longer wired |
+| Coverage | `scripts/coverage_gate.py` | a `*View`/`*Editor` screen file no test executed, or a UI test queries an identifier the app no longer has |
+
+`scripts/organizer_report.py` prints Xcode Organizer field data (launch, hangs,
+memory, diagnostic signatures) from the ASC API on every ship — report only.
+
+- **The audit reads tabs off the tab bar at run time** and audits sign-in plus
+  every tab in light AND dark, then checks every tab still opens at the largest
+  accessibility text size. Excuses live in `excused(_:)` with reasons; fix the
+  view instead of adding one.
+- **What it changed on first run:** `.secondary` text was 3.4:1 on a white
+  card, so `Color.secondaryText`/`dangerText`/`warningText`
+  (`App/ReadableColors.swift`) replace the system styles; the light-mode
+  AccentColor went #34C759 → #1A7F37 (2.2 → 5.1:1 as text; dark mode keeps
+  the brand green); the Months cap card's green/amber/red were deepened so its
+  white text passes; the big money figures use text styles instead of fixed
+  point sizes; Debt totals carry spoken labels ("762 dollars"); small buttons
+  got 44pt targets.
+- **MetricKit only logs on device.** Spendcap's App Privacy label declares no
+  crash or performance data, so nothing is sent; sending it is an owner call
+  that needs a label change first.
+- **iOS's notification prompt poisons a simulator.** Any launch without
+  `-UITestMode` that lands signed in (the smoke test, a manual run) raises it;
+  it belongs to SpringBoard and survives relaunch, after which every UI test
+  sees an inactive app ("auth screen should appear", audit error -902). Every
+  test launch calls `acceptNotificationPromptIfPresent()`.
+- `run_tests.sh` leaves `PerformanceTests` out of `unit`/`ui`/`all`; `ship`
+  mode runs unit + UI once with coverage and one retry, `perf` mode runs only
+  the performance tests.
+
 ## Keychain entries
 
 - `spendcap-supabase-db-password` — Postgres password
@@ -773,10 +816,11 @@ python3 scripts/attach_build.py --dry-run  # just report what is attached now
 |---|---|
 | `generate.sh` | Regenerate `.xcodeproj` from `project.yml` (run after adding files) |
 | `make_icon.py [--check]` | Redraw the logo (app icon + `marketing/`); `--check` gates `run_tests.sh` |
-| `run_tests.sh [unit\|ui\|all] [Class[/test]]` | Full sweep; gates every ship |
+| `run_tests.sh [unit\|ui\|all] [Class[/test]]` | Full sweep (`ship`/`perf <bundle>` modes for ship.sh) |
+| `coverage_gate.py` / `perf_gate.py` / `organizer_report.py` | Quality gates — see "Quality gates" |
 | `smoke_test.sh` | Build → install → cold-launch in a sim; proves the app starts |
 | `capture_screenshots.sh` | Signed-in App Store / portfolio PNGs from XCUITest |
-| `ship.sh` | tests → smoke → bump build → archive → TestFlight → verify testers |
+| `ship.sh` | quality gates → smoke → bump build → archive → TestFlight → verify testers |
 | `register_in_asc.py` / `configure_internal_testers.py` | ASC bootstrap + tester group |
 | `asc_enable_capability.py <CAP>` | Toggle an App ID capability (`--list` to inspect) |
 | `attach_build.py` | Attach the newest build to the App Store version (drives the ASC icon) |

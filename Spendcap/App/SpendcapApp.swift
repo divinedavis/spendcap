@@ -4,6 +4,14 @@ import UIKit
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(
         _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        MetricsReporter.shared.start()
+        return true
+    }
+
+    func application(
+        _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
         Task { @MainActor in
@@ -104,7 +112,7 @@ struct PrivacyRedactionView: View {
             VStack(spacing: 16) {
                 Image(systemName: "lock.shield.fill")
                     .font(.system(size: 44))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
                 Text("Spendcap")
                     .font(.title.weight(.bold))
             }

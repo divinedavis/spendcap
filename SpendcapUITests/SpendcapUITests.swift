@@ -16,6 +16,7 @@ final class SpendcapUITests: XCTestCase {
             }
         }
         app.launch()
+        acceptNotificationPromptIfPresent()
         return app
     }
 
@@ -375,6 +376,9 @@ final class SpendcapUITests: XCTestCase {
 
         // The monthly cap is configurable from this screen: without it the
         // over/under verdict is derived from a daily figure nobody chose.
+        // The "Save Password?" sheet can land this late and cover the card
+        // (seen 2026-10-04: the Edit button read "not hittable" under it).
+        dismissSavePasswordPromptIfPresent(timeout: 2)
         app.buttons["months.setCap"].tap()
         let monthlyField = app.descendants(matching: .any)
             .matching(identifier: "budget.monthlyLimit").firstMatch

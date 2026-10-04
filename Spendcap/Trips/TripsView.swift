@@ -189,7 +189,7 @@ struct TripRow: View {
                     .font(.body.weight(.medium))
                 Text(subtitle)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
             }
 
             Spacer(minLength: 8)
@@ -200,7 +200,7 @@ struct TripRow: View {
                 if let cap = trip.capCents {
                     Text("of \(BudgetMath.wholeDollars(cap))")
                         .font(.caption)
-                        .foregroundStyle(status == .over ? .red : .secondary)
+                        .foregroundStyle(status == .over ? Color.dangerText : Color.secondaryText)
                 } else {
                     // No plan and no budget: a total is all we can honestly say.
                     Text("no budget")
@@ -225,7 +225,7 @@ private struct TripsEmptyState: View {
                 .font(.headline)
             Text("A trip holds its own budget — flights, hotel, food, anything you add. Spending you put on a trip stops counting against your daily cap, so a hotel booking won't fire an over-cap alert.")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondaryText)
                 .multilineTextAlignment(.center)
             Button("Create a trip", action: onCreate)
                 .buttonStyle(.borderedProminent)

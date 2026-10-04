@@ -81,7 +81,7 @@ struct BudgetView: View {
                                 monthlyLimitText = ""
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(Color.secondaryText)
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("budget.clearMonthly")

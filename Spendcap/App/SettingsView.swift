@@ -22,7 +22,7 @@ struct SettingsView: View {
                             if let email = identity.email, email != auth.userEmail {
                                 Text(email)
                                     .font(.footnote)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(Color.secondaryText)
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                             }
@@ -62,7 +62,7 @@ struct SettingsView: View {
                 Section {
                     if items.isEmpty {
                         Text("No banks connected")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.secondaryText)
                     }
                     ForEach(items) { item in
                         HStack {
@@ -71,9 +71,12 @@ struct SettingsView: View {
                             if item.status != "active" {
                                 Text(item.status.capitalized)
                                     .font(.caption)
-                                    .foregroundStyle(.orange)
+                                    .foregroundStyle(Color.warningText)
                             }
                         }
+                        // One element per bank: the status badge alone was a
+                        // 33x14 target the audit failed.
+                        .accessibilityElement(children: .combine)
                     }
                     .onDelete { indexSet in
                         Task { await disconnect(indexSet) }

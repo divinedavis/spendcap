@@ -53,11 +53,12 @@ struct ActivityView: View {
                     LabeledContent("Transactions", value: "\(model.count)")
                     if model.pendingCount > 0 {
                         LabeledContent("Still pending") {
-                            Text("\(model.pendingCount)").foregroundStyle(.secondary)
+                            Text("\(model.pendingCount)").foregroundStyle(Color.secondaryText)
                         }
                     }
                 } header: {
                     Text(monthLabel)
+                        .foregroundStyle(Color.secondaryText)
                 } footer: {
                     if model.pendingCount > 0 {
                         Text("Pending amounts can change before they post, so this month's total is not final.")
@@ -97,6 +98,7 @@ struct ActivityView: View {
                             "Nothing yet this month",
                             systemImage: "list.bullet",
                             description: Text("Transactions appear here as your bank reports them.")
+                                .foregroundStyle(Color.secondaryText)
                         )
                     }
                 }
@@ -128,7 +130,7 @@ struct ActivityView: View {
                     }
                 }
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondaryText)
                 .lineLimit(1)
             }
             Spacer(minLength: 8)

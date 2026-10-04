@@ -221,13 +221,14 @@ struct DebtView: View {
         SurfaceCard {
             Text("Every month")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondaryText)
             Text(BudgetMath.dollars(model.summary.plannedCents))
-                .font(.system(size: 40, weight: .bold, design: .rounded))
+                .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                .accessibilityLabel(BudgetMath.spoken(model.summary.plannedCents))
                 .accessibilityIdentifier("debt.total")
             Text("across \(model.summary.itemCount) item\(model.summary.itemCount == 1 ? "" : "s") in \(model.summary.groups.count) group\(model.summary.groups.count == 1 ? "" : "s")")
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondaryText)
 
             if model.summary.hasTrackedItems {
                 Divider()
@@ -235,23 +236,25 @@ struct DebtView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Paid so far this month")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.secondaryText)
                         Text(BudgetMath.dollars(model.summary.paidCents))
                             .font(.headline)
+                            .accessibilityLabel(BudgetMath.spoken(model.summary.paidCents))
                             .accessibilityIdentifier("debt.paid")
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
                         Text("Still expected")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.secondaryText)
                         Text(BudgetMath.dollars(model.summary.outstandingCents))
                             .font(.headline)
+                            .accessibilityLabel(BudgetMath.spoken(model.summary.outstandingCents))
                     }
                 }
                 Text("Paid counts only the items with a match set, so it can be smaller than the total above.")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
             }
         }
     }
@@ -269,13 +272,14 @@ struct DebtView: View {
                 Text(BudgetMath.dollars(group.plannedCents))
                     .font(.title3.weight(.bold))
                     .monospacedDigit()
+                    .accessibilityLabel(BudgetMath.spoken(group.plannedCents))
                     .accessibilityIdentifier("debt.groupTotal")
             }
 
             if group.isEmpty {
                 Text("Nothing in this group yet.")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
             } else {
                 ForEach(group.vendors) { vendor in
                     vendorRows(vendor)
@@ -293,6 +297,8 @@ struct DebtView: View {
                 } label: {
                     Label("Add item", systemImage: "plus.circle.fill")
                         .font(.subheadline)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityIdentifier("debt.addItem")
                 Spacer()
@@ -301,6 +307,9 @@ struct DebtView: View {
                 } label: {
                     Text("Delete group")
                         .font(.caption)
+                        .foregroundStyle(Color.dangerText)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                 }
             }
         }
@@ -368,7 +377,7 @@ struct DebtView: View {
                 .font(.title3.weight(.bold))
             Text("Group your subscriptions, loans and buy-now-pay-later plans, and Spendcap will total each group and show what has already posted this month.")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondaryText)
             Button {
                 Task { await model.seed() }
             } label: {
@@ -403,7 +412,7 @@ struct DebtVendorHeaderRow: View {
                     .foregroundStyle(.primary)
                 Text(subtitle)
                     .font(.caption2)
-                    .foregroundStyle(vendor.txnCount > 0 ? Color.green : Color.secondary)
+                    .foregroundStyle(vendor.txnCount > 0 ? Color.green : Color.secondaryText)
             }
             Spacer(minLength: 8)
             Text(BudgetMath.dollars(vendor.plannedCents))
@@ -443,11 +452,11 @@ struct DebtItemRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(nested ? .subheadline : .body.weight(.medium))
-                    .foregroundStyle(nested ? Color.secondary : Color.primary)
+                    .foregroundStyle(nested ? Color.secondaryText : Color.primary)
                 if !nested, let note = row.note, !note.isEmpty {
                     Text(note)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                 }
                 Text(statusText)
                     .font(.caption2)
@@ -478,7 +487,8 @@ struct DebtItemRow: View {
     }
 
     private var statusColor: Color {
-        guard row.isTracked else { return .secondary }
-        return row.txnCount == 0 ? .secondary : .green
+        // Accent, not system green: #34C759 is 2.2:1 as text on a white card.
+        guard row.isTracked else { return .secondaryText }
+        return row.txnCount == 0 ? .secondaryText : .accentColor
     }
 }

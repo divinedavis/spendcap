@@ -53,6 +53,19 @@ extension XCTestCase {
         dismissSavePasswordPromptIfPresent()
     }
 
+    /// Accepts iOS's "Would Like to Send You Notifications" prompt if one is
+    /// up. It belongs to SpringBoard, outlives the app, and survives relaunch:
+    /// any launch without -UITestMode that lands signed in (the ship's smoke
+    /// test, a manual run) raises it, and from then on every test on that
+    /// simulator sees an inactive app behind it — the sign-in screen "never
+    /// appears" and the accessibility audit fails with -902. Allowing it
+    /// (rather than refusing) keeps it from coming back. 2026-10-04.
+    func acceptNotificationPromptIfPresent(timeout: TimeInterval = 2) {
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let allow = springboard.alerts.buttons["Allow"]
+        if allow.waitForExistence(timeout: timeout) { allow.tap() }
+    }
+
     @discardableResult
     func dismissSavePasswordPromptIfPresent(timeout: TimeInterval = 0) -> Bool {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")

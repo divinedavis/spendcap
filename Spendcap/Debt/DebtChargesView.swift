@@ -128,7 +128,7 @@ struct DebtChargesView: View {
                             Text(window == .thisMonth
                                  ? "Nothing has posted against this yet this month."
                                  : "Nothing has posted against this in the last six months.")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color.secondaryText)
                         } footer: {
                             Text(window == .thisMonth
                                  ? "Widen the window above to see whether it charged in earlier months."
@@ -189,7 +189,7 @@ struct DebtChargesView: View {
                 LabeledContent(window == .thisMonth ? "Charged this month" : "Charged over six months") {
                     Text(BudgetMath.dollars(totalCents))
                         .monospacedDigit()
-                        .foregroundStyle(charges.isEmpty ? Color.secondary : Color.green)
+                        .foregroundStyle(charges.isEmpty ? Color.secondaryText : Color.green)
                 }
                 .accessibilityIdentifier("debtCharges.total")
                 Picker("Window", selection: $window) {
@@ -215,7 +215,7 @@ struct DebtChargesView: View {
             if owned.isEmpty {
                 Text(item.isTracked ? "Nothing this window." : "Not tracked.")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
             } else {
                 ForEach(owned) { charge in
                     chargeRow(charge, lineName: item.itemName ?? target.title)
@@ -261,7 +261,7 @@ struct DebtChargesView: View {
                         .lineLimit(1)
                     Text(DebtChargeMath.dayLabel(charge.transaction.date))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
@@ -270,7 +270,7 @@ struct DebtChargesView: View {
                     if charge.transaction.pending {
                         Text("Pending")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.secondaryText)
                     }
                 }
             }
@@ -291,7 +291,7 @@ struct DebtChargesView: View {
                         Text(item.note?.isEmpty == false ? item.note! : (item.itemName ?? "Item"))
                         Text("No match set, so nothing can be looked up for it.")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.secondaryText)
                     }
                 }
             } header: {

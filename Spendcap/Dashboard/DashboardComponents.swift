@@ -42,7 +42,7 @@ struct SectionHeader: View {
             if let actionSystemImage, let action {
                 Button(action: action) {
                     Image(systemName: actionSystemImage)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                 }
                 .accessibilityLabel("\(title) options")
             }
@@ -89,7 +89,7 @@ struct DashboardRow: View {
                 if let subtitle {
                     Text(subtitle)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                         .lineLimit(1)
                 }
             }
@@ -101,7 +101,7 @@ struct DashboardRow: View {
                 if let valueCaption {
                     Text(valueCaption)
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                 }
             }
         }
@@ -145,7 +145,7 @@ struct AnnouncementCard: View {
                         .font(.headline)
                     Text(message)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 4)
@@ -153,7 +153,7 @@ struct AnnouncementCard: View {
                     Button(action: onDismiss) {
                         Image(systemName: "xmark")
                             .font(.footnote.weight(.bold))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.secondaryText)
                     }
                     .accessibilityLabel("Dismiss")
                 }
@@ -181,7 +181,7 @@ struct PromptCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                     Text(message)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -215,7 +215,7 @@ struct SuggestionCard: View {
                     .multilineTextAlignment(.leading)
                 Text(message)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)

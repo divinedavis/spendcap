@@ -327,7 +327,7 @@ struct TrendsView: View {
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(BudgetMath.dollars(model.stats.spentCents))
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .font(.system(.title, design: .rounded, weight: .bold))
                         .accessibilityIdentifier("trends.monthSpend")
                     // The weekly free-to-spend figure came off this card on
                     // 2026-08-19. The arithmetic was right, but the week it
@@ -346,7 +346,7 @@ struct TrendsView: View {
                     // truthful without rebuilding any of it.
                     Text(period.spentCaption)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                 }
             }
 
@@ -357,7 +357,7 @@ struct TrendsView: View {
                         ? "No spending recorded this month yet."
                         : "No spending recorded in \(monthLabel)."))
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
                     .frame(maxWidth: .infinity, minHeight: 170)
             } else {
                 chart
@@ -392,7 +392,7 @@ struct TrendsView: View {
             .frame(width: 20, height: 2)
             .accessibilityHidden(true)
             Text(title)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondaryText)
         }
         .accessibilityElement(children: .combine)
     }
@@ -469,19 +469,19 @@ struct TrendsView: View {
                         .font(.title3.weight(.bold))
                     Text("Checking on \(forecast.monthEndLabel)")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                 }
                 Spacer(minLength: 8)
                 VStack(alignment: .trailing, spacing: 2) {
                     Text((negative ? "\u{2212}" : "") + BudgetMath.dollars(abs(projected)))
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .font(.system(.title, design: .rounded, weight: .bold))
                         .foregroundStyle(negative ? Color.red : Color.primary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
                         .accessibilityIdentifier("trends.forecastBalance")
                     Text(negative ? "short at month end" : "left at month end")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                 }
             }
 
@@ -541,7 +541,7 @@ struct TrendsView: View {
                         Spacer()
                         Image(systemName: showsPredicted ? "chevron.up" : "chevron.down")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.secondaryText)
                     }
                     .contentShape(Rectangle())
                 }
@@ -553,7 +553,7 @@ struct TrendsView: View {
                         HStack(spacing: 12) {
                             Text(item.dateLabel)
                                 .font(.caption.monospacedDigit())
-                                .foregroundStyle(item.isOverdue ? Color.orange : Color.secondary)
+                                .foregroundStyle(item.isOverdue ? Color.orange : Color.secondaryText)
                                 .frame(width: 52, alignment: .leading)
                             VStack(alignment: .leading, spacing: 1) {
                                 // Two lines: a bank descriptor ("ACME CORP
@@ -583,7 +583,7 @@ struct TrendsView: View {
 
             Text("From \(forecast.windowLabel): a regular is anything that came in or went out most months, up to three times a month, on about the same day. Everything else is averaged into everyday spending. Money in only counts when it is regular.")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 2)
         }
@@ -629,7 +629,7 @@ struct TrendsView: View {
                             .accessibilityIdentifier("trends.categoryTotalSpent")
                         HStack(spacing: 5) {
                             Text("of \(BudgetMath.wholeDollars(month.plannedCents)) planned")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color.secondaryText)
                                 .accessibilityIdentifier("trends.categoryTotalPlanned")
                             if month.overCount > 0 {
                                 Text("\(month.overCount) over")
@@ -693,7 +693,7 @@ struct TrendsView: View {
                             .font(.headline)
                         Text("Set a planned amount per line in Settings \u{203A} Budget by category, and this month and last will be measured against it here.")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.secondaryText)
                             .fixedSize(horizontal: false, vertical: true)
                             .multilineTextAlignment(.leading)
                     }

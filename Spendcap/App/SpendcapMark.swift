@@ -109,7 +109,7 @@ extension Color {
     VStack(spacing: 24) {
         SpendcapIcon(size: 120)
         SpendcapMark().frame(width: 64)
-        SpendcapMark(monochrome: true).frame(width: 40).foregroundStyle(.secondary)
+        SpendcapMark(monochrome: true).frame(width: 40).foregroundStyle(Color.secondaryText)
     }
     .padding()
 }

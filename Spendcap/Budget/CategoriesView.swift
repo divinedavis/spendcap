@@ -290,20 +290,20 @@ struct CategoryLineRow: View {
                 HStack {
                     Text("of \(BudgetMath.wholeDollars(row.plannedCents)) planned")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                     Spacer()
                     Text(row.isOver
                          ? "\(BudgetMath.wholeDollars(-row.remainingCents)) over"
                          : "\(BudgetMath.wholeDollars(row.remainingCents)) left")
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(row.isOver ? .red : .secondary)
+                        .foregroundStyle(row.isOver ? Color.dangerText : Color.secondaryText)
                 }
             } else {
                 Text(row.isUncategorized
                      ? "\(row.txnCount) transaction\(row.txnCount == 1 ? "" : "s") that no category claims"
                      : "No planned amount set")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
             }
         }
         .padding(.vertical, 8)
@@ -391,7 +391,7 @@ struct CategoryEditView: View {
                         ProgressView()
                     } else if transactions.isEmpty {
                         Text("Nothing landed here this month.")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.secondaryText)
                     } else {
                         ForEach(transactions) { txn in
                             NavigationLink {
@@ -406,7 +406,7 @@ struct CategoryEditView: View {
                                             .lineLimit(1)
                                         Text(txn.date)
                                             .font(.caption)
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(Color.secondaryText)
                                     }
                                     Spacer()
                                     VStack(alignment: .trailing, spacing: 2) {
@@ -415,7 +415,7 @@ struct CategoryEditView: View {
                                         if txn.pending {
                                             Text("Pending")
                                                 .font(.caption2)
-                                                .foregroundStyle(.secondary)
+                                                .foregroundStyle(Color.secondaryText)
                                         }
                                     }
                                 }
@@ -428,7 +428,7 @@ struct CategoryEditView: View {
                         Text(periodLabel)
                         Spacer()
                         Text(BudgetMath.dollars(row.spentCents))
-                            .foregroundStyle(row.isOver ? .red : .secondary)
+                            .foregroundStyle(row.isOver ? Color.dangerText : Color.secondaryText)
                     }
                 } footer: {
                     if !transactions.isEmpty {

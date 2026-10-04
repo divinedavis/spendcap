@@ -175,7 +175,7 @@ struct TripDetailView: View {
                                     .font(.body.weight(.medium))
                                 Text("Not on this trip yet — review them")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(Color.secondaryText)
                             }
                             Spacer()
                             Image(systemName: "chevron.right")
@@ -221,7 +221,7 @@ struct TripDetailView: View {
                     if model.settledCount > 0 {
                         Text("\(model.settledCount) of \(model.settleableLines.count) done")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.secondaryText)
                             .accessibilityIdentifier("trip.settledCount")
                     }
                 }
@@ -337,15 +337,15 @@ private struct TripSummaryCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(model.spentCents == 0 ? "Nothing spent yet" : "Spent so far")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
                 Text(BudgetMath.dollars(model.spentCents))
-                    .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
+                    .font(.system(.largeTitle, design: .rounded, weight: .bold).monospacedDigit())
                     .foregroundStyle(model.status.tint)
                     .accessibilityIdentifier("trip.spent")
                 if !subtitle.isEmpty {
                     Text(subtitle)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                 }
             }
 
@@ -364,12 +364,12 @@ private struct TripSummaryCard: View {
                             .foregroundStyle(remaining >= 0 ? .secondary : Color.red)
                     }
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
                 }
             } else {
                 Text("No budget set. Add planned costs below, or set a total in Edit.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -426,7 +426,7 @@ private struct TripLineRow: View {
                 if !detail.isEmpty {
                     Text(detail)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                 }
             }
 
@@ -475,7 +475,7 @@ private struct TripTransactionRow: View {
                     }
                 }
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondaryText)
             }
             Spacer(minLength: 8)
             Text(BudgetMath.dollars(transaction.amountCents))
@@ -506,7 +506,7 @@ struct TripReviewView: View {
                                 Text(candidate.title).font(.body).lineLimit(1)
                                 Text(TripMath.dateRangeLabel(startsOn: candidate.date, endsOn: candidate.date) ?? candidate.date)
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(Color.secondaryText)
                             }
                             Spacer(minLength: 8)
                             Text(BudgetMath.dollars(candidate.amountCents))

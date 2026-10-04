@@ -86,7 +86,7 @@ struct StatementsView: View {
                     .font(.headline)
                 Text("Your bank shares transactions with Spendcap, but statements need their own approval. This reuses your existing connection — it won't add a second bank.")
                     .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
                 Button("Approve with your bank") {
                     showingConsentFlow = true
                 }
@@ -113,7 +113,7 @@ struct StatementsView: View {
                     if let account = statement.accountLabel, statement.isAvailable {
                         Text(account)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.secondaryText)
                             .lineLimit(1)
                     }
                     if let sizeLabel = statement.sizeLabel, statement.isAvailable {
@@ -123,7 +123,7 @@ struct StatementsView: View {
                     } else if !statement.isAvailable {
                         Text("Couldn't download — pull to retry")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.secondaryText)
                     }
                 }
                 Spacer()
