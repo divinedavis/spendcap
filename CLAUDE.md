@@ -728,6 +728,16 @@ the two sets of numbers and `run_tests.sh` runs it, so editing one and not the
 other fails the sweep instead of shipping two different logos. Never hand-edit
 `icon-1024.png` — regenerate it.
 
+**The sign-in screen opens with an intro (2026-10-04, user request, modelled
+on a screen recording).** Dark field → centred mark + SPENDCAP wordmark → a
+light sheet with a curved top sweeps up, the wordmark settles top-left, and
+the form fades in row by row. Load-bearing: the form is *inserted* only once
+the sheet has landed (XCUITest asserts `auth.submit` is hittable the instant
+`auth.email` exists), the sheet rises over the header while a field is
+focused (otherwise the keyboard covers `auth.password` and every sign-in test
+fails), the intro waits for an active scene (RootView's privacy cover is up
+for a beat on cold launch), and Reduce Motion skips straight to the form.
+
 **The launch screen is deliberately unbranded.** `UILaunchScreen`'s
 `UIImageName` scales its image to fill the screen rather than centring it at a
 natural size, so it cannot be matched to `LaunchPlaceholderView` — and those
