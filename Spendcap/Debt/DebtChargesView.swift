@@ -191,7 +191,7 @@ struct DebtChargesView: View {
                     .monospacedDigit()
             }
             if target.items.contains(where: \.isAutoAmount) {
-                Text("Worked out from the charges: the typical month of the three full months before \(month == .current ? "this one" : month.label()).")
+                Text("What was paid the month before \(month == .current ? "this one" : month.label()).")
                     .font(.caption)
                     .foregroundStyle(Color.secondaryText)
             }

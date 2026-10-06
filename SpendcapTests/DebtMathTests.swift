@@ -262,15 +262,21 @@ final class DebtMathTests: XCTestCase {
                        summary.plannedCents)
     }
 
-    /// A bill added today has a match and no history yet; $0 would be a lie,
-    /// so the typed figure stands until there is something to measure.
-    func testTrackedItemWithNoHistoryKeepsTheTypedAmount() {
-        let r = DebtSummaryRow(
+    /// "Usually" means what was paid last month (owner, 2026-10-06), so a
+    /// tracked item that paid nothing last month usually costs $0 — the typed
+    /// figure is only for an item that can never be seen paying.
+    func testUsualIsLastMonthEvenWhenLastMonthWasZero() {
+        let tracked = DebtSummaryRow(
             groupId: subscriptions, groupName: "Subscriptions", groupSort: 0,
             itemId: UUID(), itemName: "New gym", plannedCents: 4_500,
             matchValue: "GYM", typicalCents: 0, monthsSeen: 0)
-        XCTAssertFalse(r.isAutoAmount)
-        XCTAssertEqual(r.monthlyCents, 4_500)
+        XCTAssertTrue(tracked.isAutoAmount)
+        XCTAssertEqual(tracked.monthlyCents, 0)
+
+        let untracked = DebtSummaryRow(
+            groupId: subscriptions, groupName: "Subscriptions", groupSort: 0,
+            itemId: UUID(), itemName: "401k loan", plannedCents: 4_500)
+        XCTAssertEqual(untracked.monthlyCents, 4_500)
     }
 
     /// Postgres bigint arrives as a number or a string; both must decode, and

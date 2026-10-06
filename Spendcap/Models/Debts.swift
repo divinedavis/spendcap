@@ -25,19 +25,20 @@ struct DebtSummaryRow: Codable, Identifiable, Equatable {
     let matchValue: String?
     let matchAmountCents: Int?
     let itemSort: Int
-    /// The median of the three full months before the viewed one, zeros
-    /// included (0031). Nil from a server that predates it.
+    /// What was paid against this item the month before the viewed one
+    /// (0032; 0031 used a three-month median). Nil from an older server.
     let typicalCents: Int?
-    /// How many of those three months charged at all.
+    /// 1 when anything posted that previous month, else 0.
     let monthsSeen: Int
 
     var id: String { itemId?.uuidString ?? "empty-\(groupId.uuidString)" }
 
-    /// True when the monthly figure comes from the item's own charges rather
-    /// than what was typed. A tracked row with any charge in the last three
-    /// full months is measured; one with none — a bill added today, or one
-    /// paid outside the linked account — still needs the typed number.
-    var isAutoAmount: Bool { isTracked && monthsSeen > 0 && typicalCents != nil }
+    /// True when "usually" comes from the item's own charges: any tracked row,
+    /// whose usual amount is simply last month's paid figure — $0 included,
+    /// because "usually" means "what I paid last month" (owner, 2026-10-06).
+    /// Only an untracked row, which can never be seen paying, falls back to
+    /// the typed number.
+    var isAutoAmount: Bool { isTracked && typicalCents != nil }
 
     /// What this obligation costs a month, as every total on the tab reads it.
     /// The typed plan was the weakest number on the screen — 17 of the owner's

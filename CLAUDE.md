@@ -692,6 +692,19 @@ through and adds $0; the card reports those as "Not seen, left out". The current
 month keeps the measured amount, because a row not seen yet may just not have
 billed yet.
 
+**"Usually" is last month's paid figure (0032, same day)** — the owner's
+definition, replacing 0031's three-month median. A tracked item that paid
+nothing last month usually costs $0; only an untracked item uses its typed
+amount. 0032 changes only the `typical` CTE and the history window.
+
+**Match values drift when a merchant renames itself.** September's figures were
+short because HBO Max started billing as "Max" (its item matched "HBOMAX") and
+Netflix, Roku, OpenAI and Comoco had no item at all. Fixed in the data: HBO Max
+matches `MAX` qualified by its $18.49 price (a bare "max" would claim any
+merchant with those letters), and the four were added. Nothing on the tab
+discovers a new subscription by itself yet: `sync_debt_items_from_budget` only
+picks up LOAN_PAYMENTS on debt-kind budget lines.
+
 **Every figure on the tab is what was paid** (owner, same day — first the group
 header, then "this subscriptions total is not accurate" of a $76.21 header over
 rows showing usual amounts like $82.99). The header was right; the rows could

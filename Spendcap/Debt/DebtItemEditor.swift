@@ -69,9 +69,9 @@ struct DebtItemEditor: View {
                     Text("Every month")
                 } footer: {
                     if let row, row.isAutoAmount {
-                        Text("Worked out from your charges: \(BudgetMath.dollars(row.monthlyCents)) is the typical month of the last three. This typed amount is only used when an item has no charges to measure.")
+                        Text("Worked out from your charges: you paid \(BudgetMath.dollars(row.monthlyCents)) last month. This typed amount is only used for an item with no match text.")
                     } else {
-                        Text("Used until this item has charges to measure — then the typical month of its last three is used instead. Group and overall totals are the sum of the items.")
+                        Text("Only used if this item has no match text below. With one, the usual amount is what it charged last month.")
                     }
                 }
 

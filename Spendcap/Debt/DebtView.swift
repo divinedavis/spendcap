@@ -23,7 +23,7 @@ final class DebtViewModel: ObservableObject {
     @Published var isSeeding = false
     @Published var errorMessage: String?
     /// This month or last. Everything on the tab — paid, charges, and the
-    /// measured monthly figure (three full months before this one) — reads it.
+    /// usual figure (what was paid the month before) — reads it.
     @Published var month: DebtMonth = .current
 
     /// Loaded, and the user has no groups at all — the only state that offers
@@ -287,7 +287,7 @@ struct DebtView: View {
                     }
                 }
                 Text(model.month == .current
-                     ? "Every figure is what has actually posted this month. The usual month is the typical month of the three before this one, worked out from the charges."
+                     ? "Every figure is what has actually posted this month. \"Usually\" is what you paid the month before."
                      : "Every figure is what you actually paid in \(model.month.label()).")
                     .font(.caption2)
                     .foregroundStyle(Color.secondaryText)
