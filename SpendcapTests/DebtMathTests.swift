@@ -294,8 +294,9 @@ final class DebtMathTests: XCTestCase {
     // MARK: - Finished months count only what was seen
 
     /// The owner's screenshots: September still added a $49.90 row that never
-    /// charged, and Transfers read $377 when $692 was actually paid. A finished
-    /// month totals what was paid; this month an unseen row is still expected.
+    /// charged, Transfers read $377 when $692 was paid, and a $76.21
+    /// Subscriptions header sat over rows that couldn't add up to it. Every
+    /// figure is paid now; the usual amount is only ever said in words.
     func testAFinishedMonthTotalsWhatWasPaid() {
         let other = UUID()
         let rows = [
@@ -309,17 +310,21 @@ final class DebtMathTests: XCTestCase {
                            itemId: UUID(), itemName: "401k loan", plannedCents: 10_000, itemSort: 2),
         ]
         let september = DebtMath.summary(rows: rows, monthIsOver: true)
-        XCTAssertEqual(september.plannedCents, 33_374,
+        XCTAssertEqual(september.paidCents, 33_374,
                        "a finished month totals what was paid — nothing for the unseen row or the typed-only loan")
-        XCTAssertEqual(september.plannedCents, september.paidCents)
         XCTAssertEqual(september.unseenCents, 14_990)
         XCTAssertEqual(september.unseenCount, 2)
-        XCTAssertEqual(september.groups[0].vendors.reduce(0) { $0 + $1.plannedCents },
-                       september.plannedCents)
+        // The bug in the owner's screenshot: a header that the rows under it
+        // could not add up to. Paid figures nest exactly at every level.
+        XCTAssertEqual(september.groups[0].vendors.reduce(0) { $0 + $1.paidCents },
+                       september.groups[0].paidCents)
+        XCTAssertEqual(september.groups[0].items.reduce(0) { $0 + $1.paidCents },
+                       september.paidCents)
 
         let october = DebtMath.summary(rows: rows)
-        XCTAssertEqual(october.plannedCents, 48_364, "this month an unseen row is still expected")
-        XCTAssertEqual(october.unseenCents, 0)
+        XCTAssertEqual(october.paidCents, 33_374)
+        XCTAssertEqual(october.plannedCents, 48_364, "the usual month still counts every row")
+        XCTAssertEqual(october.unseenCents, 0, "this month an unseen row is not yet missed")
     }
 
     // MARK: - Company detection

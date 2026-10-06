@@ -49,19 +49,17 @@ struct DebtSummaryRow: Codable, Identifiable, Equatable {
     /// server — the fold sets it from which month the tab is reading.
     var monthIsOver = false
 
-    /// A finished month counts what was actually paid in it, never what was
-    /// expected (owner, 2026-10-06: "if a payment was not seen in the month, we
-    /// shouldn't be calculating it in our debt total", then "only calculate
-    /// what I paid in a given month, not what I budgeted"). So a row with no
-    /// charge in September adds nothing to September — including an untracked
-    /// row, whose amount is only ever a typed plan. This month is different: a
-    /// row not seen yet may simply not have billed yet, so it stays counted at
-    /// its usual amount as still expected.
-    var countsTowardTotal: Bool { !(monthIsOver && txnCount == 0) }
-
-    /// What this row adds to every subtotal and total on the tab: what was
-    /// paid, for a month that is over; the usual monthly amount, for this one.
-    var totalCents: Int { monthIsOver ? paidCents : monthlyCents }
+    /// Every figure the tab shows is what was paid (owner, 2026-10-06: "only
+    /// calculate what I paid in a given month, not what I budgeted", and then,
+    /// of a $76.21 Subscriptions header over rows reading $82.99 and $74.67,
+    /// "this total is not accurate"). The header was right; the rows under it
+    /// were usual amounts and could not add up to it. So rows, companies,
+    /// groups and the total all show paid, and `monthlyCents` — the usual
+    /// amount — is said in words underneath, never as the row's figure.
+    ///
+    /// A finished month's row with no charge did not cost anything that
+    /// month; this flags it so the screen can say so.
+    var missedInFinishedMonth: Bool { monthIsOver && txnCount == 0 }
     var isPlaceholder: Bool { itemId == nil }
 
     /// Nil means this obligation is not visible in the linked account at all —
@@ -164,7 +162,7 @@ struct DebtVendorSummary: Identifiable, Equatable {
     /// keep, so a single-item vendor renders exactly as it always did.
     var isMulti: Bool { items.count > 1 }
 
-    var plannedCents: Int { items.reduce(0) { $0 + $1.totalCents } }
+    var plannedCents: Int { items.reduce(0) { $0 + $1.monthlyCents } }
     var paidCents: Int { items.filter(\.isTracked).reduce(0) { $0 + $1.paidCents } }
     var txnCount: Int { items.filter(\.isTracked).reduce(0) { $0 + $1.txnCount } }
     var hasTrackedItems: Bool { items.contains(where: \.isTracked) }
@@ -186,12 +184,12 @@ struct DebtGroupSummary: Identifiable, Equatable {
     /// Divine's sheet had two buckets whose written total disagreed with its
     /// own rows ($500 for $498 of items, $350 for $1,350); deriving it means
     /// the screen cannot drift from what is in it.
-    var plannedCents: Int { items.reduce(0) { $0 + $1.totalCents } }
+    var plannedCents: Int { items.reduce(0) { $0 + $1.monthlyCents } }
 
     /// Only tracked items contribute. An untracked one has no evidence either
     /// way, and adding its zero would read as "not paid yet".
     var paidCents: Int { items.filter(\.isTracked).reduce(0) { $0 + $1.paidCents } }
-    var trackedPlannedCents: Int { items.filter(\.isTracked).reduce(0) { $0 + $1.totalCents } }
+    var trackedPlannedCents: Int { items.filter(\.isTracked).reduce(0) { $0 + $1.monthlyCents } }
     var hasTrackedItems: Bool { items.contains(where: \.isTracked) }
     var isEmpty: Bool { items.isEmpty }
 
@@ -216,12 +214,12 @@ struct DebtSummary: Equatable {
     /// Clamped at zero: an overpaid item does not create room somewhere else.
     var outstandingCents: Int { max(0, trackedPlannedCents - paidCents) }
 
-    /// A finished month's tracked rows that never charged, at what they
-    /// usually cost — left out of every total above, reported here instead.
+    /// A finished month's rows that never charged, at what they usually cost
+    /// — nothing was paid for them, so they are in no paid figure.
     var unseenCents: Int {
-        groups.flatMap(\.items).filter { !$0.countsTowardTotal }.reduce(0) { $0 + $1.monthlyCents }
+        groups.flatMap(\.items).filter(\.missedInFinishedMonth).reduce(0) { $0 + $1.monthlyCents }
     }
-    var unseenCount: Int { groups.flatMap(\.items).filter { !$0.countsTowardTotal }.count }
+    var unseenCount: Int { groups.flatMap(\.items).filter(\.missedInFinishedMonth).count }
 
     static let empty = DebtSummary(groups: [])
 }

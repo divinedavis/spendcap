@@ -253,12 +253,12 @@ struct DebtView: View {
 
     private var totalCard: some View {
         SurfaceCard {
-            Text(model.month == .current ? "Every month" : "\(model.month.label()) total")
+            Text(model.month == .current ? "Paid so far this month" : "Paid in \(model.month.label())")
                 .font(.subheadline)
                 .foregroundStyle(Color.secondaryText)
-            Text(BudgetMath.dollars(model.summary.plannedCents))
+            Text(BudgetMath.dollars(model.summary.paidCents))
                 .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                .accessibilityLabel(BudgetMath.spoken(model.summary.plannedCents))
+                .accessibilityLabel(BudgetMath.spoken(model.summary.paidCents))
                 .accessibilityIdentifier("debt.total")
             Text("across \(model.summary.itemCount) item\(model.summary.itemCount == 1 ? "" : "s") in \(model.summary.groups.count) group\(model.summary.groups.count == 1 ? "" : "s")")
                 .font(.footnote)
@@ -268,17 +268,17 @@ struct DebtView: View {
                 Divider()
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(model.month == .current ? "Paid so far this month" : "Paid \(monthName)")
+                        Text("Usual month")
                             .font(.caption)
                             .foregroundStyle(Color.secondaryText)
-                        Text(BudgetMath.dollars(model.summary.paidCents))
+                        Text(BudgetMath.dollars(model.summary.plannedCents))
                             .font(.headline)
-                            .accessibilityLabel(BudgetMath.spoken(model.summary.paidCents))
+                            .accessibilityLabel(BudgetMath.spoken(model.summary.plannedCents))
                             .accessibilityIdentifier("debt.paid")
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text(model.month == .current ? "Still expected" : "Not seen, left out")
+                        Text(model.month == .current ? "Still expected" : "Didn't charge")
                             .font(.caption)
                             .foregroundStyle(Color.secondaryText)
                         Text(BudgetMath.dollars(pendingCents))
@@ -287,8 +287,8 @@ struct DebtView: View {
                     }
                 }
                 Text(model.month == .current
-                     ? "Each amount is worked out from its charges: the typical month of the three before this one. Items with no charges use the amount you typed. Paid counts only items with a match set."
-                     : "Every figure is what you actually paid in \(model.month.label()). Struck-through items didn't charge that month and aren't counted.")
+                     ? "Every figure is what has actually posted this month. The usual month is the typical month of the three before this one, worked out from the charges."
+                     : "Every figure is what you actually paid in \(model.month.label()).")
                     .font(.caption2)
                     .foregroundStyle(Color.secondaryText)
             }
@@ -316,7 +316,7 @@ struct DebtView: View {
                     .accessibilityIdentifier("debt.groupTotal")
             }
             if model.month == .current, group.plannedCents != group.paidCents {
-                Text("paid of \(BudgetMath.dollars(group.plannedCents)) usual")
+                Text("usually \(BudgetMath.dollars(group.plannedCents)) a month")
                     .font(.caption)
                     .foregroundStyle(Color.secondaryText)
                     .frame(maxWidth: .infinity, alignment: .trailing)
@@ -462,7 +462,7 @@ struct DebtVendorHeaderRow: View {
                     .foregroundStyle(vendor.txnCount > 0 ? Color.green : Color.secondaryText)
             }
             Spacer(minLength: 8)
-            Text(BudgetMath.dollars(vendor.plannedCents))
+            Text(BudgetMath.dollars(vendor.paidCents))
                 .font(.body.weight(.semibold))
                 .monospacedDigit()
                 .foregroundStyle(.primary)
@@ -480,12 +480,14 @@ struct DebtVendorHeaderRow: View {
         let plans = "\(vendor.items.count) items"
         guard vendor.hasTrackedItems else { return plans }
         guard vendor.txnCount > 0 else {
+            let usual = BudgetMath.dollars(vendor.plannedCents)
             return monthName == "this month"
-                ? "\(plans) · nothing seen yet this month"
-                : "\(plans) · nothing seen \(monthName)"
+                ? "\(plans) · usually \(usual) · nothing seen yet"
+                : "\(plans) · usually \(usual) · nothing seen \(monthName)"
         }
-        let paid = BudgetMath.dollars(vendor.paidCents)
-        return "\(plans) · \(paid) paid · \(vendor.txnCount) charge\(vendor.txnCount == 1 ? "" : "s")"
+        // The heading's figure is paid; the usual amount is said here.
+        let usual = BudgetMath.dollars(vendor.plannedCents)
+        return "\(plans) · \(vendor.txnCount) charge\(vendor.txnCount == 1 ? "" : "s") · usually \(usual)"
     }
 }
 
@@ -519,27 +521,17 @@ struct DebtItemRow: View {
                     .foregroundStyle(statusColor)
             }
             Spacer(minLength: 8)
-            // A finished month's row that never charged keeps its usual
-            // amount on screen, struck through, so it reads as "left out"
-            // rather than as a $0 bill.
-            Text(BudgetMath.dollars(shownCents))
+            // What was paid — so the rows add up to the headings above them.
+            // Nothing paid reads dimmed rather than as a bill.
+            Text(BudgetMath.dollars(row.paidCents))
                 .font(nested ? .subheadline.weight(.medium) : .body.weight(.semibold))
                 .monospacedDigit()
-                .strikethrough(!row.countsTowardTotal)
-                .foregroundStyle(row.countsTowardTotal ? Color.primary : Color.secondaryText)
-                .accessibilityLabel(row.countsTowardTotal
-                                    ? BudgetMath.spoken(shownCents)
-                                    : "\(BudgetMath.spoken(shownCents)), not counted")
+                .foregroundStyle(row.txnCount > 0 ? Color.primary : Color.secondaryText)
+                .accessibilityLabel("\(BudgetMath.spoken(row.paidCents)) paid")
         }
         .padding(.vertical, 2)
         .padding(.leading, nested ? 12 : 0)
         .contentShape(Rectangle())
-    }
-
-    /// A finished month shows what was paid; one that never charged shows its
-    /// usual amount, struck through. This month shows the usual amount.
-    private var shownCents: Int {
-        row.monthIsOver && row.countsTowardTotal ? row.paidCents : row.monthlyCents
     }
 
     /// Nested under a company the row says what it is: its own name when
@@ -555,13 +547,17 @@ struct DebtItemRow: View {
         return name
     }
 
+    /// The usual amount lives here, in words, so the figure on the right can
+    /// be what was paid.
     private var statusText: String {
-        guard row.isTracked else { return "Not tracked" }
+        let usual = "usually \(BudgetMath.dollars(row.monthlyCents))"
+        guard row.isTracked else { return "Not tracked · \(usual)" }
         if row.txnCount == 0 {
-            return monthName == "this month" ? "Not seen yet this month" : "Not seen \(monthName)"
+            let seen = monthName == "this month" ? "not seen yet" : "not seen \(monthName)"
+            return "\(usual.prefix(1).uppercased())\(usual.dropFirst()) · \(seen)"
         }
-        let paid = BudgetMath.dollars(row.paidCents)
-        return row.txnCount == 1 ? "\(paid) paid" : "\(paid) paid · \(row.txnCount) charges"
+        let charges = row.txnCount == 1 ? "1 charge" : "\(row.txnCount) charges"
+        return "\(charges) · \(usual)"
     }
 
     private var statusColor: Color {

@@ -26,7 +26,7 @@ struct DebtChargesTarget: Identifiable {
     var id: String { items.map(\.id).joined(separator: "+") }
     var isMulti: Bool { items.count > 1 }
     var trackedItemIds: [UUID] { items.filter(\.isTracked).compactMap(\.itemId) }
-    var plannedCents: Int { items.reduce(0) { $0 + $1.totalCents } }
+    var plannedCents: Int { items.reduce(0) { $0 + $1.monthlyCents } }
     var hasTrackedItems: Bool { items.contains(where: \.isTracked) }
 
     init(title: String, items: [DebtSummaryRow]) {
@@ -186,7 +186,7 @@ struct DebtChargesView: View {
 
     private var summarySection: some View {
         Section {
-            LabeledContent("Every month") {
+            LabeledContent("Usual month") {
                 Text(BudgetMath.dollars(target.plannedCents))
                     .monospacedDigit()
             }

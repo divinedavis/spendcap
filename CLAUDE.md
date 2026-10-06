@@ -692,9 +692,13 @@ through and adds $0; the card reports those as "Not seen, left out". The current
 month keeps the measured amount, because a row not seen yet may just not have
 billed yet.
 
-**The figure beside a group's name is what was paid**, in both months (owner,
-same day: "the total I paid instead of what I budgeted"). This month adds a
-"paid of $X usual" caption under it while the two differ.
+**Every figure on the tab is what was paid** (owner, same day — first the group
+header, then "this subscriptions total is not accurate" of a $76.21 header over
+rows showing usual amounts like $82.99). The header was right; the rows could
+not add up to it. Now the total card, group headers, company headings and rows
+all show paid, nesting exactly; the usual amount (`monthlyCents`, `plannedCents`
+on the summaries) is only ever said in words — "usually $82.99 · not seen yet",
+"usually $X a month" under a group, "Usual month" on the total card.
 
 **The page is pinned to the screen's width** (`.containerRelativeFrame(.horizontal)`
 on the ScrollView content). A screen recording showed every card panning
