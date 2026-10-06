@@ -815,6 +815,55 @@ final class SpendcapUITests: XCTestCase {
         return result
     }
 
+    /// The Debt page scrolls up and down only. A screen recording on
+    /// 2026-10-06 showed every card sliding left and right under a diagonal
+    /// drag — the page had content wider than the screen. A sideways drag must
+    /// leave the total card exactly where it was.
+    func testDebtPageDoesNotScrollSideways() throws {
+        guard let email = ProcessInfo.processInfo.environment["SPENDCAP_TEST_EMAIL"],
+              let password = ProcessInfo.processInfo.environment["SPENDCAP_TEST_PASSWORD"],
+              !email.isEmpty, !password.isEmpty else {
+            throw XCTSkip("SPENDCAP_TEST_EMAIL/PASSWORD not set")
+        }
+
+        let app = launch()
+        signIn(app, email: email, password: password)
+        XCTAssertTrue(app.staticTexts["trends.monthSpend"].waitForExistence(timeout: 20))
+        app.tapTab("Debt", in: self)
+
+        let seed = app.buttons["debt.seed"]
+        if seed.waitForExistence(timeout: 5) { seed.tap() }
+
+        let total = app.staticTexts["debt.total"]
+        XCTAssertTrue(total.waitForExistence(timeout: 20))
+        let before = total.frame.minX
+
+        // Hold the drag past the bounce so a page that can pan sideways is
+        // caught mid-pan, not after it has sprung back.
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.5))
+        start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow,
+                    thenHoldForDuration: 0.5)
+        XCTAssertEqual(total.frame.minX, before, accuracy: 1,
+                       "the Debt page should not move sideways")
+
+        // Both months, since the previous one renders different rows.
+        let monthPicker = app.segmentedControls["debt.month"]
+        if monthPicker.waitForExistence(timeout: 5) {
+            let previous = monthPicker.buttons.element(boundBy: 1)
+            let settled = expectation(for: NSPredicate(format: "hittable == true"), evaluatedWith: previous)
+            wait(for: [settled], timeout: 10)
+            previous.tap()
+            XCTAssertTrue(total.waitForExistence(timeout: 20))
+            sleep(2)
+            let beforePrevious = total.frame.minX
+            start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow,
+                        thenHoldForDuration: 0.5)
+            XCTAssertEqual(total.frame.minX, beforePrevious, accuracy: 1,
+                           "the previous month should not move sideways either")
+        }
+    }
+
     /// The Debt tab opens, totals its groups, and can add and remove an item
     /// without the totals going stale.
     ///

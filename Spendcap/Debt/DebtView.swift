@@ -145,7 +145,14 @@ struct DebtView: View {
                     // flush under it. 24 keeps the first card's controls real.
                     .padding(.top, 24)
                     .padding(.bottom, 32)
+                    // Pin the page to the screen's width. A screen recording
+                    // (2026-10-06) showed every card sliding left and right:
+                    // something on the owner's data laid out wider than the
+                    // screen, and a ScrollView whose content is wider than it
+                    // pans sideways. Pinned, a too-wide row wraps instead.
+                    .containerRelativeFrame(.horizontal)
                 }
+                .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
                 .refreshable { await model.load() }
 
                 if model.isLoading && model.summary.isEmpty {
@@ -294,15 +301,25 @@ struct DebtView: View {
     /// paid line stays, because that one is not shown anywhere else.
     private func groupCard(_ group: DebtGroupSummary) -> some View {
         SurfaceCard {
+            // The figure beside a category's name is what was paid (owner,
+            // 2026-10-06: "the total I paid instead of what I budgeted"). In a
+            // finished month that is the whole story; this month the usual
+            // amount sits under it, since part of it hasn't billed yet.
             HStack(alignment: .firstTextBaseline) {
                 Text(group.name)
                     .font(.title3.weight(.bold))
                 Spacer()
-                Text(BudgetMath.dollars(group.plannedCents))
+                Text(BudgetMath.dollars(group.paidCents))
                     .font(.title3.weight(.bold))
                     .monospacedDigit()
-                    .accessibilityLabel(BudgetMath.spoken(group.plannedCents))
+                    .accessibilityLabel("\(BudgetMath.spoken(group.paidCents)) paid")
                     .accessibilityIdentifier("debt.groupTotal")
+            }
+            if model.month == .current, group.plannedCents != group.paidCents {
+                Text("paid of \(BudgetMath.dollars(group.plannedCents)) usual")
+                    .font(.caption)
+                    .foregroundStyle(Color.secondaryText)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
 
             if group.isEmpty {

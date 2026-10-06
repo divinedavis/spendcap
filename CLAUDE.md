@@ -692,6 +692,16 @@ through and adds $0; the card reports those as "Not seen, left out". The current
 month keeps the measured amount, because a row not seen yet may just not have
 billed yet.
 
+**The figure beside a group's name is what was paid**, in both months (owner,
+same day: "the total I paid instead of what I budgeted"). This month adds a
+"paid of $X usual" caption under it while the two differ.
+
+**The page is pinned to the screen's width** (`.containerRelativeFrame(.horizontal)`
+on the ScrollView content). A screen recording showed every card panning
+sideways on the owner's data; a ScrollView pans horizontally whenever its content
+lays out wider than itself. Not reproducible on the test account, so
+`testDebtPageDoesNotScrollSideways` guards the behaviour rather than the cause.
+
 ## Trips and events (0010, shipped 2026-08-06)
 
 A fifth tab. A trip is a named budget with its own cost lines — flights, hotel,
