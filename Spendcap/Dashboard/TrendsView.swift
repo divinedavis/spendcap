@@ -307,7 +307,9 @@ struct TrendsView: View {
             } label: {
                 Label(period.label(), systemImage: "line.3.horizontal.decrease")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.blue)
+                    // Accent, not system blue: #007AFF on white is ~4:1,
+                    // under the 4.5:1 the audit asks of text this size.
+                    .foregroundStyle(Color.accentColor)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(Color(.systemBackground), in: Capsule())
@@ -328,6 +330,7 @@ struct TrendsView: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(BudgetMath.dollars(model.stats.spentCents))
                         .font(.system(.title, design: .rounded, weight: .bold))
+                        .accessibilityLabel(BudgetMath.spoken(model.stats.spentCents))
                         .accessibilityIdentifier("trends.monthSpend")
                     // The weekly free-to-spend figure came off this card on
                     // 2026-08-19. The arithmetic was right, but the week it

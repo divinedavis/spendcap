@@ -78,7 +78,13 @@ final class AccessibilityAuditTests: XCTestCase {
         if issue.auditType.contains(.contrast) {
             if !e.isEnabled { return true }   // WCAG 1.4.3 exempts disabled controls
             let bar = app.tabBars.firstMatch
-            if bar.exists, !bar.frame.contains(e.frame),
+            // Not one of the bar's own tabs (those are ours and must pass),
+            // but content scrolled into its band. Identified by label, not by
+            // `bar.frame.contains`: iOS 26 can report a bar frame that covers
+            // the row under it, which skipped this excuse and failed Settings'
+            // "Trips and events" for sitting behind the glass.
+            if bar.exists,
+               !bar.buttons.matching(NSPredicate(format: "label == %@", e.label)).firstMatch.exists,
                floating.contains(where: { e.frame.intersects($0) }) { return true }
             let window = app.windows.firstMatch.frame
             if !window.isEmpty, e.frame.maxY > window.maxY - 34 { return true }   // under the home indicator

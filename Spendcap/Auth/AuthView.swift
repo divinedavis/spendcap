@@ -239,13 +239,19 @@ struct AuthView: View {
                 .disabled(email.isEmpty || password.isEmpty || auth.isLoading)
                 .accessibilityIdentifier("auth.submit")
 
-                Button(isSigningUp ? "Have an account? Sign in" : "New here? Create an account") {
+                Button {
                     isSigningUp.toggle()
                     auth.errorMessage = nil
                     auth.noticeMessage = nil
+                } label: {
+                    // The 44pt frame goes on the label: on the Button it only
+                    // pads the layout, and the audit measured the hit area at
+                    // the text's own 15pt.
+                    Text(isSigningUp ? "Have an account? Sign in" : "New here? Create an account")
+                        .font(.footnote)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                 }
-                .font(.footnote)
-                .frame(minHeight: 44)
                 .accessibilityIdentifier("auth.toggleMode")
             }
             .frame(maxWidth: .infinity)

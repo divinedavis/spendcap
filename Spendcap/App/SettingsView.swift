@@ -52,11 +52,12 @@ struct SettingsView: View {
                         }
                     }
                 } header: {
-                    Text("Account")
+                    Text("Account").foregroundStyle(Color.secondaryText)
                 } footer: {
                     // The reason this screen exists rather than leaving people
                     // to sign in with whichever provider they like.
                     Text("Linking adds another way to sign in to this same account. Signing in with a provider you haven't linked — especially Apple with Hide My Email — creates a separate, empty account.")
+                        .foregroundStyle(Color.secondaryText)
                 }
 
                 Section {
@@ -91,12 +92,13 @@ struct SettingsView: View {
                     }
                     .accessibilityIdentifier("settings.addBank")
                 } header: {
-                    Text("Connected banks")
+                    Text("Connected banks").foregroundStyle(Color.secondaryText)
                 } footer: {
                     Text("Spendcap reads transactions through Plaid. Your bank credentials are never shared with the app.")
+                        .foregroundStyle(Color.secondaryText)
                 }
 
-                Section("Budget") {
+                Section {
                     NavigationLink {
                         CategoriesView()
                     } label: {
@@ -111,19 +113,29 @@ struct SettingsView: View {
                     Button {
                         showingTrips = true
                     } label: {
-                        Label("Trips and events", systemImage: "airplane")
-                            .foregroundStyle(.primary)
+                        // Explicit Color.primary on the text: a List button tints
+                        // its label, and the audit measured that tint at under
+                        // 4.5:1 even with `.foregroundStyle(.primary)` on the Label.
+                        Label {
+                            Text("Trips and events").foregroundStyle(Color.primary)
+                        } icon: {
+                            Image(systemName: "airplane")
+                        }
                     }
                     .accessibilityIdentifier("settings.trips")
+                } header: {
+                    Text("Budget").foregroundStyle(Color.secondaryText)
                 }
 
-                Section("Documents") {
+                Section {
                     NavigationLink {
                         StatementsView()
                     } label: {
                         Label("Statements", systemImage: "doc.text")
                     }
                     .accessibilityIdentifier("settings.statements")
+                } header: {
+                    Text("Documents").foregroundStyle(Color.secondaryText)
                 }
 
                 Section {
