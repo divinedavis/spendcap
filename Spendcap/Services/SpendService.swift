@@ -668,13 +668,21 @@ final class SpendService {
     /// Takes several items because a company's products are read together on
     /// screen; asks the server for nothing when none of them is tracked, since
     /// an untracked item has no match string and therefore no charges to find.
-    func debtCharges(itemIds: [UUID], window: DebtChargeWindow = .thisMonth) async throws -> [DebtCharge] {
+    /// `period` anchors the window on another month (the previous-month view);
+    /// nil is this month.
+    func debtCharges(itemIds: [UUID], window: DebtChargeWindow = .thisMonth,
+                     period: Date? = nil) async throws -> [DebtCharge] {
         guard !itemIds.isEmpty else { return [] }
+        var params: [String: AnyJSON] = [
+            "items": AnyJSON.array(itemIds.map { .string($0.uuidString.lowercased()) }),
+            "months": AnyJSON.integer(window.rawValue),
+            "period": .null,
+        ]
+        if let period {
+            params["period"] = .string(Self.localDateString(now: period))
+        }
         return try await client
-            .rpc("debt_item_transactions", params: [
-                "items": AnyJSON.array(itemIds.map { .string($0.uuidString.lowercased()) }),
-                "months": AnyJSON.integer(window.rawValue),
-            ])
+            .rpc("debt_item_transactions", params: params)
             .execute()
             .value
     }

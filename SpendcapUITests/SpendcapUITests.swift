@@ -849,6 +849,29 @@ final class SpendcapUITests: XCTestCase {
         XCTAssertTrue(total.waitForExistence(timeout: 20),
                       "Debt should show a monthly total")
 
+        // Last month is a tab on the screen, not a place you scroll to. It has
+        // to reload into a full screen of totals and come back again.
+        let monthPicker = app.segmentedControls["debt.month"]
+        XCTAssertTrue(monthPicker.waitForExistence(timeout: 10),
+                      "Debt should offer this month and last month")
+        // The segments arrive with the totals and are still settling for a
+        // beat afterwards; a tap dispatched then reports "not hittable".
+        func selectSegment(_ index: Int) {
+            let segment = monthPicker.buttons.element(boundBy: index)
+            let settled = expectation(for: NSPredicate(format: "hittable == true"),
+                                      evaluatedWith: segment)
+            wait(for: [settled], timeout: 10)
+            segment.tap()
+            if !segment.isSelected {
+                segment.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }
+            XCTAssertTrue(segment.isSelected, "month segment \(index) should select")
+        }
+        selectSegment(1)
+        XCTAssertTrue(total.waitForExistence(timeout: 20),
+                      "the previous month should still show its total")
+        selectSegment(0)
+
         let addItem = app.buttons.matching(identifier: "debt.addItem").firstMatch
         XCTAssertTrue(addItem.waitForExistence(timeout: 15),
                       "each group should offer a way to add an item")

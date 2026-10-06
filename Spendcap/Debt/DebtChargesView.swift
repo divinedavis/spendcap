@@ -26,7 +26,7 @@ struct DebtChargesTarget: Identifiable {
     var id: String { items.map(\.id).joined(separator: "+") }
     var isMulti: Bool { items.count > 1 }
     var trackedItemIds: [UUID] { items.filter(\.isTracked).compactMap(\.itemId) }
-    var plannedCents: Int { items.reduce(0) { $0 + $1.plannedCents } }
+    var plannedCents: Int { items.reduce(0) { $0 + $1.monthlyCents } }
     var hasTrackedItems: Bool { items.contains(where: \.isTracked) }
 
     init(title: String, items: [DebtSummaryRow]) {
@@ -105,6 +105,9 @@ struct DebtChargesView: View {
 
     let target: DebtChargesTarget
     let groups: [DebtGroup]
+    /// The month the Debt tab was reading when this opened; the window counts
+    /// back from it, so a row tapped in the September view lists September.
+    var month: DebtMonth = .current
     let onChange: () async -> Void
 
     @State private var charges: [DebtCharge] = []
@@ -126,7 +129,9 @@ struct DebtChargesView: View {
                     } else if charges.isEmpty {
                         Section {
                             Text(window == .thisMonth
-                                 ? "Nothing has posted against this yet this month."
+                                 ? (month == .current
+                                    ? "Nothing has posted against this yet this month."
+                                    : "Nothing posted against this in \(month.label()).")
                                  : "Nothing has posted against this in the last six months.")
                                 .foregroundStyle(Color.secondaryText)
                         } footer: {
@@ -185,8 +190,15 @@ struct DebtChargesView: View {
                 Text(BudgetMath.dollars(target.plannedCents))
                     .monospacedDigit()
             }
+            if target.items.contains(where: \.isAutoAmount) {
+                Text("Worked out from the charges: the typical month of the three full months before \(month == .current ? "this one" : month.label()).")
+                    .font(.caption)
+                    .foregroundStyle(Color.secondaryText)
+            }
             if target.hasTrackedItems {
-                LabeledContent(window == .thisMonth ? "Charged this month" : "Charged over six months") {
+                LabeledContent(window == .thisMonth
+                               ? (month == .current ? "Charged this month" : "Charged in \(month.label())")
+                               : "Charged over six months") {
                     Text(BudgetMath.dollars(totalCents))
                         .monospacedDigit()
                         .foregroundStyle(charges.isEmpty ? Color.secondaryText : Color.green)
@@ -194,7 +206,7 @@ struct DebtChargesView: View {
                 .accessibilityIdentifier("debtCharges.total")
                 Picker("Window", selection: $window) {
                     ForEach(DebtChargeWindow.allCases) { option in
-                        Text(option.label).tag(option)
+                        Text(option == .thisMonth ? month.label() : option.label).tag(option)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -335,7 +347,9 @@ struct DebtChargesView: View {
         errorMessage = nil
         defer { isLoading = false }
         do {
-            charges = try await SpendService.shared.debtCharges(itemIds: ids, window: window)
+            charges = try await SpendService.shared.debtCharges(
+                itemIds: ids, window: window,
+                period: month == .current ? nil : month.start())
         } catch {
             guard !MonthsViewModel.isCancellation(error) else { return }
             errorMessage = error.localizedDescription

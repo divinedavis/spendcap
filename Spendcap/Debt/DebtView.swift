@@ -22,6 +22,9 @@ final class DebtViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var isSeeding = false
     @Published var errorMessage: String?
+    /// This month or last. Everything on the tab — paid, charges, and the
+    /// measured monthly figure (three full months before this one) — reads it.
+    @Published var month: DebtMonth = .current
 
     /// Loaded, and the user has no groups at all — the only state that offers
     /// to seed the starter buckets.
@@ -38,7 +41,7 @@ final class DebtViewModel: ObservableObject {
             // the sync is an enrichment, the summary below is the screen.
             _ = try? await SpendService.shared.syncDebtItemsFromBudget()
 
-            async let rows = SpendService.shared.debtSummary()
+            async let rows = SpendService.shared.debtSummary(period: month.start())
             async let stored = SpendService.shared.debtGroups()
             summary = DebtMath.summary(rows: try await rows)
             groups = try await stored
@@ -120,6 +123,7 @@ struct DebtView: View {
                         if model.isEmpty {
                             starterCard
                         } else {
+                            monthPicker
                             totalCard
                             ForEach(model.summary.groups) { group in
                                 groupCard(group)
@@ -149,7 +153,7 @@ struct DebtView: View {
                 }
             }
             .navigationTitle("Debt")
-            .task { await model.load() }
+            .task(id: model.month) { await model.load() }
             .sheet(item: $sheet) { which in
                 switch which {
                 case .add(let groupId):
@@ -161,7 +165,7 @@ struct DebtView: View {
                         await model.load()
                     }
                 case .charges(let target):
-                    DebtChargesView(target: target, groups: model.groups) {
+                    DebtChargesView(target: target, groups: model.groups, month: model.month) {
                         await model.load()
                     }
                 }
@@ -217,6 +221,23 @@ struct DebtView: View {
 
     // MARK: - Cards
 
+    /// Last month is one tap away rather than a scroll through history: "did
+    /// everything go out in September" is the question, and a summary pinned to
+    /// today could not answer it once October started.
+    private var monthPicker: some View {
+        Picker("Month", selection: $model.month) {
+            ForEach(DebtMonth.allCases) { month in
+                Text(month.label()).tag(month)
+            }
+        }
+        .pickerStyle(.segmented)
+        .accessibilityIdentifier("debt.month")
+    }
+
+    private var monthName: String {
+        model.month == .current ? "this month" : "in \(model.month.label())"
+    }
+
     private var totalCard: some View {
         SurfaceCard {
             Text("Every month")
@@ -234,7 +255,7 @@ struct DebtView: View {
                 Divider()
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Paid so far this month")
+                        Text(model.month == .current ? "Paid so far this month" : "Paid \(monthName)")
                             .font(.caption)
                             .foregroundStyle(Color.secondaryText)
                         Text(BudgetMath.dollars(model.summary.paidCents))
@@ -244,7 +265,7 @@ struct DebtView: View {
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text("Still expected")
+                        Text(model.month == .current ? "Still expected" : "Didn't post")
                             .font(.caption)
                             .foregroundStyle(Color.secondaryText)
                         Text(BudgetMath.dollars(model.summary.outstandingCents))
@@ -252,7 +273,7 @@ struct DebtView: View {
                             .accessibilityLabel(BudgetMath.spoken(model.summary.outstandingCents))
                     }
                 }
-                Text("Paid counts only the items with a match set, so it can be smaller than the total above.")
+                Text("Each amount is worked out from its charges: the typical month of the three before \(model.month == .current ? "this one" : model.month.label()). Items with no charges use the amount you typed. Paid counts only items with a match set.")
                     .font(.caption2)
                     .foregroundStyle(Color.secondaryText)
             }
@@ -282,7 +303,7 @@ struct DebtView: View {
                     .foregroundStyle(Color.secondaryText)
             } else {
                 ForEach(group.vendors) { vendor in
-                    vendorRows(vendor)
+                    vendorRows(vendor, monthName: monthName)
 
                     if vendor.id != group.vendors.last?.id {
                         Divider()
@@ -323,12 +344,12 @@ struct DebtView: View {
     /// so "Google" is said once and can be read as one relationship instead of
     /// three unrelated lines that happen to share a word.
     @ViewBuilder
-    private func vendorRows(_ vendor: DebtVendorSummary) -> some View {
+    private func vendorRows(_ vendor: DebtVendorSummary, monthName: String) -> some View {
         if vendor.isMulti {
             Button {
                 sheet = .charges(DebtChargesTarget(vendor: vendor))
             } label: {
-                DebtVendorHeaderRow(vendor: vendor)
+                DebtVendorHeaderRow(vendor: vendor, monthName: monthName)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("debt.vendor")
@@ -337,7 +358,7 @@ struct DebtView: View {
                 Button {
                     sheet = .charges(DebtChargesTarget(row: row))
                 } label: {
-                    DebtItemRow(row: row, nested: true)
+                    DebtItemRow(row: row, nested: true, vendorName: vendor.name, monthName: monthName)
                 }
                 .buttonStyle(.plain)
                 .contextMenu {
@@ -349,7 +370,7 @@ struct DebtView: View {
             Button {
                 sheet = .charges(DebtChargesTarget(row: row))
             } label: {
-                DebtItemRow(row: row)
+                DebtItemRow(row: row, monthName: monthName)
             }
             .buttonStyle(.plain)
             .contextMenu {
@@ -403,6 +424,7 @@ struct DebtView: View {
 /// row that can be edited, and tapping it opens every charge the company made.
 struct DebtVendorHeaderRow: View {
     let vendor: DebtVendorSummary
+    var monthName: String = "this month"
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -428,9 +450,15 @@ struct DebtVendorHeaderRow: View {
     }
 
     private var subtitle: String {
-        let plans = "\(vendor.items.count) subscriptions"
+        // "items", not "subscriptions": a company heading now forms on its own
+        // in any group, and Apple in Transfers is not two subscriptions.
+        let plans = "\(vendor.items.count) items"
         guard vendor.hasTrackedItems else { return plans }
-        guard vendor.txnCount > 0 else { return "\(plans) · nothing seen yet this month" }
+        guard vendor.txnCount > 0 else {
+            return monthName == "this month"
+                ? "\(plans) · nothing seen yet this month"
+                : "\(plans) · nothing seen \(monthName)"
+        }
         let paid = BudgetMath.dollars(vendor.paidCents)
         return "\(plans) · \(paid) paid · \(vendor.txnCount) charge\(vendor.txnCount == 1 ? "" : "s")"
     }
@@ -446,6 +474,9 @@ struct DebtVendorHeaderRow: View {
 struct DebtItemRow: View {
     let row: DebtSummaryRow
     var nested: Bool = false
+    /// The heading this row sits under, when nested.
+    var vendorName: String? = nil
+    var monthName: String = "this month"
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -453,7 +484,7 @@ struct DebtItemRow: View {
                 Text(title)
                     .font(nested ? .subheadline : .body.weight(.medium))
                     .foregroundStyle(nested ? Color.secondaryText : Color.primary)
-                if !nested, let note = row.note, !note.isEmpty {
+                if let note = row.note, !note.isEmpty, note != title {
                     Text(note)
                         .font(.caption)
                         .foregroundStyle(Color.secondaryText)
@@ -463,7 +494,7 @@ struct DebtItemRow: View {
                     .foregroundStyle(statusColor)
             }
             Spacer(minLength: 8)
-            Text(BudgetMath.dollars(row.plannedCents))
+            Text(BudgetMath.dollars(row.monthlyCents))
                 .font(nested ? .subheadline.weight(.medium) : .body.weight(.semibold))
                 .monospacedDigit()
                 .foregroundStyle(.primary)
@@ -473,15 +504,24 @@ struct DebtItemRow: View {
         .contentShape(Rectangle())
     }
 
+    /// Nested under a company the row says what it is: its own name when
+    /// that differs from the heading ("YouTube TV" under Google), otherwise
+    /// its note ("workspace" on a row the user named "Google").
     private var title: String {
-        guard nested else { return row.itemName ?? "—" }
-        if let note = row.note, !note.isEmpty { return note }
-        return row.itemName ?? "—"
+        let name = row.itemName ?? "—"
+        guard nested else { return name }
+        let sameAsHeading = vendorName.map {
+            DebtMath.vendorKey($0, fallback: row.id) == DebtMath.vendorKey(name, fallback: row.id)
+        } ?? true
+        if sameAsHeading, let note = row.note, !note.isEmpty { return note }
+        return name
     }
 
     private var statusText: String {
         guard row.isTracked else { return "Not tracked" }
-        if row.txnCount == 0 { return "Not seen yet this month" }
+        if row.txnCount == 0 {
+            return monthName == "this month" ? "Not seen yet this month" : "Not seen \(monthName)"
+        }
         let paid = BudgetMath.dollars(row.paidCents)
         return row.txnCount == 1 ? "\(paid) paid" : "\(paid) paid · \(row.txnCount) charges"
     }

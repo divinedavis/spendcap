@@ -238,6 +238,109 @@ final class DebtMathTests: XCTestCase {
         XCTAssertEqual(months.reduce(0) { $0 + $1.totalCents }, 2_900)
     }
 
+    // MARK: - Measured monthly amount (0031)
+
+    /// The owner's ask: the monthly figure is the charges, not what was typed.
+    /// A tracked row with history reads its typical month; the totals follow.
+    func testTrackedItemWithHistoryUsesItsTypicalMonth() {
+        let measured = DebtSummaryRow(
+            groupId: subscriptions, groupName: "Subscriptions", groupSort: 0,
+            itemId: UUID(), itemName: "Claude", plannedCents: 10_000,
+            matchValue: "ANTHROPIC", typicalCents: 13_066, monthsSeen: 3)
+        let typed = DebtSummaryRow(
+            groupId: subscriptions, groupName: "Subscriptions", groupSort: 0,
+            itemId: UUID(), itemName: "401k loan", plannedCents: 20_000,
+            itemSort: 1)
+        XCTAssertTrue(measured.isAutoAmount)
+        XCTAssertEqual(measured.monthlyCents, 13_066)
+        XCTAssertFalse(typed.isAutoAmount, "no match string, nothing to measure")
+        XCTAssertEqual(typed.monthlyCents, 20_000)
+
+        let summary = DebtMath.summary(rows: [measured, typed])
+        XCTAssertEqual(summary.plannedCents, 33_066)
+        XCTAssertEqual(summary.groups[0].vendors.reduce(0) { $0 + $1.plannedCents },
+                       summary.plannedCents)
+    }
+
+    /// A bill added today has a match and no history yet; $0 would be a lie,
+    /// so the typed figure stands until there is something to measure.
+    func testTrackedItemWithNoHistoryKeepsTheTypedAmount() {
+        let r = DebtSummaryRow(
+            groupId: subscriptions, groupName: "Subscriptions", groupSort: 0,
+            itemId: UUID(), itemName: "New gym", plannedCents: 4_500,
+            matchValue: "GYM", typicalCents: 0, monthsSeen: 0)
+        XCTAssertFalse(r.isAutoAmount)
+        XCTAssertEqual(r.monthlyCents, 4_500)
+    }
+
+    /// Postgres bigint arrives as a number or a string; both must decode, and
+    /// an older server with no column must not fail the tab.
+    func testTypicalCentsDecodesFromNumberStringOrAbsent() throws {
+        let group = UUID().uuidString
+        func decode(_ extra: String) throws -> DebtSummaryRow {
+            let json = """
+            {"group_id":"\(group)","group_name":"G","item_id":"\(UUID().uuidString)",
+             "item_name":"X","planned_cents":100,"paid_cents":"0","match_value":"X"\(extra)}
+            """
+            return try JSONDecoder().decode(DebtSummaryRow.self, from: Data(json.utf8))
+        }
+        XCTAssertEqual(try decode(#","typical_cents":2744,"months_seen":3"#).monthlyCents, 2_744)
+        XCTAssertEqual(try decode(#","typical_cents":"2744","months_seen":3"#).monthlyCents, 2_744)
+        let old = try decode("")
+        XCTAssertNil(old.typicalCents)
+        XCTAssertEqual(old.monthlyCents, 100)
+    }
+
+    // MARK: - Company detection
+
+    /// "auto categorize these by the company I'm paying": YouTube products
+    /// and Workspace are all Google, with no one typing "Google" into each.
+    func testProductsCollectUnderTheirParentCompany() {
+        let rows = [
+            row(subscriptions, "Subscriptions", item: "Google", note: "workspace",
+                match: "GOOGLE WORKSPACE", itemSort: 0),
+            row(subscriptions, "Subscriptions", item: "Liberty Mutual", itemSort: 1),
+            row(subscriptions, "Subscriptions", item: "YouTube TV", note: "add-ons",
+                match: "YOUTUBE TV", itemSort: 2),
+            row(subscriptions, "Subscriptions", item: "YouTube Premium",
+                match: "YOUTUBE PREMIUM", itemSort: 3),
+        ]
+        let vendors = DebtMath.summary(rows: rows).groups[0].vendors
+        XCTAssertEqual(vendors.map(\.name), ["Google", "Liberty Mutual"])
+        XCTAssertEqual(vendors[0].items.count, 3)
+    }
+
+    func testCompanyIsReadFromTheMatchWhenTheNameIsPersonal() {
+        let haircut = row(subscriptions, "Transfers", item: "Haircut", match: "APPLE CASH")
+        XCTAssertEqual(DebtMath.company(for: haircut), "Apple")
+        XCTAssertEqual(DebtMath.company(named: "SP+AFF"), "Affirm")
+        XCTAssertEqual(DebtMath.company(named: "HBOMAX"), "Warner Bros.")
+    }
+
+    /// Whole words only — a brand inside another word is not that brand.
+    func testCompanyAliasesMatchWholeWordsOnly() {
+        XCTAssertNil(DebtMath.company(named: "Pineapple Express"))
+        XCTAssertNil(DebtMath.company(named: "Metamucil"))
+        XCTAssertNil(DebtMath.company(named: "Liberty Mutual"))
+        XCTAssertEqual(DebtMath.company(named: "Apple Card"), "Apple")
+    }
+
+    // MARK: - Previous month
+
+    func testPreviousMonthStartsOnTheFirstEvenFromThe31st() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let oct31 = calendar.date(from: DateComponents(year: 2026, month: 10, day: 31, hour: 23))!
+        let sep1 = calendar.date(from: DateComponents(year: 2026, month: 9, day: 1))!
+        let oct1 = calendar.date(from: DateComponents(year: 2026, month: 10, day: 1))!
+        XCTAssertEqual(DebtMonth.previous.start(now: oct31, calendar: calendar), sep1)
+        XCTAssertEqual(DebtMonth.current.start(now: oct31, calendar: calendar), oct1)
+        let jan5 = calendar.date(from: DateComponents(year: 2027, month: 1, day: 5))!
+        let dec1 = calendar.date(from: DateComponents(year: 2026, month: 12, day: 1))!
+        XCTAssertEqual(DebtMonth.previous.start(now: jan5, calendar: calendar), dec1)
+        XCTAssertEqual(DebtMonth.current.label(now: jan5, calendar: calendar), "This month")
+    }
+
     private func charge(_ date: String, _ cents: Int, item: UUID = UUID()) -> DebtCharge {
         DebtCharge(
             itemId: item,

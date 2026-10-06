@@ -25,8 +25,25 @@ struct DebtSummaryRow: Codable, Identifiable, Equatable {
     let matchValue: String?
     let matchAmountCents: Int?
     let itemSort: Int
+    /// The median of the three full months before the viewed one, zeros
+    /// included (0031). Nil from a server that predates it.
+    let typicalCents: Int?
+    /// How many of those three months charged at all.
+    let monthsSeen: Int
 
     var id: String { itemId?.uuidString ?? "empty-\(groupId.uuidString)" }
+
+    /// True when the monthly figure comes from the item's own charges rather
+    /// than what was typed. A tracked row with any charge in the last three
+    /// full months is measured; one with none — a bill added today, or one
+    /// paid outside the linked account — still needs the typed number.
+    var isAutoAmount: Bool { isTracked && monthsSeen > 0 && typicalCents != nil }
+
+    /// What this obligation costs a month, as every total on the tab reads it.
+    /// The typed plan was the weakest number on the screen — 17 of the owner's
+    /// tracked rows sat at $0 while charging monthly — so the charges decide
+    /// wherever there are charges to decide from.
+    var monthlyCents: Int { isAutoAmount ? (typicalCents ?? plannedCents) : plannedCents }
     var isPlaceholder: Bool { itemId == nil }
 
     /// Nil means this obligation is not visible in the linked account at all —
@@ -47,13 +64,17 @@ struct DebtSummaryRow: Codable, Identifiable, Equatable {
         case matchValue = "match_value"
         case matchAmountCents = "match_amount_cents"
         case itemSort = "item_sort"
+        case typicalCents = "typical_cents"
+        case monthsSeen = "months_seen"
     }
 
     init(groupId: UUID, groupName: String, groupSort: Int,
          itemId: UUID?, itemName: String?, note: String? = nil,
          plannedCents: Int = 0, paidCents: Int = 0, txnCount: Int = 0,
          matchValue: String? = nil, matchAmountCents: Int? = nil,
-         itemSort: Int = 0) {
+         itemSort: Int = 0, typicalCents: Int? = nil, monthsSeen: Int = 0) {
+        self.typicalCents = typicalCents
+        self.monthsSeen = monthsSeen
         self.groupId = groupId
         self.groupName = groupName
         self.groupSort = groupSort
@@ -90,6 +111,15 @@ struct DebtSummaryRow: Codable, Identifiable, Equatable {
         matchValue = try c.decodeIfPresent(String.self, forKey: .matchValue)
         matchAmountCents = try c.decodeIfPresent(Int.self, forKey: .matchAmountCents)
         itemSort = try c.decodeIfPresent(Int.self, forKey: .itemSort) ?? 0
+        // bigint again: number or string depending on the aggregate.
+        if let value = try? c.decode(Int.self, forKey: .typicalCents) {
+            typicalCents = value
+        } else if let text = try? c.decode(String.self, forKey: .typicalCents), let value = Int(text) {
+            typicalCents = value
+        } else {
+            typicalCents = nil
+        }
+        monthsSeen = try c.decodeIfPresent(Int.self, forKey: .monthsSeen) ?? 0
     }
 }
 
@@ -105,7 +135,8 @@ struct DebtVendorSummary: Identifiable, Equatable {
     /// Case- and punctuation-insensitive, so "Digital Ocean" and
     /// "DigitalOcean" are one company rather than two.
     let key: String
-    /// The company as the user actually wrote it on the first of its rows.
+    /// The parent company when one is recognised ("Google" over "YouTube TV"),
+    /// otherwise the company as the user wrote it on the first of its rows.
     let name: String
     let items: [DebtSummaryRow]
 
@@ -115,7 +146,7 @@ struct DebtVendorSummary: Identifiable, Equatable {
     /// keep, so a single-item vendor renders exactly as it always did.
     var isMulti: Bool { items.count > 1 }
 
-    var plannedCents: Int { items.reduce(0) { $0 + $1.plannedCents } }
+    var plannedCents: Int { items.reduce(0) { $0 + $1.monthlyCents } }
     var paidCents: Int { items.filter(\.isTracked).reduce(0) { $0 + $1.paidCents } }
     var txnCount: Int { items.filter(\.isTracked).reduce(0) { $0 + $1.txnCount } }
     var hasTrackedItems: Bool { items.contains(where: \.isTracked) }
@@ -132,16 +163,17 @@ struct DebtGroupSummary: Identifiable, Equatable {
     let sortOrder: Int
     let items: [DebtSummaryRow]
 
-    /// The number on the right of the screenshot: the sum of the items, always.
+    /// The number on the right of the screenshot: the sum of the items, always
+    /// — each at its measured monthly figure where it has one (`monthlyCents`).
     /// Divine's sheet had two buckets whose written total disagreed with its
     /// own rows ($500 for $498 of items, $350 for $1,350); deriving it means
     /// the screen cannot drift from what is in it.
-    var plannedCents: Int { items.reduce(0) { $0 + $1.plannedCents } }
+    var plannedCents: Int { items.reduce(0) { $0 + $1.monthlyCents } }
 
     /// Only tracked items contribute. An untracked one has no evidence either
     /// way, and adding its zero would read as "not paid yet".
     var paidCents: Int { items.filter(\.isTracked).reduce(0) { $0 + $1.paidCents } }
-    var trackedPlannedCents: Int { items.filter(\.isTracked).reduce(0) { $0 + $1.plannedCents } }
+    var trackedPlannedCents: Int { items.filter(\.isTracked).reduce(0) { $0 + $1.monthlyCents } }
     var hasTrackedItems: Bool { items.contains(where: \.isTracked) }
     var isEmpty: Bool { items.isEmpty }
 
@@ -211,10 +243,11 @@ enum DebtMath {
 
         for item in items {
             let name = item.itemName ?? "—"
-            let key = vendorKey(name, fallback: item.id)
+            let parent = Self.company(for: item)
+            let key = vendorKey(parent ?? name, fallback: item.id)
             if byKey[key] == nil {
                 order.append(key)
-                labels[key] = name
+                labels[key] = parent ?? name
             }
             byKey[key, default: []].append(item)
         }
@@ -223,6 +256,62 @@ enum DebtMath {
             DebtVendorSummary(key: key, name: labels[key] ?? "—", items: byKey[key] ?? [])
         }
     }
+
+    /// The parent company a product is paid to, when it is not the name on the
+    /// row. "YouTube TV", "Google Workspace" and "Google Cloud" are all Google
+    /// money, and the owner asked for them to collect under Google without
+    /// having to type "Google" into each one. Read from the item's name first,
+    /// then from the text it matches on (a row named "Haircut" that matches
+    /// APPLE CASH is still paid through Apple).
+    ///
+    /// Matched on whole words, so "pineapple" is not Apple and "Metamucil" is
+    /// not Meta. Nil means "no known parent" and the row groups by its own
+    /// name, as before.
+    static func company(for item: DebtSummaryRow) -> String? {
+        for text in [item.itemName, item.matchValue].compactMap({ $0 }) {
+            if let parent = company(named: text) { return parent }
+        }
+        return nil
+    }
+
+    static func company(named text: String) -> String? {
+        let words = text.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+        guard !words.isEmpty else { return nil }
+        // Every run of whole words, joined, so "SP+AFF" and "Digital Ocean"
+        // compare as "spaff" and "digitalocean".
+        var runs = Set<String>()
+        for start in words.indices {
+            var joined = ""
+            for word in words[start...] {
+                joined += word
+                runs.insert(joined)
+            }
+        }
+        return companyAliases.first { _, aliases in
+            aliases.contains(where: runs.contains)
+        }?.0
+    }
+
+    /// Brands whose products bill under their own names, as casefolded runs
+    /// of whole words.
+    static let companyAliases: [(String, [String])] = [
+        ("Google", ["google", "youtube", "gsuite"]),
+        ("Apple", ["apple", "icloud", "itunes"]),
+        ("Amazon", ["amazon", "amzn", "primevideo", "audible", "aws", "kindle"]),
+        ("Microsoft", ["microsoft", "xbox", "msft", "github", "linkedin"]),
+        ("Sony", ["playstation", "sony"]),
+        ("Meta", ["facebook", "instagram", "meta", "whatsapp"]),
+        ("Disney", ["disney", "hulu", "espn"]),
+        ("Warner Bros.", ["hbo", "hbomax", "warnerbros"]),
+        ("Anthropic", ["anthropic", "claude"]),
+        ("OpenAI", ["openai", "chatgpt"]),
+        ("Affirm", ["affirm", "spaff"]),
+        ("PayPal", ["paypal", "venmo", "pypl"]),
+        ("Block", ["cashapp", "squareup", "afterpay"]),
+        ("Digital Ocean", ["digitalocean"]),
+    ]
 
     /// Casefolded, stripped of spaces and punctuation. A name that survives
     /// none of that — an emoji-only row — keeps its own identity rather than
@@ -283,6 +372,35 @@ enum DebtChargeWindow: Int, CaseIterable, Identifiable {
         case .thisMonth: return "This month"
         case .sixMonths: return "6 months"
         }
+    }
+}
+
+/// Which month the Debt tab is reading. Two, not a picker of twelve: the
+/// question is "did last month's bills all go out", and Months already owns
+/// the year.
+enum DebtMonth: Int, CaseIterable, Identifiable {
+    case current = 0
+    case previous = 1
+
+    var id: Int { rawValue }
+
+    /// The first day of the month this reads, in the device's calendar. The
+    /// walk is by month start, never `now - 1 month`, which clamps on the 31st.
+    func start(now: Date = Date(), calendar: Calendar = .current) -> Date {
+        let thisMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
+        guard self == .previous else { return thisMonth }
+        let dayBefore = calendar.date(byAdding: .day, value: -1, to: thisMonth) ?? thisMonth
+        return calendar.dateInterval(of: .month, for: dayBefore)?.start ?? dayBefore
+    }
+
+    /// "This month" / "September".
+    func label(now: Date = Date(), calendar: Calendar = .current) -> String {
+        guard self == .previous else { return "This month" }
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.setLocalizedDateFormatFromTemplate("MMMM")
+        return formatter.string(from: start(now: now, calendar: calendar))
     }
 }
 

@@ -620,7 +620,7 @@ not a rendering bug.
 Two changes to the same complaint: the tab stated figures it gave no way to
 check, and said the same company's name twice in a row.
 
-**Tapping a row opens its charges** — `debt_item_transactions(items, months)`,
+**Tapping a row opens its charges** — `debt_item_transactions(items, months, period)`,
 the matching subquery copied verbatim from `debt_summary` so the list adds up
 to the paid figure that opened it. If those two ever drift, the drill-down
 contradicts the row above it, which is worse than not shipping it. The paid
@@ -648,6 +648,39 @@ where its first item sat and its products keep their order — grouping must not
 rearrange a list someone arranged. A single-item company renders exactly as it
 did. Vendor subtotals are derived from the same rows the group total sums, so a
 card cannot show headings that add up to something other than itself.
+
+### Measured amounts, parent companies, last month (0031, 2026-10-06)
+
+Owner request, from a screenshot of the tab: "this should be auto calculated",
+"auto categorize these by the company I'm paying", "show the previous month as
+a tab".
+
+**The monthly figure is measured, not typed.** `debt_summary` now returns
+`typical_cents` = the **median of the three full months before the viewed
+month, zeros included**, and `months_seen`. `DebtSummaryRow.monthlyCents` uses
+it whenever the row is tracked and charged in any of those months, else the
+typed `planned_cents`; every total sums `monthlyCents`. Median, not mean, so one
+$1,350 Best Buy payment doesn't become a $450/mo row; zeros counted, so a
+one-off in one month of three is $0 — **except** when that one month is the
+most recent, which is what a just-started subscription looks like, and then its
+single bill is used. Full months only, so the figure doesn't move day to day.
+On the owner's data this took the total from the typed $2,388.49 to $3,681.92:
+17 tracked rows were typed $0 and still charging. History months go through the
+same matching subquery as paid, so a charge is claimed by the same item in every
+month.
+
+**Companies are recognised, not typed.** `DebtMath.company(for:)` maps a row's
+name, then its match value, through `companyAliases` (YouTube → Google, SP+AFF →
+Affirm, APPLE CASH → Apple, …) on **whole words** — "Metamucil" is not Meta.
+No alias → the row groups by its own name as before. Still presentation only
+and still within a group, so group totals are untouched. A nested row titles
+itself with its own name when that differs from the heading, else its note.
+
+**Last month is a segmented control** (`DebtMonth`, `debt.month`). Paid, the
+measured amount and the charges sheet all read the selected month;
+`debt_item_transactions` gained a `period` argument for that. Both functions
+changed signature, so 0031 drops them first; the new arguments default, so an
+older build sending only `items, months` still resolves (no PGRST203).
 
 ## Trips and events (0010, shipped 2026-08-06)
 

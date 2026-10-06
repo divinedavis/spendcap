@@ -68,7 +68,11 @@ struct DebtItemEditor: View {
                 } header: {
                     Text("Every month")
                 } footer: {
-                    Text("Group and overall totals are the sum of these, so they can never disagree with the rows above them.")
+                    if let row, row.isAutoAmount {
+                        Text("Worked out from your charges: \(BudgetMath.dollars(row.monthlyCents)) is the typical month of the last three. This typed amount is only used when an item has no charges to measure.")
+                    } else {
+                        Text("Used until this item has charges to measure — then the typical month of its last three is used instead. Group and overall totals are the sum of the items.")
+                    }
                 }
 
                 if groups.count > 1 {
