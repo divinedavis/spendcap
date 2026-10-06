@@ -43,7 +43,7 @@ final class DebtViewModel: ObservableObject {
 
             async let rows = SpendService.shared.debtSummary(period: month.start())
             async let stored = SpendService.shared.debtGroups()
-            summary = DebtMath.summary(rows: try await rows)
+            summary = DebtMath.summary(rows: try await rows, monthIsOver: month != .current)
             groups = try await stored
         } catch {
             errorMessage = MonthsViewModel.isCancellation(error) ? nil : error.localizedDescription
@@ -238,9 +238,15 @@ struct DebtView: View {
         model.month == .current ? "this month" : "in \(model.month.label())"
     }
 
+    /// Right-hand figure: what is still to come this month, or — for a month
+    /// that is over — what never came and so was left out of the total.
+    private var pendingCents: Int {
+        model.month == .current ? model.summary.outstandingCents : model.summary.unseenCents
+    }
+
     private var totalCard: some View {
         SurfaceCard {
-            Text("Every month")
+            Text(model.month == .current ? "Every month" : "\(model.month.label()) total")
                 .font(.subheadline)
                 .foregroundStyle(Color.secondaryText)
             Text(BudgetMath.dollars(model.summary.plannedCents))
@@ -265,15 +271,17 @@ struct DebtView: View {
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text(model.month == .current ? "Still expected" : "Didn't post")
+                        Text(model.month == .current ? "Still expected" : "Not seen, left out")
                             .font(.caption)
                             .foregroundStyle(Color.secondaryText)
-                        Text(BudgetMath.dollars(model.summary.outstandingCents))
+                        Text(BudgetMath.dollars(pendingCents))
                             .font(.headline)
-                            .accessibilityLabel(BudgetMath.spoken(model.summary.outstandingCents))
+                            .accessibilityLabel(BudgetMath.spoken(pendingCents))
                     }
                 }
-                Text("Each amount is worked out from its charges: the typical month of the three before \(model.month == .current ? "this one" : model.month.label()). Items with no charges use the amount you typed. Paid counts only items with a match set.")
+                Text(model.month == .current
+                     ? "Each amount is worked out from its charges: the typical month of the three before this one. Items with no charges use the amount you typed. Paid counts only items with a match set."
+                     : "Every figure is what you actually paid in \(model.month.label()). Struck-through items didn't charge that month and aren't counted.")
                     .font(.caption2)
                     .foregroundStyle(Color.secondaryText)
             }
@@ -494,14 +502,27 @@ struct DebtItemRow: View {
                     .foregroundStyle(statusColor)
             }
             Spacer(minLength: 8)
-            Text(BudgetMath.dollars(row.monthlyCents))
+            // A finished month's row that never charged keeps its usual
+            // amount on screen, struck through, so it reads as "left out"
+            // rather than as a $0 bill.
+            Text(BudgetMath.dollars(shownCents))
                 .font(nested ? .subheadline.weight(.medium) : .body.weight(.semibold))
                 .monospacedDigit()
-                .foregroundStyle(.primary)
+                .strikethrough(!row.countsTowardTotal)
+                .foregroundStyle(row.countsTowardTotal ? Color.primary : Color.secondaryText)
+                .accessibilityLabel(row.countsTowardTotal
+                                    ? BudgetMath.spoken(shownCents)
+                                    : "\(BudgetMath.spoken(shownCents)), not counted")
         }
         .padding(.vertical, 2)
         .padding(.leading, nested ? 12 : 0)
         .contentShape(Rectangle())
+    }
+
+    /// A finished month shows what was paid; one that never charged shows its
+    /// usual amount, struck through. This month shows the usual amount.
+    private var shownCents: Int {
+        row.monthIsOver && row.countsTowardTotal ? row.paidCents : row.monthlyCents
     }
 
     /// Nested under a company the row says what it is: its own name when

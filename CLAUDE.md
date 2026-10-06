@@ -682,6 +682,16 @@ measured amount and the charges sheet all read the selected month;
 changed signature, so 0031 drops them first; the new arguments default, so an
 older build sending only `items, months` still resolves (no PGRST203).
 
+**A finished month totals what was paid, nothing else** (owner, same day, from
+September screenshots: "only calculate what I paid in a given month, not what I
+budgeted"). `DebtMath.summary(rows:monthIsOver:)` marks the rows;
+`totalCents` is `paidCents` for a finished month and `monthlyCents` for this
+one, and every subtotal sums `totalCents`. A row that didn't charge (tracked or
+not — an untracked amount is only ever a plan) shows its usual amount struck
+through and adds $0; the card reports those as "Not seen, left out". The current
+month keeps the measured amount, because a row not seen yet may just not have
+billed yet.
+
 ## Trips and events (0010, shipped 2026-08-06)
 
 A fifth tab. A trip is a named budget with its own cost lines — flights, hotel,

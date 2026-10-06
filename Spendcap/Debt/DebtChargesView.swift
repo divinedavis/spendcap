@@ -26,7 +26,7 @@ struct DebtChargesTarget: Identifiable {
     var id: String { items.map(\.id).joined(separator: "+") }
     var isMulti: Bool { items.count > 1 }
     var trackedItemIds: [UUID] { items.filter(\.isTracked).compactMap(\.itemId) }
-    var plannedCents: Int { items.reduce(0) { $0 + $1.monthlyCents } }
+    var plannedCents: Int { items.reduce(0) { $0 + $1.totalCents } }
     var hasTrackedItems: Bool { items.contains(where: \.isTracked) }
 
     init(title: String, items: [DebtSummaryRow]) {

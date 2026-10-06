@@ -44,6 +44,24 @@ struct DebtSummaryRow: Codable, Identifiable, Equatable {
     /// tracked rows sat at $0 while charging monthly — so the charges decide
     /// wherever there are charges to decide from.
     var monthlyCents: Int { isAutoAmount ? (typicalCents ?? plannedCents) : plannedCents }
+
+    /// Set when the row belongs to a month that has finished. Not from the
+    /// server — the fold sets it from which month the tab is reading.
+    var monthIsOver = false
+
+    /// A finished month counts what was actually paid in it, never what was
+    /// expected (owner, 2026-10-06: "if a payment was not seen in the month, we
+    /// shouldn't be calculating it in our debt total", then "only calculate
+    /// what I paid in a given month, not what I budgeted"). So a row with no
+    /// charge in September adds nothing to September — including an untracked
+    /// row, whose amount is only ever a typed plan. This month is different: a
+    /// row not seen yet may simply not have billed yet, so it stays counted at
+    /// its usual amount as still expected.
+    var countsTowardTotal: Bool { !(monthIsOver && txnCount == 0) }
+
+    /// What this row adds to every subtotal and total on the tab: what was
+    /// paid, for a month that is over; the usual monthly amount, for this one.
+    var totalCents: Int { monthIsOver ? paidCents : monthlyCents }
     var isPlaceholder: Bool { itemId == nil }
 
     /// Nil means this obligation is not visible in the linked account at all —
@@ -146,7 +164,7 @@ struct DebtVendorSummary: Identifiable, Equatable {
     /// keep, so a single-item vendor renders exactly as it always did.
     var isMulti: Bool { items.count > 1 }
 
-    var plannedCents: Int { items.reduce(0) { $0 + $1.monthlyCents } }
+    var plannedCents: Int { items.reduce(0) { $0 + $1.totalCents } }
     var paidCents: Int { items.filter(\.isTracked).reduce(0) { $0 + $1.paidCents } }
     var txnCount: Int { items.filter(\.isTracked).reduce(0) { $0 + $1.txnCount } }
     var hasTrackedItems: Bool { items.contains(where: \.isTracked) }
@@ -168,12 +186,12 @@ struct DebtGroupSummary: Identifiable, Equatable {
     /// Divine's sheet had two buckets whose written total disagreed with its
     /// own rows ($500 for $498 of items, $350 for $1,350); deriving it means
     /// the screen cannot drift from what is in it.
-    var plannedCents: Int { items.reduce(0) { $0 + $1.monthlyCents } }
+    var plannedCents: Int { items.reduce(0) { $0 + $1.totalCents } }
 
     /// Only tracked items contribute. An untracked one has no evidence either
     /// way, and adding its zero would read as "not paid yet".
     var paidCents: Int { items.filter(\.isTracked).reduce(0) { $0 + $1.paidCents } }
-    var trackedPlannedCents: Int { items.filter(\.isTracked).reduce(0) { $0 + $1.monthlyCents } }
+    var trackedPlannedCents: Int { items.filter(\.isTracked).reduce(0) { $0 + $1.totalCents } }
     var hasTrackedItems: Bool { items.contains(where: \.isTracked) }
     var isEmpty: Bool { items.isEmpty }
 
@@ -198,13 +216,20 @@ struct DebtSummary: Equatable {
     /// Clamped at zero: an overpaid item does not create room somewhere else.
     var outstandingCents: Int { max(0, trackedPlannedCents - paidCents) }
 
+    /// A finished month's tracked rows that never charged, at what they
+    /// usually cost — left out of every total above, reported here instead.
+    var unseenCents: Int {
+        groups.flatMap(\.items).filter { !$0.countsTowardTotal }.reduce(0) { $0 + $1.monthlyCents }
+    }
+    var unseenCount: Int { groups.flatMap(\.items).filter { !$0.countsTowardTotal }.count }
+
     static let empty = DebtSummary(groups: [])
 }
 
 enum DebtMath {
     /// Fold the flat rollup into groups, keeping the user's order and dropping
     /// the placeholder row that only existed to carry an empty group's name.
-    static func summary(rows: [DebtSummaryRow]) -> DebtSummary {
+    static func summary(rows: [DebtSummaryRow], monthIsOver: Bool = false) -> DebtSummary {
         var order: [UUID] = []
         var byGroup: [UUID: [DebtSummaryRow]] = [:]
         var names: [UUID: (String, Int)] = [:]
@@ -215,6 +240,8 @@ enum DebtMath {
                 order.append(row.groupId)
             }
             guard !row.isPlaceholder else { continue }
+            var row = row
+            row.monthIsOver = monthIsOver
             byGroup[row.groupId, default: []].append(row)
         }
 
