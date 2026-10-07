@@ -1108,7 +1108,7 @@ without it nginx 301s, and a redirect on the redirect URI is trouble).
 
 | Piece | Where | State |
 |---|---|---|
-| AASA entry | `Personal-Website/.well-known/apple-app-site-association` → `/var/www/divinedavis` on 159.203.110.79 | done — **shared with Hidden Gems, merge never overwrite** |
+| AASA entry | `Personal-Website/.well-known/apple-app-site-association` → `/var/www/divinedavis` on 104.236.120.144 | done — **shared with Hidden Gems, merge never overwrite** |
 | Landing page | `Personal-Website/spendcap/oauth/index.html` | done (200, no redirect) |
 | Entitlement | `project.yml` → `applinks:divinedavis.com` | done |
 | App ID capability | `scripts/asc_enable_associated_domains.py` | done (ASSOCIATED_DOMAINS on) |
@@ -1299,7 +1299,7 @@ whole thing, and what each step depends on:
 
 Privacy policy and support pages live in the Personal-Website repo under
 `spendcap/privacy/` and `spendcap/support/` and are deployed by `scp` to
-`/var/www/divinedavis/spendcap/` on 159.203.110.79.
+`/var/www/divinedavis/spendcap/` on 104.236.120.144.
 
 ## Known quirks
 
