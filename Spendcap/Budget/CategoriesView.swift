@@ -158,7 +158,10 @@ struct CategoriesView: View {
         .sheet(item: $sheet) { which in
             switch which {
             case .edit(let row):
-                CategoryEditView(row: row) {
+                CategoryEditView(
+                    row: row,
+                    lines: model.months.first { $0.rows.contains(row) }?.rows ?? []
+                ) {
                     Task { await model.load() }
                 }
             case .add:
@@ -286,6 +289,7 @@ struct CategoryLineRow: View {
             if row.plannedCents > 0 {
                 ProgressView(value: row.progress)
                     .tint(barTint)
+                    .overlay(alignment: .leading) { overflowSegment }
 
                 HStack {
                     Text("of \(BudgetMath.wholeDollars(row.plannedCents)) planned")
@@ -298,6 +302,23 @@ struct CategoryLineRow: View {
                         .font(.caption.weight(.medium))
                         .foregroundStyle(row.isOver ? Color.dangerText : Color.secondaryText)
                 }
+
+                // Spill-over (0033): the giving line says where its overage
+                // went, the receiving line says whose overage it is carrying —
+                // so less room on Socializing reads as "Food ate it", not as a
+                // mystery.
+                if row.overflowOutCents > 0, let target = row.overflowTargetName {
+                    Text("\(BudgetMath.wholeDollars(row.overflowOutCents)) over, moved to \(target)")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.orange)
+                        .accessibilityIdentifier("category.overflowOut")
+                }
+                if row.overflowInCents > 0 {
+                    Text("Includes \(BudgetMath.wholeDollars(row.overflowInCents)) of overspending from other lines")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.orange)
+                        .accessibilityIdentifier("category.overflowIn")
+                }
             } else {
                 Text(row.isUncategorized
                      ? "\(row.txnCount) transaction\(row.txnCount == 1 ? "" : "s") that no category claims"
@@ -309,6 +330,24 @@ struct CategoryLineRow: View {
         .padding(.vertical, 8)
         .contentShape(Rectangle())
     }
+
+    /// The part of the bar that is another line's overage, drawn at the end of
+    /// the fill in orange. Left off once the line is over: the whole bar is
+    /// red then and the caption already says why.
+    @ViewBuilder
+    private var overflowSegment: some View {
+        if row.overflowInProgress > 0, !row.isOver {
+            GeometryReader { geo in
+                Capsule()
+                    .fill(Color.orange)
+                    .frame(width: geo.size.width * row.overflowInProgress)
+                    .offset(x: geo.size.width * (row.progress - row.overflowInProgress))
+            }
+            .frame(height: 4)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+    }
 }
 
 /// Rename a line or change what it plans to spend.
@@ -316,19 +355,24 @@ struct CategoryEditView: View {
     @Environment(\.dismiss) private var dismiss
 
     let row: CategorySpendRow
+    /// The month's other lines, for the spill-over picker.
+    let lines: [CategorySpendRow]
     let onSave: () -> Void
 
     @State private var name: String
     @State private var plannedText: String
     @State private var kind: CategoryKind?
+    @State private var overflowId: UUID?
     @State private var transactions: [CategoryTransaction] = []
     @State private var isLoadingTransactions = true
     @State private var isSaving = false
     @State private var errorMessage: String?
 
-    init(row: CategorySpendRow, onSave: @escaping () -> Void) {
+    init(row: CategorySpendRow, lines: [CategorySpendRow] = [], onSave: @escaping () -> Void) {
         self.row = row
+        self.lines = lines.filter { !$0.isUncategorized && $0.categoryId != row.categoryId }
         self.onSave = onSave
+        _overflowId = State(initialValue: row.overflowCategoryId)
         _name = State(initialValue: row.categoryName)
         _plannedText = State(initialValue: String(format: "%.0f", Double(row.plannedCents) / 100))
         _kind = State(initialValue: row.kind)
@@ -381,6 +425,21 @@ struct CategoryEditView: View {
                         Text("Planned each month")
                     } footer: {
                         Text("What this line is meant to cost. Months are measured against it.")
+                    }
+                    if !lines.isEmpty {
+                        Section {
+                            Picker("Spill into", selection: $overflowId) {
+                                Text("None").tag(UUID?.none)
+                                ForEach(lines) { line in
+                                    Text(line.categoryName).tag(line.categoryId)
+                                }
+                            }
+                            .accessibilityIdentifier("category.overflow")
+                        } header: {
+                            Text("When this line runs out")
+                        } footer: {
+                            Text("Spending past the plan comes out of the line you pick, so it shows less left to spend there.")
+                        }
                     }
                 }
 
@@ -484,7 +543,8 @@ struct CategoryEditView: View {
                 id: id,
                 name: name.trimmingCharacters(in: .whitespaces),
                 plannedCents: cents,
-                kind: kind
+                kind: kind,
+                overflowCategoryId: overflowId
             )
             onSave()
             dismiss()

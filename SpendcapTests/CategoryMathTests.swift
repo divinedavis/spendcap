@@ -173,4 +173,92 @@ final class CategoryMathTests: XCTestCase {
         XCTAssertNil(rows[1].kind, "an unknown kind reads as untagged, not a decode failure")
         XCTAssertNil(rows[2].kind)
     }
+
+    // MARK: - Spill-over (0033)
+
+    private func spill(food foodSpent: Int, social socialSpent: Int,
+                       socialPlanned: Int = 60_000) -> (food: CategorySpendRow, social: CategorySpendRow, month: CategoryMonth) {
+        let socialId = UUID()
+        let food = CategorySpendRow(period: "2026-10-01", categoryId: UUID(), categoryName: "Food",
+                                    plannedCents: 60_000, spentCents: foodSpent, txnCount: 1,
+                                    sortOrder: 1, overflowCategoryId: socialId)
+        let social = row("2026-10-01", "Socializing", planned: socialPlanned, spent: socialSpent,
+                         order: 2, id: socialId)
+        let month = months([food, social, uncategorized("2026-10-01", spent: 5_000)],
+                           now: "2026-10-08").first!
+        return (month.rows[0], month.rows[1], month)
+    }
+
+    func testOverageMovesToTheOverflowLine() {
+        let (food, social, _) = spill(food: 65_000, social: 19_400)
+        XCTAssertEqual(food.overflowOutCents, 5_000)
+        XCTAssertEqual(food.overflowTargetName, "Socializing")
+        XCTAssertEqual(food.shownSpentCents, 60_000)
+        XCTAssertFalse(food.isOver, "a line that handed on its overage is full, not over")
+        XCTAssertEqual(food.remainingCents, 0)
+        XCTAssertEqual(social.overflowInCents, 5_000)
+        XCTAssertEqual(social.remainingCents, 60_000 - 19_400 - 5_000)
+        XCTAssertEqual(social.overflowInProgress, 5_000.0 / 60_000.0, accuracy: 0.0001)
+    }
+
+    func testNothingMovesUnderPlan() {
+        let (food, social, _) = spill(food: 52_000, social: 19_400)
+        XCTAssertEqual(food.overflowOutCents, 0)
+        XCTAssertEqual(social.overflowInCents, 0)
+        XCTAssertEqual(food.remainingCents, 8_000)
+    }
+
+    func testSpillNeverChangesMonthTotals() {
+        let (_, _, month) = spill(food: 90_000, social: 40_000)
+        XCTAssertEqual(month.spentCents, 90_000 + 40_000 + 5_000)
+        XCTAssertEqual(month.discretionarySpentCents, 135_000,
+                       "discretionary must stay equal to discretionary_daily, which knows nothing of spill")
+    }
+
+    func testReceivingLineGoesOverWhenItCannotAbsorb() {
+        let (food, social, month) = spill(food: 90_000, social: 40_000)
+        XCTAssertFalse(food.isOver)
+        XCTAssertTrue(social.isOver)
+        XCTAssertEqual(social.remainingCents, -10_000)
+        XCTAssertEqual(month.overCount, 1)
+    }
+
+    func testOneHopOnlySoACycleCannotLoop() {
+        let a = UUID(), b = UUID()
+        let rows = CategoryMath.spillOver([
+            CategorySpendRow(period: "2026-10-01", categoryId: a, categoryName: "A",
+                             plannedCents: 100, spentCents: 150, txnCount: 1, sortOrder: 1,
+                             overflowCategoryId: b),
+            CategorySpendRow(period: "2026-10-01", categoryId: b, categoryName: "B",
+                             plannedCents: 100, spentCents: 120, txnCount: 1, sortOrder: 2,
+                             overflowCategoryId: a),
+        ])
+        // Each hands on only its *own* overage, measured before any spill.
+        XCTAssertEqual(rows[0].overflowOutCents, 50)
+        XCTAssertEqual(rows[1].overflowOutCents, 20)
+        XCTAssertEqual(rows[0].shownSpentCents + rows[1].shownSpentCents, 270)
+    }
+
+    func testMissingTargetJustGoesOver() {
+        let rows = CategoryMath.spillOver([
+            CategorySpendRow(period: "2026-10-01", categoryId: UUID(), categoryName: "Food",
+                             plannedCents: 60_000, spentCents: 65_000, txnCount: 1, sortOrder: 1,
+                             overflowCategoryId: UUID()),
+        ])
+        XCTAssertEqual(rows[0].overflowOutCents, 0)
+        XCTAssertTrue(rows[0].isOver)
+    }
+
+    func testOverflowIdDecodesAndIsOptional() throws {
+        let json = """
+        [{"period":"2026-10-01","category_id":"56B662F3-7D79-403B-A7F3-4361231F5383","category_name":"Food",
+          "planned_cents":60000,"spent_cents":1,"txn_count":1,"sort_order":1,"kind":"food",
+          "overflow_category_id":"56B662F3-7D79-403B-A7F3-4361231F5384"},
+         {"period":"2026-10-01","category_id":null,"category_name":"Uncategorized",
+          "planned_cents":0,"spent_cents":1,"txn_count":1,"sort_order":2147483647}]
+        """
+        let rows = try JSONDecoder().decode([CategorySpendRow].self, from: Data(json.utf8))
+        XCTAssertEqual(rows[0].overflowCategoryId?.uuidString, "56B662F3-7D79-403B-A7F3-4361231F5384")
+        XCTAssertNil(rows[1].overflowCategoryId, "pre-0033 rows and snapshots carry no overflow")
+    }
 }

@@ -1161,6 +1161,16 @@ struct CategorySpendRow: Codable, Identifiable, Equatable {
     /// The line's fixed type tag; nil for untagged lines and always nil for
     /// Uncategorized.
     let kind: CategoryKind?
+    /// The line that absorbs this line's overage on screen (0033). Nil means
+    /// the line simply goes over.
+    let overflowCategoryId: UUID?
+    /// Overage moved out to `overflowCategoryId` / in from lines spilling
+    /// here. Set by `CategoryMath.months`, never decoded: the transactions
+    /// stay filed where the rules put them, only the bars move.
+    var overflowOutCents = 0
+    var overflowInCents = 0
+    /// Name of the line this one spilled into, for the row's caption.
+    var overflowTargetName: String?
 
     var id: String { "\(period)-\(categoryId?.uuidString ?? "uncategorized")" }
     var isUncategorized: Bool { categoryId == nil }
@@ -1175,17 +1185,31 @@ struct CategorySpendRow: Codable, Identifiable, Equatable {
         return parser.date(from: period)
     }
 
+    /// What the line shows against its plan after spill-over: its own
+    /// spending, minus overage handed on, plus overage received. Month and
+    /// discretionary totals keep using raw `spentCents` — the spill only
+    /// moves money between lines, so it can't change a sum.
+    var shownSpentCents: Int { spentCents - overflowOutCents + overflowInCents }
+
     /// Positive means room left, negative means over. The sign is the answer.
-    var remainingCents: Int { plannedCents - spentCents }
-    var isOver: Bool { plannedCents > 0 && spentCents > plannedCents }
+    var remainingCents: Int { plannedCents - shownSpentCents }
+    var isOver: Bool { plannedCents > 0 && shownSpentCents > plannedCents }
 
     var progress: Double {
         guard plannedCents > 0 else { return 0 }
-        return min(1.0, max(0.0, Double(spentCents) / Double(plannedCents)))
+        return min(1.0, max(0.0, Double(shownSpentCents) / Double(plannedCents)))
+    }
+
+    /// Share of the bar that is another line's overage, drawn in its own tint
+    /// so Socializing shows how much of it Food ate.
+    var overflowInProgress: Double {
+        guard plannedCents > 0 else { return 0 }
+        return min(progress, Double(overflowInCents) / Double(plannedCents))
     }
 
     enum CodingKeys: String, CodingKey {
         case period, kind
+        case overflowCategoryId = "overflow_category_id"
         case categoryId = "category_id"
         case categoryName = "category_name"
         case plannedCents = "planned_cents"
@@ -1196,7 +1220,7 @@ struct CategorySpendRow: Codable, Identifiable, Equatable {
 
     init(period: String, categoryId: UUID?, categoryName: String,
          plannedCents: Int, spentCents: Int, txnCount: Int, sortOrder: Int,
-         kind: CategoryKind? = nil) {
+         kind: CategoryKind? = nil, overflowCategoryId: UUID? = nil) {
         self.period = period
         self.categoryId = categoryId
         self.categoryName = categoryName
@@ -1205,6 +1229,7 @@ struct CategorySpendRow: Codable, Identifiable, Equatable {
         self.txnCount = txnCount
         self.sortOrder = sortOrder
         self.kind = kind
+        self.overflowCategoryId = overflowCategoryId
     }
 
     init(from decoder: Decoder) throws {
@@ -1228,6 +1253,8 @@ struct CategorySpendRow: Codable, Identifiable, Equatable {
         // failure that blanks every budget line on the screen.
         kind = (try? c.decodeIfPresent(String.self, forKey: .kind))
             .flatMap { $0 }.flatMap(CategoryKind.init(rawValue:))
+        // Absent from pre-0033 snapshots; absent means no spill.
+        overflowCategoryId = try? c.decodeIfPresent(UUID.self, forKey: .overflowCategoryId)
     }
 }
 
@@ -1246,6 +1273,8 @@ struct CategoryMonth: Identifiable, Equatable {
     var plannedCents: Int { rows.filter { !$0.isUncategorized }.reduce(0) { $0 + $1.plannedCents } }
     /// Spent totals include it: the money left the account either way.
     var spentCents: Int { rows.reduce(0) { $0 + $1.spentCents } }
+    /// Counted after spill-over: Food that handed its overage to Socializing
+    /// is full, not over — Socializing is over only if it can't absorb it.
     var overCount: Int { rows.filter(\.isOver).count }
     var uncategorizedCents: Int { rows.first(where: \.isUncategorized)?.spentCents ?? 0 }
 
@@ -1308,11 +1337,38 @@ enum CategoryMath {
                 isCurrent: currentMonth.map {
                     calendar.isDate(period, equalTo: $0, toGranularity: .month)
                 } ?? false,
-                rows: (byPeriod[period] ?? []).sorted {
+                rows: spillOver((byPeriod[period] ?? []).sorted {
                     ($0.sortOrder, $0.categoryName) < ($1.sortOrder, $1.categoryName)
-                }
+                })
             )
         }
+    }
+
+    /// Moves each line's overage onto the line it names as its overflow
+    /// (Food over $600 → the excess shows on Socializing). One hop only: if
+    /// the receiving line is pushed over, it shows over rather than passing
+    /// the money on again, so a chain or cycle can never loop or hide where
+    /// the overspending started. A target that isn't in this month's rows
+    /// (deleted line, older snapshot) means the line just goes over.
+    static func spillOver(_ rows: [CategorySpendRow]) -> [CategorySpendRow] {
+        var result = rows
+        let indexById = Dictionary(
+            result.enumerated().compactMap { offset, row in row.categoryId.map { ($0, offset) } },
+            uniquingKeysWith: { first, _ in first }
+        )
+        for source in result.indices {
+            let row = result[source]
+            guard let targetId = row.overflowCategoryId,
+                  targetId != row.categoryId,
+                  let target = indexById[targetId],
+                  row.plannedCents > 0,
+                  row.spentCents > row.plannedCents else { continue }
+            let excess = row.spentCents - row.plannedCents
+            result[source].overflowOutCents = excess
+            result[source].overflowTargetName = result[target].categoryName
+            result[target].overflowInCents += excess
+        }
+        return result
     }
 }
 

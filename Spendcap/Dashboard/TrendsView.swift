@@ -237,7 +237,7 @@ struct TrendsView: View {
                 Task { await model.load(period: newValue) }
             }
             .sheet(item: $editingLine) { row in
-                CategoryEditView(row: row) {
+                CategoryEditView(row: row, lines: model.selectedCategoryMonth?.rows ?? []) {
                     Task { await model.load(period: period) }
                 }
             }

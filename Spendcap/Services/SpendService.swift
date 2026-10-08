@@ -253,7 +253,8 @@ final class SpendService {
             .execute()
     }
 
-    func updateCategory(id: UUID, name: String, plannedCents: Int, kind: CategoryKind?) async throws {
+    func updateCategory(id: UUID, name: String, plannedCents: Int, kind: CategoryKind?,
+                        overflowCategoryId: UUID?) async throws {
         try await client
             .from("budget_categories")
             .update([
@@ -262,6 +263,9 @@ final class SpendService {
                 // Explicit null clears the tag — "no kind" is a choice the
                 // sheet can save, not just an absence.
                 "kind": kind.map { AnyJSON.string($0.rawValue) } ?? AnyJSON.null,
+                // Same: null is "just go over", a saveable choice (0033).
+                "overflow_category_id": overflowCategoryId
+                    .map { AnyJSON.string($0.uuidString.lowercased()) } ?? AnyJSON.null,
                 "updated_at": AnyJSON.string(ISO8601DateFormatter().string(from: Date())),
             ])
             .eq("id", value: id.uuidString.lowercased())

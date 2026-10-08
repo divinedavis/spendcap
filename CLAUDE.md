@@ -278,6 +278,25 @@ exactly the state worth surfacing. `CategoryMonth.plannedCents` /
 `.spentCents`, unchanged; only the display is new. The "N over" count moved
 under them.
 
+**A line can spill its overage into another line (0033, 2026-10-08, user
+request).** Once Food passes its plan, the excess counts against Socializing:
+`budget_categories.overflow_category_id`, picked in the edit-line sheet ("When
+this line runs out → Spill into"). Set live on the owner's account for Food →
+Socializing / Shopping. It is a **display reallocation in
+`CategoryMath.spillOver`**, not a re-routing of transactions — the rules still
+file every charge where they always did, so the five copies of the
+rule-resolution block and `discretionary_daily` are untouched;
+`category_spend` only gained a trailing `overflow_category_id` column.
+`shownSpentCents` drives the bar, "left", `isOver` and the "N over" count;
+raw `spentCents` still drives every total (a spill moves money between lines,
+it can't change a sum, and the discretionary total must keep equalling
+`discretionary_daily`). The giving line reads full ("$X over, moved to …"),
+the receiving line carries an orange bar segment + "Includes $X of
+overspending from other lines". **One hop only**: a receiving line that can't
+absorb it goes over rather than passing it on, so cycles can't loop. Same-user
+is a composite FK `(user_id, overflow_category_id)`; deleting the target
+nulls only that column.
+
 **A line's transactions are listed newest first (0023, 2026-08-16)**, matching
 `month_activity`, so the two screens agree about what the top of a list means.
 It was ordered by amount, which read as arbitrary past one screen. Amount is
