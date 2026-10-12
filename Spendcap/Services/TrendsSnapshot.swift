@@ -23,6 +23,8 @@ struct TrendsSnapshot: Codable, Equatable {
     /// shipped restores without one, and the card waits for the network.
     var forecastRecurring: [ForecastRecurringRow]?
     var forecastFlows: [ForecastFlowRow]?
+    /// Optional for snapshots saved before the Income row (2026-10-12).
+    var forecastIncome: [ForecastIncomeRow]?
 
     /// Optional for snapshots saved before the comparison line was added.
     var previousMonthTransactions: [BankTransaction]?

@@ -69,14 +69,51 @@ final class ForecastMathTests: XCTestCase {
 
     // MARK: - Which rows are regulars
 
-    func testTwiceMonthlyPayrollIsTwoExpectedDeposits() {
-        let stats = ForecastMath.stats(recurring: [payroll], flows: flows(),
+    /// August's two paychecks, the shape 0034 emits.
+    private let augustPay = [
+        ForecastIncomeRow(period: "2026-08-01", date: "2026-08-14", who: "ACME PAYROLL DD", cents: 312_000),
+        ForecastIncomeRow(period: "2026-08-01", date: "2026-08-31", who: "ACME PAYROLL DD", cents: 318_000),
+    ]
+
+    // MARK: - Income
+
+    func testIncomeIsLastMonthsPaychecksAgainOnTheSameDays() {
+        let stats = ForecastMath.stats(recurring: [], flows: flows(), income: augustPay,
                                        now: date("2026-09-08"), timeZone: utc)!
         let deposits = stats.predicted.filter(\.isInflow)
-        XCTAssertEqual(deposits.map(\.dateLabel), ["Sep 15", "Sep 30"],
-                       "day 31 clamps to the month's last day")
+        XCTAssertEqual(deposits.map(\.dateLabel), ["Sep 14", "Sep 30"],
+                       "the 31st clamps to the month's last day")
+        XCTAssertEqual(deposits.map(\.amountCents), [312_000, 318_000])
         XCTAssertEqual(stats.predictedInCents, 630_000)
         XCTAssertEqual(stats.predictedInCount, 2)
+        XCTAssertEqual(stats.lastMonthIncomeCents, 630_000)
+        XCTAssertEqual(stats.lastMonthLabel, "Aug")
+    }
+
+    /// Savings sweeps recur on a schedule too; recurring money in is not income.
+    func testRecurringMoneyInIsNotIncome() {
+        let stats = ForecastMath.stats(recurring: [payroll], flows: flows(),
+                                       now: date("2026-09-08"), timeZone: utc)!
+        XCTAssertEqual(stats.predictedInCents, 0)
+        XCTAssertEqual(stats.lastMonthIncomeCents, 0)
+    }
+
+    /// The first paycheck of the month ticks off the first of last month's.
+    func testAPaycheckAlreadyReceivedIsNotExpectedAgain() {
+        let received = augustPay + [
+            ForecastIncomeRow(period: "2026-09-01", date: "2026-09-15", who: "ACME PAYROLL DD", cents: 312_000),
+        ]
+        let stats = ForecastMath.stats(recurring: [], flows: flows(), income: received,
+                                       now: date("2026-09-20"), timeZone: utc)!
+        XCTAssertEqual(stats.predicted.map(\.dateLabel), ["Sep 30"])
+        XCTAssertEqual(stats.predictedInCents, 318_000)
+    }
+
+    /// Two months back is not last month: only the month just ended is used.
+    func testOnlyLastMonthsPayCounts() {
+        let stats = ForecastMath.stats(recurring: [], flows: flows(), income: augustPay,
+                                       now: date("2026-10-08"), timeZone: utc)
+        XCTAssertEqual(stats?.predictedInCents, 0)
     }
 
     func testARegularAlreadyPostedThisMonthIsNotExpectedAgain() {
@@ -139,7 +176,7 @@ final class ForecastMathTests: XCTestCase {
     }
 
     func testProjectionStartsFromTheBalanceLessPendingAndAddsEverythingUp() {
-        let stats = ForecastMath.stats(recurring: [payroll, rent], flows: flows(),
+        let stats = ForecastMath.stats(recurring: [payroll, rent], flows: flows(), income: augustPay,
                                        now: date("2026-09-08"), timeZone: utc)!
         XCTAssertEqual(stats.availableCents, 250_000 - 50_000)
         XCTAssertEqual(
@@ -150,7 +187,7 @@ final class ForecastMathTests: XCTestCase {
 
     /// The expected list is in date order — it is read as "what's coming".
     func testExpectedTransactionsAreSoonestFirst() {
-        let stats = ForecastMath.stats(recurring: [rent, payroll, ngrok], flows: flows(),
+        let stats = ForecastMath.stats(recurring: [rent, ngrok], flows: flows(), income: augustPay,
                                        now: date("2026-09-08"), timeZone: utc)!
         XCTAssertEqual(stats.predicted.map(\.who),
                        ["Ngrok Inc.", "ACME PAYROLL DD", "Rent", "ACME PAYROLL DD"])

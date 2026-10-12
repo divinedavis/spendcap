@@ -115,6 +115,15 @@ final class SpendService {
             .value
     }
 
+    /// Paychecks into checking last month and this month (0034). Last
+    /// month's are what the forecast expects this month to bring in.
+    func forecastIncome() async throws -> [ForecastIncomeRow] {
+        try await client
+            .rpc("forecast_income")
+            .execute()
+            .value
+    }
+
     // MARK: - Category budgets
 
     /// Planned vs actual per category for the last `monthsBack` months, newest

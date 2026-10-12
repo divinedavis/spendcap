@@ -118,6 +118,30 @@ struct ForecastFlowRow: Codable, Equatable {
     }
 }
 
+/// One row of `forecast_income()` (0034): a paycheck that landed in checking
+/// last month or this month. Last month's are this month's income forecast.
+struct ForecastIncomeRow: Codable, Equatable {
+    let period: String          // "yyyy-MM-dd", first day of the month
+    let date: String            // "yyyy-MM-dd"
+    let who: String
+    let cents: Int
+
+    init(period: String, date: String, who: String, cents: Int) {
+        self.period = period
+        self.date = date
+        self.who = who
+        self.cents = cents
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        period = try c.decode(String.self, forKey: .period)
+        date = try c.decode(String.self, forKey: .date)
+        who = try c.decode(String.self, forKey: .who)
+        cents = try ForecastDecoding.int(c, .cents)
+    }
+}
+
 /// Postgres bigints reach us as JSON numbers through PostgREST and as quoted
 /// strings through other serialisers — the same tolerance MonthlySpendRow has,
 /// extended to the bigint arrays these rows carry.
@@ -170,7 +194,7 @@ struct ForecastStats: Equatable {
     /// these; the forecast must.
     let pendingOutCents: Int
     let pendingInCents: Int
-    /// Regular money in and out still expected this month, soonest first.
+    /// Paychecks and regular bills still expected this month, soonest first.
     let predicted: [PredictedTransaction]
     /// What a day of everything-else spending has cost over the window.
     let everydayPerDayCents: Int
@@ -183,6 +207,10 @@ struct ForecastStats: Equatable {
     let windowLabel: String
     /// "Sep 30".
     let monthEndLabel: String
+    /// What last month's paychecks came to — the income this month is
+    /// expected to repeat — and "Sep", the month they are from.
+    let lastMonthIncomeCents: Int
+    let lastMonthLabel: String
 
     var predictedInCents: Int { predicted.filter(\.isInflow).reduce(0) { $0 + $1.amountCents } }
     var predictedOutCents: Int { predicted.filter { !$0.isInflow }.reduce(0) { $0 + $1.amountCents } }
@@ -235,6 +263,7 @@ enum ForecastMath {
     static func stats(
         recurring: [ForecastRecurringRow],
         flows: [ForecastFlowRow],
+        income: [ForecastIncomeRow] = [],
         now: Date = Date(),
         timeZone: TimeZone = .current
     ) -> ForecastStats? {
@@ -271,10 +300,36 @@ enum ForecastMath {
         dayLabel.timeZone = timeZone
         dayLabel.setLocalizedDateFormatFromTemplate("MMM d")
 
-        for row in recurring {
+        // Money in is never read from the regulars: savings sweeps and round-up
+        // credits recur too, and none of them is income. Income is last
+        // month's paychecks again (0034), each on the day it landed then, less
+        // the ones this month has already received — in order, so the 15th's
+        // paycheck arriving ticks off the 15th's, not the month-end one.
+        guard let lastMonthStart = calendar.date(byAdding: .month, value: -1, to: monthStart) else { return nil }
+        let lastMonthPeriod = parser.string(from: lastMonthStart)
+        let thisMonthPeriod = parser.string(from: monthStart)
+        let lastMonthPay = income.filter { $0.period == lastMonthPeriod }.sorted { $0.date < $1.date }
+        let paidSoFar = income.filter { $0.period == thisMonthPeriod }.count
+        for pay in lastMonthPay.dropFirst(paidSoFar) {
+            guard let landed = parser.date(from: pay.date) else { continue }
+            let day = min(calendar.component(.day, from: landed), daysInMonth)
+            let overdue = day < todayDay
+            guard let expected = calendar.date(byAdding: .day, value: (overdue ? todayDay : day) - 1,
+                                               to: monthStart) else { continue }
+            predicted.append(PredictedTransaction(
+                who: pay.who,
+                date: expected,
+                amountCents: pay.cents,
+                isInflow: true,
+                isOverdue: overdue,
+                dateLabel: dayLabel.string(from: expected)
+            ))
+        }
+
+        for row in recurring where !row.isInflow {
             let ranks = regularRanks(row, windowMonths: windowMonths)
             guard !ranks.isEmpty else { continue }
-            if !row.isInflow { regularWindowOutCents += row.windowCents }
+            regularWindowOutCents += row.windowCents
             // The first `thisMonthCount` occurrences have happened; the rest
             // of the regular ranks are still to come.
             for rank in ranks where rank >= row.thisMonthCount {
@@ -328,7 +383,9 @@ enum ForecastMath {
             daysLeft: daysInMonth - todayDay + 1,
             windowMonths: windowMonths,
             windowLabel: windowLabel,
-            monthEndLabel: dayLabel.string(from: calendar.startOfDay(for: lastDay))
+            monthEndLabel: dayLabel.string(from: calendar.startOfDay(for: lastDay)),
+            lastMonthIncomeCents: lastMonthPay.reduce(0) { $0 + $1.cents },
+            lastMonthLabel: monthLabel.string(from: lastMonthStart)
         )
     }
 }

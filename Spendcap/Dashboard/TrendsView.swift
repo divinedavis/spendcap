@@ -50,7 +50,8 @@ final class TrendsViewModel: ObservableObject {
               daily: snapshot.dailyDiscretionary,
               wireDiscretionary: true)
         if let recurring = snapshot.forecastRecurring, let flows = snapshot.forecastFlows {
-            forecast = ForecastMath.stats(recurring: recurring, flows: flows)
+            forecast = ForecastMath.stats(recurring: recurring, flows: flows,
+                                          income: snapshot.forecastIncome ?? [])
         }
     }
 
@@ -111,12 +112,16 @@ final class TrendsViewModel: ObservableObject {
         async let flowsTask = period.isCurrent
             ? try? await SpendService.shared.forecastFlows()
             : nil
+        async let incomeTask = period.isCurrent
+            ? try? await SpendService.shared.forecastIncome()
+            : nil
         let (rows, daily, recurring, flows) = await (rowsTask, dailyTask, recurringTask, flowsTask)
+        let income = await incomeTask
         if let rows {
             apply(categoryRows: rows, daily: daily, wireDiscretionary: period.isCurrent)
         }
         if let recurring, let flows {
-            forecast = ForecastMath.stats(recurring: recurring, flows: flows)
+            forecast = ForecastMath.stats(recurring: recurring, flows: flows, income: income ?? [])
         }
 
         // Persist what the next cold launch should open on: the current
@@ -134,6 +139,7 @@ final class TrendsViewModel: ObservableObject {
                 transactions: loaded.transactions, budget: loaded.budget,
                 categoryRows: rows, dailyDiscretionary: daily,
                 forecastRecurring: recurring, forecastFlows: flows,
+                forecastIncome: income,
                 previousMonthTransactions: loaded.previous))
         }
     }
@@ -503,10 +509,12 @@ struct TrendsView: View {
             DashboardRow(
                 icon: "arrow.down.left.circle.fill",
                 tint: .green,
-                title: "Regular money in",
-                subtitle: forecast.predictedInCount == 0
-                    ? "Nothing more expected this month"
-                    : "\(forecast.predictedInCount) expected",
+                title: "Income",
+                subtitle: forecast.lastMonthIncomeCents == 0
+                    ? "No pay found in \(forecast.lastMonthLabel)"
+                    : forecast.predictedInCount == 0
+                        ? "All paid this month"
+                        : "\(forecast.predictedInCount) paycheck\(forecast.predictedInCount == 1 ? "" : "s"), as in \(forecast.lastMonthLabel)",
                 value: "+" + BudgetMath.dollars(forecast.predictedInCents),
                 valueColor: .green
             )
@@ -584,7 +592,7 @@ struct TrendsView: View {
                 }
             }
 
-            Text("From \(forecast.windowLabel): a regular is anything that came in or went out most months, up to three times a month, on about the same day. Everything else is averaged into everyday spending. Money in only counts when it is regular.")
+            Text("From \(forecast.windowLabel): a regular is anything that came in or went out most months, up to three times a month, on about the same day. Everything else is averaged into everyday spending. Income is last month's paychecks again, on the same days.")
                 .font(.caption)
                 .foregroundStyle(Color.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
