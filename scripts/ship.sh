@@ -135,7 +135,11 @@ xcodebuild \
     archive
 
 echo "==> exporting IPA"
-xcodebuild \
+# System PATH only: the export copies with /usr/bin/rsync (openrsync), which
+# spawns its receiving side as whatever `rsync` is first on PATH. Homebrew's
+# rsync 3.x rejects openrsync's -E and the export dies with "Copy failed"
+# (2026-10-12, build 64).
+PATH=/usr/bin:/bin:/usr/sbin:/sbin xcodebuild \
     -exportArchive \
     -archivePath "$ARCHIVE" \
     -exportPath "$EXPORT_DIR" \
