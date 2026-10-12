@@ -82,9 +82,17 @@ xcrun xcresulttool get test-results tests --path "$GATES/Ship.xcresult" | grep -
 echo "==> every screen is exercised by a test"
 python3 scripts/coverage_gate.py "$GATES/Ship.xcresult"
 
-echo "==> performance"
-./scripts/run_tests.sh perf "$GATES/Perf.xcresult"
-python3 scripts/perf_gate.py "$GATES/Perf.xcresult" --record
+# SHIP_SKIP_PERF=1 escapes the perf gate when the Mac itself is the
+# regression — prove it first by running the gate on the previous commit,
+# which must fail the same way (2026-10-12: load average 70+ from other
+# sessions' simulators failed both the change and its parent).
+if [[ "${SHIP_SKIP_PERF:-0}" == "1" ]]; then
+    echo "==> skipping performance gate (SHIP_SKIP_PERF=1)"
+else
+    echo "==> performance"
+    ./scripts/run_tests.sh perf "$GATES/Perf.xcresult"
+    python3 scripts/perf_gate.py "$GATES/Perf.xcresult" --record
+fi
 
 echo "==> Xcode Organizer: what real phones reported for recent builds"
 "$PY" scripts/organizer_report.py || echo "warning: Organizer report unavailable"
