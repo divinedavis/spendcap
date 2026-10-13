@@ -292,8 +292,11 @@ raw `spentCents` still drives every total (a spill moves money between lines,
 it can't change a sum, and the discretionary total must keep equalling
 `discretionary_daily`). The giving line reads full ("$X over, moved to …"),
 the receiving line carries an orange bar segment + "Includes $X of
-overspending from other lines". **One hop only**: a receiving line that can't
-absorb it goes over rather than passing it on, so cycles can't loop. Same-user
+overspending from other lines". **It chains (2026-10-13, owner)**: a receiving line
+that fills up passes what it can't hold to *its* overflow line (Food →
+Socializing → Transportation → Cash), so only the end of the chain can show
+over. Each walk stops before revisiting a line, so a cycle leaves the money
+on the line where the walk stopped instead of looping. Same-user
 is a composite FK `(user_id, overflow_category_id)`; deleting the target
 nulls only that column.
 

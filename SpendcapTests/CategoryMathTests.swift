@@ -223,7 +223,70 @@ final class CategoryMathTests: XCTestCase {
         XCTAssertEqual(month.overCount, 1)
     }
 
-    func testOneHopOnlySoACycleCannotLoop() {
+    func testFullReceiverPassesTheRestDownTheChain() {
+        // Food → Socializing → Transportation → Cash, owner's 2026-10-13 ask.
+        let social = UUID(), transport = UUID(), cash = UUID()
+        let rows = CategoryMath.spillOver([
+            CategorySpendRow(period: "2026-10-01", categoryId: UUID(), categoryName: "Food",
+                             plannedCents: 60_000, spentCents: 90_000, txnCount: 1, sortOrder: 1,
+                             overflowCategoryId: social),
+            CategorySpendRow(period: "2026-10-01", categoryId: social, categoryName: "Socializing",
+                             plannedCents: 60_000, spentCents: 50_000, txnCount: 1, sortOrder: 2,
+                             overflowCategoryId: transport),
+            CategorySpendRow(period: "2026-10-01", categoryId: transport, categoryName: "Transportation",
+                             plannedCents: 20_000, spentCents: 15_000, txnCount: 1, sortOrder: 3,
+                             overflowCategoryId: cash),
+            CategorySpendRow(period: "2026-10-01", categoryId: cash, categoryName: "Cash",
+                             plannedCents: 30_000, spentCents: 0, txnCount: 0, sortOrder: 4),
+        ])
+        // Food's $300 over: $100 fills Socializing, $50 fills Transportation,
+        // the last $150 lands on Cash.
+        XCTAssertEqual(rows[0].overflowOutCents, 30_000)
+        XCTAssertEqual(rows[1].overflowInCents, 30_000)
+        XCTAssertEqual(rows[1].overflowOutCents, 20_000)
+        XCTAssertEqual(rows[1].overflowTargetName, "Transportation")
+        XCTAssertEqual(rows[2].overflowInCents, 20_000)
+        XCTAssertEqual(rows[2].overflowOutCents, 15_000)
+        XCTAssertEqual(rows[3].overflowInCents, 15_000)
+        XCTAssertEqual(rows[3].remainingCents, 15_000)
+        XCTAssertEqual(rows.map(\.shownSpentCents), [60_000, 60_000, 20_000, 15_000])
+        XCTAssertFalse(rows.contains(where: \.isOver))
+        XCTAssertEqual(rows.reduce(0) { $0 + $1.shownSpentCents }, 155_000, "spill moves money, never adds it")
+    }
+
+    func testChainStopsWhereThereIsRoom() {
+        let social = UUID(), transport = UUID()
+        let rows = CategoryMath.spillOver([
+            CategorySpendRow(period: "2026-10-01", categoryId: UUID(), categoryName: "Food",
+                             plannedCents: 60_000, spentCents: 76_200, txnCount: 1, sortOrder: 1,
+                             overflowCategoryId: social),
+            CategorySpendRow(period: "2026-10-01", categoryId: social, categoryName: "Socializing",
+                             plannedCents: 60_000, spentCents: 14_400, txnCount: 1, sortOrder: 2,
+                             overflowCategoryId: transport),
+            CategorySpendRow(period: "2026-10-01", categoryId: transport, categoryName: "Transportation",
+                             plannedCents: 20_000, spentCents: 0, txnCount: 0, sortOrder: 3),
+        ])
+        XCTAssertEqual(rows[1].overflowOutCents, 0, "Socializing still has room, nothing moves on")
+        XCTAssertEqual(rows[1].remainingCents, 60_000 - 14_400 - 16_200)
+        XCTAssertEqual(rows[2].overflowInCents, 0)
+    }
+
+    func testEndOfChainGoesOver() {
+        let social = UUID()
+        let rows = CategoryMath.spillOver([
+            CategorySpendRow(period: "2026-10-01", categoryId: UUID(), categoryName: "Food",
+                             plannedCents: 100, spentCents: 200, txnCount: 1, sortOrder: 1,
+                             overflowCategoryId: social),
+            CategorySpendRow(period: "2026-10-01", categoryId: social, categoryName: "Socializing",
+                             plannedCents: 100, spentCents: 130, txnCount: 1, sortOrder: 2,
+                             overflowCategoryId: UUID()),
+        ])
+        XCTAssertEqual(rows[1].overflowOutCents, 0, "a missing target ends the chain")
+        XCTAssertTrue(rows[1].isOver)
+        XCTAssertEqual(rows[1].remainingCents, -130)
+    }
+
+    func testCycleCannotLoop() {
         let a = UUID(), b = UUID()
         let rows = CategoryMath.spillOver([
             CategorySpendRow(period: "2026-10-01", categoryId: a, categoryName: "A",
@@ -233,7 +296,8 @@ final class CategoryMathTests: XCTestCase {
                              plannedCents: 100, spentCents: 120, txnCount: 1, sortOrder: 2,
                              overflowCategoryId: a),
         ])
-        // Each hands on only its *own* overage, measured before any spill.
+        // Each walk stops before revisiting its start, so each line hands
+        // on only its own overage and the received money stays put.
         XCTAssertEqual(rows[0].overflowOutCents, 50)
         XCTAssertEqual(rows[1].overflowOutCents, 20)
         XCTAssertEqual(rows[0].shownSpentCents + rows[1].shownSpentCents, 270)

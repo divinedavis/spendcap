@@ -1345,28 +1345,49 @@ enum CategoryMath {
     }
 
     /// Moves each line's overage onto the line it names as its overflow
-    /// (Food over $600 → the excess shows on Socializing). One hop only: if
-    /// the receiving line is pushed over, it shows over rather than passing
-    /// the money on again, so a chain or cycle can never loop or hide where
-    /// the overspending started. A target that isn't in this month's rows
-    /// (deleted line, older snapshot) means the line just goes over.
+    /// (Food over $600 → the excess shows on Socializing), and keeps going
+    /// down the chain (owner, 2026-10-13): once Socializing is full too, what
+    /// it can't hold moves to *its* overflow line (Transportation), then to
+    /// that line's (Cash), until a line has room or names no overflow. A line
+    /// passes on only what lands past its plan — its own overage plus
+    /// whatever arrived once it was full — so every line in the chain reads
+    /// full, not over, and only the end of the chain can show over.
+    ///
+    /// Each walk stops before revisiting a line, so a cycle (A → B → A) can't
+    /// loop: the money stays on the line where the walk stopped and shows
+    /// over there. A target that isn't in this month's rows (deleted line,
+    /// older snapshot) ends the chain, so that line just goes over.
     static func spillOver(_ rows: [CategorySpendRow]) -> [CategorySpendRow] {
         var result = rows
         let indexById = Dictionary(
             result.enumerated().compactMap { offset, row in row.categoryId.map { ($0, offset) } },
             uniquingKeysWith: { first, _ in first }
         )
+        func target(of index: Int) -> Int? {
+            guard let targetId = result[index].overflowCategoryId,
+                  targetId != result[index].categoryId else { return nil }
+            return indexById[targetId]
+        }
         for source in result.indices {
             let row = result[source]
-            guard let targetId = row.overflowCategoryId,
-                  targetId != row.categoryId,
-                  let target = indexById[targetId],
-                  row.plannedCents > 0,
-                  row.spentCents > row.plannedCents else { continue }
-            let excess = row.spentCents - row.plannedCents
-            result[source].overflowOutCents = excess
-            result[source].overflowTargetName = result[target].categoryName
-            result[target].overflowInCents += excess
+            guard row.plannedCents > 0, row.spentCents > row.plannedCents else { continue }
+            var amount = row.spentCents - row.plannedCents
+            var current = source
+            var visited: Set<Int> = [source]
+            while amount > 0, let next = target(of: current), !visited.contains(next) {
+                visited.insert(next)
+                result[current].overflowOutCents += amount
+                result[current].overflowTargetName = result[next].categoryName
+                // What lands past `next`'s plan is the part it hands on. Its
+                // own overage was or will be walked from `next` as a source,
+                // so only the newly created excess continues from here.
+                let planned = max(0, result[next].plannedCents)
+                let filled = result[next].spentCents + result[next].overflowInCents
+                let excessBefore = max(0, filled - planned)
+                result[next].overflowInCents += amount
+                amount = max(0, filled + amount - planned) - excessBefore
+                current = next
+            }
         }
         return result
     }
